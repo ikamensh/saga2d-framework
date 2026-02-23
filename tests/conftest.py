@@ -4,8 +4,11 @@ import pytest
 
 from easygame import Game
 
-# Exclude visual tests (require display, pyglet) from collection.
-collect_ignore = ["tests/visual"]
+# Exclude visual and screenshot tests (require display, pyglet) from collection.
+# "tests/visual" is project-relative (legacy); "screenshot" is conftest-relative.
+# Both are defensive — visual tests have no test_ functions, screenshot has its own
+# conftest with a pyglet-availability skip guard.
+collect_ignore = ["tests/visual", "screenshot"]
 
 
 from easygame.backends.mock_backend import MockBackend
