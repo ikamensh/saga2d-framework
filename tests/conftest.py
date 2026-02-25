@@ -28,6 +28,21 @@ def mock_game() -> Game:
     return Game("Test", backend="mock", resolution=(1920, 1080))
 
 
+@pytest.fixture(autouse=True)
+def cleanup_globals() -> None:
+    """After each test, clear module-level _current_game and _tween_manager for isolation."""
+    yield
+    import easygame.rendering.sprite as sprite_mod
+    import easygame.util.tween as tween_mod
+
+    game = sprite_mod._current_game
+    if game is not None:
+        if hasattr(game, "_teardown"):
+            game._teardown()
+        sprite_mod._current_game = None
+    tween_mod._tween_manager = None
+
+
 @pytest.fixture
 def mock_backend(mock_game: Game) -> MockBackend:
     """Return the MockBackend instance from mock_game.
