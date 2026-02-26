@@ -27,6 +27,10 @@ game = Game("My Game", resolution=(960, 540))
 game.run(MenuScene())
 ```
 
+> **Headless / CI:** Pass `backend="mock"` to `Game(...)` to run without a display
+> server. The mock backend stubs out all rendering and audio, making it suitable for
+> automated tests and continuous integration environments.
+
 ## Core Features
 
 | Feature | Description |
