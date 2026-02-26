@@ -3,6 +3,7 @@
 import pytest
 
 from easygame import Game
+from easygame.backends.mock_backend import MockBackend
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -17,9 +18,6 @@ def pytest_configure(config: pytest.Config) -> None:
 # Both are defensive — visual tests have no test_ functions, screenshot has its own
 # conftest with a pyglet-availability skip guard.
 collect_ignore = ["visual", "screenshot"]
-
-
-from easygame.backends.mock_backend import MockBackend
 
 
 @pytest.fixture
