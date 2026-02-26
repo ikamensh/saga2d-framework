@@ -2,8 +2,47 @@
 
 Python framework for 2D sprite-based games. You write game logic, not engine plumbing.
 
-**Status:** Design phase. See `DESIGN.md` for requirements, `BACKEND.md` for pyglet
-implementation details, `desired_examples/` for before/after code comparisons.
+## Quick Start
+
+```bash
+pip install pyglet pillow
+```
+
+```python
+from easygame import Game, Scene, Button, Label, Panel, Layout, Anchor
+
+class MenuScene(Scene):
+    def on_enter(self) -> None:
+        self.ui.add(Panel(
+            layout=Layout.VERTICAL,
+            spacing=20,
+            anchor=Anchor.CENTER,
+            children=[
+                Label("My Game", font_size=48),
+                Button("Play", on_click=lambda: self.game.pop()),
+            ],
+        ))
+
+game = Game("My Game", resolution=(960, 540))
+game.run(MenuScene())
+```
+
+## Core Features
+
+| Feature | Description |
+|---------|-------------|
+| **Scene stack** | Push/pop scenes. Each scene has `on_enter`, `on_exit`, `on_reveal` hooks. |
+| **Sprites** | Position, animate, layer. Actions: `Sequence`, `Parallel`, `MoveTo`, `FadeIn`, etc. |
+| **Camera** | Follow, scroll, pan, bounds. `camera.shake()` for screen shake. |
+| **UI** | `Button`, `Label`, `Panel`, `List`, `ProgressBar`, `DataTable`. Layout and anchoring. |
+| **Theme** | Global style defaults. `game.theme` or per-component `Style`. |
+| **Audio** | Channels (master, music, sfx, ui). `play_music`, `crossfade_music`, sound pools. |
+| **Input** | Action mapping (bind keys to actions). `handle_input(event)` in scenes. |
+| **Save/load** | `game.save(slot)`, `game.load(slot)`. JSON-based, slot metadata. |
+| **Tweening** | `tween(obj, "x", 0, 100, 1.0)` for property interpolation. |
+| **Drag-and-drop** | `DragManager` for draggable UI. |
+
+See `tutorials/tower_defense/` for a complete tutorial. `DESIGN.md` for requirements, `BACKEND.md` for implementation details.
 
 ---
 
