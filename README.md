@@ -5,7 +5,7 @@ Python framework for 2D sprite-based games. You write game logic, not engine plu
 ## Quick Start
 
 ```bash
-pip install pyglet pillow
+pip install -e .
 ```
 
 ```python
