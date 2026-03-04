@@ -59,17 +59,17 @@ needs to exist.
 
 ### Low-level backends (what frameworks build on)
 
-**pygame / pygame-ce** — SDL2 wrapper. Window, 2D software rendering, event queue, audio
+**[pygame / pygame-ce](https://github.com/pygame-community/pygame-ce)** — SDL2 wrapper. Window, 2D software rendering, event queue, audio
 mixer. ~8.6k stars, actively maintained (pygame-ce is the more active community fork).
 Gives you a surface to blit pixels onto. Everything else is your problem.
 
-**pyglet** — Pure Python, OpenGL-based. Sprite batching, text rendering, audio playback.
+**[pyglet](https://github.com/pyglet/pyglet)** — Pure Python, OpenGL-based. Sprite batching, text rendering, audio playback.
 ~2k stars, actively maintained (v2.1+). Our chosen first backend — GPU-accelerated,
 no binary dependencies, readable stack traces.
 
 ### Higher-level frameworks
 
-**Arcade** (~1.8k stars, active, v3.3) — The most feature-complete living project.
+**[Arcade](https://github.com/pythonarcade/arcade)** (~1.8k stars, active, v3.3) — The most feature-complete living project.
 Built on pyglet. Has GPU sprite batching, a GUI system with layout and anchoring,
 Camera2D, and tiled map loading. Solid for what it covers. But:
 - "Scene" is a sprite list organizer, not a state machine — no push/pop scene stack
@@ -79,10 +79,10 @@ Camera2D, and tiled map loading. Solid for what it covers. But:
 - No tweening or composable action sequences
 - No drag-and-drop, no save/load system
 - Hardcoded to pyglet — cannot swap backends
-- **arcade-curtains** (~30 stars) is a community plugin adding scene transitions and
+- **[arcade-curtains](https://github.com/maarten-dp/arcade-curtains)** (~30 stars) is a community plugin adding scene transitions and
   sprite animation to Arcade — evidence that users want exactly what's missing
 
-**Cocos2d Python** (los-cocos, ~700 stars, **abandoned ~2020**) — The historical
+**[Cocos2d Python](https://github.com/los-cocos/cocos)** (los-cocos, ~700 stars, **abandoned ~2020**) — The historical
 ancestor of what Saga2D wants to be. Had the right architecture:
 - Director singleton with push/pop scene stack
 - Scene/Layer system for state management
@@ -93,34 +93,34 @@ ancestor of what Saga2D wants to be. Had the right architecture:
 - Never built UI components, audio management, asset system, or theming
 - Saga2D's composable Actions are directly inspired by this
 
-**Ursina** (~2.5k stars, active) — "Unity for Python." Entity-based, has decent UI
+**[Ursina](https://github.com/pokepetter/ursina)** (~2.5k stars, active) — "Unity for Python." Entity-based, has decent UI
 widgets, a `Draggable` component, built-in `animate()` with easing curves. But:
 - 3D-first (built on Panda3D) — 2D is not the focus
 - No scene stack, no theming, no audio channels
 - Heavy dependency (pulls in entire Panda3D C++ engine)
 
-**Pygame Zero** (pgzero, ~4.5k stars) — Zero-boilerplate game programming. No
+**[Pygame Zero](https://github.com/lordmauve/pgzero)** (pgzero, ~4.5k stars) — Zero-boilerplate game programming. No
 `pygame.init()`, no event loop, just `draw()` and `update()` functions. Brilliant
 for education. But intentionally minimal — no scenes, no UI, no camera, no tweening.
 Not a framework, a teaching tool.
 
 ### UI-only libraries
 
-**pygame-gui** (~700 stars, active) — Best game UI in the Python ecosystem. JSON theme
+**[pygame-gui](https://github.com/MyreMylar/pygame_gui)** (~700 stars, active) — Best game UI in the Python ecosystem. JSON theme
 files, anchoring, solid widget set (buttons, text entry, dropdowns, progress bars,
 panels, tooltips, windows). But:
 - UI only — no scenes, sprites, audio, or camera
 - Hardcoded to pygame surfaces
 
-**ThorPy** (~100 stars, active) — Simpler alternative to pygame-gui. Buttons, sliders,
+**[ThorPy](https://github.com/YannThoworkin/thorpy)** (~100 stars, active) — Simpler alternative to pygame-gui. Buttons, sliders,
 checkboxes. Less feature-complete, pygame-only.
 
 ### Utility libraries
 
-**PyTweening** — Pure easing functions (ease_in, ease_out, bounce, elastic). Just math,
+**[PyTweening](https://github.com/asweigart/pytweening)** — Pure easing functions (ease_in, ease_out, bounce, elastic). Just math,
 no tween manager, no integration with any framework.
 
-**python-statemachine** (~800 stars), **transitions** (~5.5k stars) — General-purpose
+**[python-statemachine](https://github.com/fgmacedo/python-statemachine)** (~800 stars), **[transitions](https://github.com/pytransitions/transitions)** (~5.5k stars) — General-purpose
 FSM libraries. Not game-specific, no rendering or update loop integration.
 
 ---
@@ -129,17 +129,17 @@ FSM libraries. Not game-specific, no rendering or update loop integration.
 
 What Saga2D provides that no existing Python framework does:
 
-| Feature | Saga2D | Arcade | Cocos2d | Ursina | pygame-gui |
+| Feature | Saga2D | [Arcade](https://github.com/pythonarcade/arcade) | [Cocos2d](https://github.com/los-cocos/cocos) | [Ursina](https://github.com/pokepetter/ursina) | [pygame-gui](https://github.com/MyreMylar/pygame_gui) |
 |---|---|---|---|---|---|
 | Scene stack (push/pop) | **yes** | — | **yes** (dead) | — | — |
 | UI components + layout | **yes** | **yes** | — | **yes** | **yes** |
 | Data-driven theming | **yes** | — | — | — | **yes** |
-| Sprite animation + callbacks | **yes** | partial | **yes** (dead) | partial | n/a |
+| Sprite animation + callbacks | **yes** | partial | **yes** (dead) | partial | — |
 | Composable actions (Sequence/Parallel) | **yes** | — | **yes** (dead) | — | — |
-| Camera/scrolling | **yes** | **yes** | partial | **yes** | n/a |
-| Audio channels/crossfade/sound pools | **yes** | — | — | — | n/a |
-| Asset loading by name | **yes** | — | — | — | n/a |
-| Input action mapping | **yes** | — | — | — | n/a |
+| Camera/scrolling | **yes** | **yes** | partial | **yes** | — |
+| Audio channels/crossfade/sound pools | **yes** | — | — | — | — |
+| Asset loading by name | **yes** | — | — | — | — |
+| Input action mapping | **yes** | — | — | — | — |
 | Drag-and-drop | **yes** | — | — | **yes** | — |
 | Tweening | **yes** | — | **yes** (dead) | **yes** | — |
 | Save/load system | **yes** | — | — | — | — |
