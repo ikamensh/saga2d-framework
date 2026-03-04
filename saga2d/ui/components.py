@@ -29,6 +29,47 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
+# Border drawing helper
+# ---------------------------------------------------------------------------
+
+
+def _draw_border(
+    backend: Any,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    border_color: tuple[int, int, int, int],
+    border_width: int,
+) -> None:
+    """Draw a border as four thin rectangles inset within the given bounds.
+
+    The border is drawn as four rectangles:
+    - Top: from (x, y) with dimensions (width, border_width)
+    - Bottom: from (x, y + height - border_width) with dimensions (width, border_width)
+    - Left: from (x, y) with dimensions (border_width, height)
+    - Right: from (x + width - border_width, y) with dimensions (border_width, height)
+
+    Parameters:
+        backend: The backend to draw with.
+        x: Left edge of the component.
+        y: Top edge of the component.
+        width: Total width of the component.
+        height: Total height of the component.
+        border_color: RGBA color tuple for the border.
+        border_width: Thickness of the border in pixels.
+    """
+    # Top border
+    backend.draw_rect(x, y, width, border_width, border_color)
+    # Bottom border
+    backend.draw_rect(x, y + height - border_width, width, border_width, border_color)
+    # Left border
+    backend.draw_rect(x, y, border_width, height, border_color)
+    # Right border
+    backend.draw_rect(x + width - border_width, y, border_width, height, border_color)
+
+
+# ---------------------------------------------------------------------------
 # Text size heuristic
 # ---------------------------------------------------------------------------
 
@@ -326,7 +367,7 @@ class Button(Component):
     # -- Drawing -----------------------------------------------------------
 
     def on_draw(self) -> None:
-        """Draw background rectangle then centered text."""
+        """Draw background rectangle, border, then centered text."""
         if self._game is None:
             return
         state: Literal["normal", "hovered", "pressed", "disabled"] = (
@@ -342,6 +383,18 @@ class Button(Component):
             self._computed_h,
             resolved.background_color,
         )
+
+        # Border (on top of background, below text).
+        if resolved.border_width > 0 and resolved.border_color is not None:
+            _draw_border(
+                self._game._backend,
+                self._computed_x,
+                self._computed_y,
+                self._computed_w,
+                self._computed_h,
+                resolved.border_color,
+                resolved.border_width,
+            )
 
         # Centered text.
         if self._font_handle is None:
@@ -527,7 +580,7 @@ class Panel(Component):
     # -- Drawing -----------------------------------------------------------
 
     def on_draw(self) -> None:
-        """Draw the panel's background rectangle."""
+        """Draw the panel's background rectangle and border."""
         if self._game is None:
             return
         resolved = self._resolve_style()
@@ -539,6 +592,18 @@ class Panel(Component):
                 self._computed_w,
                 self._computed_h,
                 bg,
+            )
+
+        # Border (on top of background, below children).
+        if resolved.border_width > 0 and resolved.border_color is not None:
+            _draw_border(
+                self._game._backend,
+                self._computed_x,
+                self._computed_y,
+                self._computed_w,
+                self._computed_h,
+                resolved.border_color,
+                resolved.border_width,
             )
 
     # -- Internal ----------------------------------------------------------
