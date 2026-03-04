@@ -82,26 +82,27 @@ class Theme:
         # Label defaults
         label_text_color: Color = (220, 225, 240, 255),
         # ProgressBar defaults
-        progressbar_color: Color = (60, 180, 60, 255),
-        progressbar_bg_color: Color = (40, 40, 40, 200),
+        progressbar_color: Color = (80, 150, 220, 255),
+        progressbar_bg_color: Color = (28, 32, 42, 220),
         # List / Grid / DataTable defaults
-        selected_color: Color = (60, 60, 100, 255),
+        selected_color: Color = (70, 90, 140, 200),
+        list_alt_row_bg_color: Color = (38, 44, 60, 120),
         # Tooltip defaults
-        tooltip_background_color: Color = (20, 20, 20, 230),
-        tooltip_text_color: Color = (230, 230, 230, 255),
+        tooltip_background_color: Color = (25, 30, 42, 240),
+        tooltip_text_color: Color = (240, 242, 250, 255),
         tooltip_font_size: int = 18,
         tooltip_padding: int = 6,
         # TabGroup defaults
-        tab_active_color: Color = (70, 70, 100, 255),
-        tab_inactive_color: Color = (45, 45, 60, 200),
-        tab_text_color: Color = (220, 220, 220, 255),
+        tab_active_color: Color = (50, 60, 90, 255),
+        tab_inactive_color: Color = (35, 42, 58, 220),
+        tab_text_color: Color = (220, 225, 240, 255),
         tab_font_size: int = 20,
         tab_padding: int = 10,
         # DataTable defaults
-        datatable_header_bg_color: Color = (55, 55, 75, 255),
-        datatable_header_text_color: Color = (240, 240, 240, 255),
-        datatable_row_bg_color: Color = (35, 35, 45, 200),
-        datatable_alt_row_bg_color: Color = (42, 42, 55, 200),
+        datatable_header_bg_color: Color = (42, 50, 72, 255),
+        datatable_header_text_color: Color = (240, 242, 250, 255),
+        datatable_row_bg_color: Color = (32, 38, 54, 180),
+        datatable_alt_row_bg_color: Color = (38, 44, 60, 180),
         # Drag-and-drop defaults
         drop_accept_color: Color = (0, 180, 0, 80),
         drop_reject_color: Color = (180, 0, 0, 80),
@@ -127,6 +128,7 @@ class Theme:
         self._progressbar_color = progressbar_color
         self._progressbar_bg_color = progressbar_bg_color
         self._selected_color = selected_color
+        self._list_alt_row_bg_color = list_alt_row_bg_color
         self._tooltip_background_color = tooltip_background_color
         self._tooltip_text_color = tooltip_text_color
         self._tooltip_font_size = tooltip_font_size
@@ -220,6 +222,11 @@ class Theme:
     @property
     def selected_color(self) -> Color:
         return self._selected_color
+
+    @property
+    def list_alt_row_bg_color(self) -> Color:
+        """Alternating row background color for List widget."""
+        return self._list_alt_row_bg_color
 
     def resolve_list_style(self, explicit: Style | None) -> ResolvedStyle:
         """Merge explicit style with List defaults from theme.
