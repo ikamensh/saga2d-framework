@@ -583,14 +583,14 @@ for orchestrating multi-step sequences.
 **Inspired by:** Cocos2d Python's Actions system, the best part of a now-dead framework.
 
 ```python
-from easygame.actions import Sequence, Parallel, Delay, Do, PlayAnim, MoveTo, FadeOut, Remove
+from saga2d.actions import Sequence, Parallel, Delay, Do, PlayAnim, MoveTo, FadeOut, Remove
 
 # Battle attack sequence — flat and readable
 knight.do(Sequence(
     Parallel(PlayAnim(walk), MoveTo((500, 400), speed=200)),  # walk + move together
     PlayAnim(attack),
     Delay(0.3),
-    Do(lambda: target.do(Sequence(                            # trigger on target
+    Do(lambda: target.do(Sequence(  # trigger on target
         PlayAnim(hit),
         PlayAnim(death),
         FadeOut(0.5),
@@ -904,8 +904,9 @@ autosave hooks are identical across games. Only the state dict contents vary.
 ## Standard Game Flow Example
 
 ```python
-from easygame import Game, Scene, MessageScreen, ChoiceScreen
-from easygame.ui import Panel, Label, Button, Anchor, Layout, Style
+from saga2d import Game, Scene, MessageScreen, ChoiceScreen
+from saga2d.ui import Panel, Label, Button, Anchor, Layout, Style
+
 
 class MainMenu(Scene):
     show_hud = False
@@ -924,6 +925,7 @@ class MainMenu(Scene):
             "The Dark Lord has returned...",
             on_dismiss=lambda: self.game.replace(WorldMapScene()),
         ))
+
 
 game = Game("Chronicles of the Realm", background="parchment.png")
 game.run(MainMenu())

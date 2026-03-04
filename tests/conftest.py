@@ -2,8 +2,8 @@
 
 import pytest
 
-from easygame import Game
-from easygame.backends.mock_backend import MockBackend
+from saga2d import Game
+from saga2d.backends.mock_backend import MockBackend
 
 
 @pytest.fixture(autouse=True)
@@ -15,8 +15,8 @@ def _teardown_game_globals() -> None:
     pollution. Clearing them after each test ensures isolation.
     """
     yield
-    import easygame.rendering.sprite as _sprite_mod
-    import easygame.util.tween as _tween_mod
+    import saga2d.rendering.sprite as _sprite_mod
+    import saga2d.util.tween as _tween_mod
 
     _sprite_mod._current_game = None
     _tween_mod._tween_manager = None

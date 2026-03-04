@@ -9,7 +9,8 @@ pip install -e .
 ```
 
 ```python
-from easygame import Game, Scene, Button, Label, Panel, Layout, Anchor
+from saga2d import Game, Scene, Button, Label, Panel, Layout, Anchor
+
 
 class MenuScene(Scene):
     def on_enter(self) -> None:
@@ -22,6 +23,7 @@ class MenuScene(Scene):
                 Button("Play", on_click=lambda: self.game.pop()),
             ],
         ))
+
 
 game = Game("My Game", resolution=(960, 540))
 game.run(MenuScene())
