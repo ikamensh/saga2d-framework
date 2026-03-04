@@ -1,3 +1,5 @@
+### proudly vibe coded with [kodo](https://github.com/ikamensh/kodo), claude code and cursor 
+
 # Saga2D
 
 Python framework for 2D sprite-based games. You write game logic, not engine plumbing.
