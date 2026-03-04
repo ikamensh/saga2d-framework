@@ -1,4 +1,4 @@
-# EasyGame
+# Saga2D
 
 Python framework for 2D sprite-based games. You write game logic, not engine plumbing.
 
@@ -54,7 +54,7 @@ See `tutorials/tower_defense/` for a complete tutorial. `DESIGN.md` for requirem
 
 ## Existing Python Game Frameworks
 
-A survey of what exists, what each provides, and what's missing. This is why EasyGame
+A survey of what exists, what each provides, and what's missing. This is why Saga2D
 needs to exist.
 
 ### Low-level backends (what frameworks build on)
@@ -83,7 +83,7 @@ Camera2D, and tiled map loading. Solid for what it covers. But:
   sprite animation to Arcade — evidence that users want exactly what's missing
 
 **Cocos2d Python** (los-cocos, ~700 stars, **abandoned ~2020**) — The historical
-ancestor of what EasyGame wants to be. Had the right architecture:
+ancestor of what Saga2D wants to be. Had the right architecture:
 - Director singleton with push/pop scene stack
 - Scene/Layer system for state management
 - **Actions system** — composable sprite operations: `Sequence(MoveTo(...), FadeIn(...),
@@ -91,7 +91,7 @@ ancestor of what EasyGame wants to be. Had the right architecture:
   best idea in any Python game framework. Proven and dead.
 - Built on pyglet, never became backend-agnostic
 - Never built UI components, audio management, asset system, or theming
-- EasyGame's composable Actions are directly inspired by this
+- Saga2D's composable Actions are directly inspired by this
 
 **Ursina** (~2.5k stars, active) — "Unity for Python." Entity-based, has decent UI
 widgets, a `Draggable` component, built-in `animate()` with easing curves. But:
@@ -127,23 +127,23 @@ FSM libraries. Not game-specific, no rendering or update loop integration.
 
 ## Gap Analysis
 
-What EasyGame provides that no existing Python framework does:
+What Saga2D provides that no existing Python framework does:
 
-| Feature | Arcade | Cocos2d | Ursina | pygame-gui |
-|---|---|---|---|---|
-| Scene stack (push/pop) | — | **yes** (dead) | — | — |
-| UI components + layout | **yes** | — | **yes** | **yes** |
-| Data-driven theming | — | — | — | **yes** |
-| Sprite animation + callbacks | partial | **yes** (dead) | partial | n/a |
-| Composable actions (Sequence/Parallel) | — | **yes** (dead) | — | — |
-| Camera/scrolling | **yes** | partial | **yes** | n/a |
-| Audio channels/crossfade/sound pools | — | — | — | n/a |
-| Asset loading by name | — | — | — | n/a |
-| Input action mapping | — | — | — | n/a |
-| Drag-and-drop | — | — | **yes** | — |
-| Tweening | — | **yes** (dead) | **yes** | — |
-| Save/load system | — | — | — | — |
-| Backend-agnostic protocol | — | — | — | — |
+| Feature | Saga2D | Arcade | Cocos2d | Ursina | pygame-gui |
+|---|---|---|---|---|---|
+| Scene stack (push/pop) | **yes** | — | **yes** (dead) | — | — |
+| UI components + layout | **yes** | **yes** | — | **yes** | **yes** |
+| Data-driven theming | **yes** | — | — | — | **yes** |
+| Sprite animation + callbacks | **yes** | partial | **yes** (dead) | partial | n/a |
+| Composable actions (Sequence/Parallel) | **yes** | — | **yes** (dead) | — | — |
+| Camera/scrolling | **yes** | **yes** | partial | **yes** | n/a |
+| Audio channels/crossfade/sound pools | **yes** | — | — | — | n/a |
+| Asset loading by name | **yes** | — | — | — | n/a |
+| Input action mapping | **yes** | — | — | — | n/a |
+| Drag-and-drop | **yes** | — | — | **yes** | — |
+| Tweening | **yes** | — | **yes** (dead) | **yes** | — |
+| Save/load system | **yes** | — | — | — | — |
+| Backend-agnostic protocol | **yes** | — | — | — | — |
 
 No existing project combines all of these. The "complete 2D framework" niche that
 exists in other ecosystems (Love2D for Lua, MonoGame for C#, Phaser for JavaScript)
@@ -151,5 +151,5 @@ is empty in Python.
 
 The closest historical attempt — Cocos2d Python — had the right architecture
 (scene stack, composable actions) but was abandoned before it grew UI, audio, or
-asset management. EasyGame picks up where it left off, with a broader scope and
+asset management. Saga2D picks up where it left off, with a broader scope and
 backend-agnostic design.

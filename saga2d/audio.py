@@ -85,7 +85,7 @@ class AudioManager:
 
     Parameters:
         backend: The backend instance (must implement the audio protocol).
-        assets:  The :class:`~easygame.assets.AssetManager` for loading
+        assets:  The :class:`~saga2d.assets.AssetManager` for loading
                  sound/music assets by name.
     """
 

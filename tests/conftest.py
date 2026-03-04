@@ -1,4 +1,4 @@
-"""pytest fixtures for EasyGame tests."""
+"""pytest fixtures for Saga2D tests."""
 
 import pytest
 

@@ -51,7 +51,7 @@ class Game:
         fullscreen: Whether to open in fullscreen mode.
         backend:    ``"mock"`` or ``"pyglet"`` (string), or a backend
                     instance that satisfies the
-                    :class:`~easygame.backends.base.Backend` protocol.
+                    :class:`~saga2d.backends.base.Backend` protocol.
         visible:    Whether the window is initially visible (default
                     ``True``).  Pass ``False`` to create a hidden window
                     (useful for headless rendering or testing).
@@ -167,7 +167,7 @@ class Game:
 
     @property
     def assets(self) -> AssetManager:
-        """The :class:`~easygame.assets.AssetManager`, created lazily.
+        """The :class:`~saga2d.assets.AssetManager`, created lazily.
 
         Defaults to ``AssetManager(backend, Path("assets"),
         scale_factor=backend.scale_factor)``.  Set ``game.assets``
@@ -193,7 +193,7 @@ class Game:
 
     @property
     def audio(self) -> AudioManager:
-        """The :class:`~easygame.audio.AudioManager`, created lazily.
+        """The :class:`~saga2d.audio.AudioManager`, created lazily.
 
         Created on first access using the backend and
         :attr:`assets` manager.
@@ -210,7 +210,7 @@ class Game:
 
     @property
     def theme(self) -> Theme:
-        """The :class:`~easygame.ui.theme.Theme`, created lazily.
+        """The :class:`~saga2d.ui.theme.Theme`, created lazily.
 
         Components access the theme via ``self._game.theme`` to resolve
         styles.  Set ``game.theme`` to override the default theme.
@@ -227,7 +227,7 @@ class Game:
 
     @property
     def cursor(self) -> "CursorManager":
-        """The :class:`~easygame.cursor.CursorManager`, created lazily.
+        """The :class:`~saga2d.cursor.CursorManager`, created lazily.
 
         Use to register and switch cursors::
 
@@ -243,7 +243,7 @@ class Game:
 
     @property
     def input(self) -> InputManager:
-        """The :class:`~easygame.input.InputManager`.
+        """The :class:`~saga2d.input.InputManager`.
 
         Use to rebind actions at runtime::
 
@@ -254,7 +254,7 @@ class Game:
 
     @property
     def save_manager(self) -> "SaveManager":
-        """The :class:`~easygame.save.SaveManager`, created lazily.
+        """The :class:`~saga2d.save.SaveManager`, created lazily.
 
         Save files are stored in ``save_dir`` (if provided at construction)
         or ``~/.{game_title_slug}/saves/`` by default.
@@ -275,7 +275,7 @@ class Game:
 
     @property
     def hud(self) -> "HUD":
-        """The :class:`~easygame.ui.hud.HUD` layer, created lazily.
+        """The :class:`~saga2d.ui.hud.HUD` layer, created lazily.
 
         Persistent UI that renders above the base scene but below overlay
         scenes.  Visibility is controlled by ``hud.visible`` and the top

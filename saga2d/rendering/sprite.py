@@ -8,7 +8,7 @@ sync to the backend whenever they change.  Game code creates sprites like::
     knight.remove()                # gone from the batch
 
 The Sprite reads ``_current_game`` (a module-level reference set by
-:class:`~easygame.game.Game`) at construction time to obtain the backend and
+:class:`~saga2d.game.Game`) at construction time to obtain the backend and
 asset manager.  This keeps the public API clean — no explicit ``game`` arg.
 
 Y-sort draw ordering

@@ -1,7 +1,7 @@
 """ParticleEmitter — managed lightweight sprite particles.
 
 A :class:`ParticleEmitter` spawns short-lived :class:`Sprite` particles on
-the :attr:`~easygame.rendering.layers.RenderLayer.EFFECTS` layer.  Each
+the :attr:`~saga2d.rendering.layers.RenderLayer.EFFECTS` layer.  Each
 particle has randomised velocity, lifetime, and optional opacity fade-out.
 
 Two spawning modes are supported:
@@ -69,7 +69,7 @@ class ParticleEmitter:
     **Continuous emitters must be explicitly stopped** by calling
     :meth:`stop` (cease spawning, let particles die naturally) or
     :meth:`remove` (kill everything immediately).  Typically this is
-    done in the owning scene's :meth:`~easygame.scene.Scene.on_exit`
+    done in the owning scene's :meth:`~saga2d.scene.Scene.on_exit`
     to prevent the emitter from firing in the background after the
     scene is no longer active.
 

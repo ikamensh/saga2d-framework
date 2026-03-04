@@ -1,11 +1,11 @@
 """Pyglet backend — GPU-accelerated rendering via OpenGL.
 
 This module is **never imported at module level** by the framework.  The
-``Game`` class performs a lazy ``from easygame.backends.pyglet_backend import
+``Game`` class performs a lazy ``from saga2d.backends.pyglet_backend import
 PygletBackend`` inside ``if backend == "pyglet"`` so that tests never need
 pyglet installed.
 
-Implements the full :class:`~easygame.backends.base.Backend` protocol.
+Implements the full :class:`~saga2d.backends.base.Backend` protocol.
 Stage 1 only exercises lifecycle + events + quit; rendering and audio
 methods are stubbed (functional but minimal) and will be fleshed out in
 later stages.
@@ -80,7 +80,7 @@ def _buttons_to_name(buttons: int) -> str | None:
 class PygletBackend:
     """GPU-accelerated backend using pyglet 2.x.
 
-    Satisfies the :class:`~easygame.backends.base.Backend` protocol via
+    Satisfies the :class:`~saga2d.backends.base.Backend` protocol via
     structural subtyping — does **not** inherit from ``Backend``.
     """
 

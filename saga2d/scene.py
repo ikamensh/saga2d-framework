@@ -191,7 +191,7 @@ class Scene:
             return self._owned_emitters
 
     def add_emitter(self, emitter: Any) -> Any:
-        """Register a :class:`~easygame.rendering.particles.ParticleEmitter`
+        """Register a :class:`~saga2d.rendering.particles.ParticleEmitter`
         as owned by this scene.
 
         Owned emitters are automatically removed (stopped + unregistered)
@@ -381,7 +381,7 @@ class Scene:
     def ui(self) -> _UIRoot:
         """The UI component tree root, created lazily on first access.
 
-        Returns a :class:`~easygame.ui.component._UIRoot` that covers the
+        Returns a :class:`~saga2d.ui.component._UIRoot` that covers the
         full logical screen.  Add components via ``self.ui.add(panel)``.
 
         The root is created on first access (after ``game`` is set by the

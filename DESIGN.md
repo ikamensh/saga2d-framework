@@ -1,4 +1,4 @@
-# EasyGame Engine — Design Document
+# Saga2D Engine — Design Document
 
 ## Vision
 
@@ -936,7 +936,7 @@ game.run(MainMenu())
 ## File / Project Structure
 
 ```
-easygame/
+saga2d/
     __init__.py              # public API re-exports
     game.py                  # Game class, game loop
     scene.py                 # Scene, SceneStack

@@ -6,7 +6,7 @@ These are the three building blocks for in-game menus and HUDs.
 *   :class:`Button` — clickable rectangle with hover / press states.
 *   :class:`Panel` — container with optional flow layout and background.
 
-All three inherit from :class:`~easygame.ui.component.Component` and
+All three inherit from :class:`~saga2d.ui.component.Component` and
 access the backend through ``self._game._backend`` and the theme
 through ``self._game.theme``.
 """

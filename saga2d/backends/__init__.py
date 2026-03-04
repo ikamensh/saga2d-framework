@@ -1,8 +1,8 @@
-"""Backend implementations for the EasyGame framework.
+"""Backend implementations for the Saga2D framework.
 
 This package is *internal* — game code never imports from here directly.
 The ``Game`` class selects and owns the backend; the rest of the framework
-interacts with it through the :class:`~easygame.backends.base.Backend`
+interacts with it through the :class:`~saga2d.backends.base.Backend`
 protocol.
 
 Re-exported for convenience within the framework:

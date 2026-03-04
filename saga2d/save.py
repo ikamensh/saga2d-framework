@@ -1,6 +1,6 @@
 """Save/Load system — manages save file I/O, slot listing, and metadata.
 
-A :class:`SaveManager` is owned lazily by :class:`~easygame.game.Game`.  Save
+A :class:`SaveManager` is owned lazily by :class:`~saga2d.game.Game`.  Save
 files are stored as JSON in a configurable save directory.  Each slot is a
 separate file: ``save_1.json``, ``save_2.json``, etc.
 

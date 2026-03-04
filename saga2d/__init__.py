@@ -1,9 +1,9 @@
-"""EasyGame — a Python framework for 2D sprite-based games.
+"""Saga2D — a Python framework for 2D sprite-based games.
 
 Public API re-exports.  Game code imports from here::
 
-    from easygame import Game, Scene, RenderLayer, SpriteAnchor, AssetManager
-    from easygame import Panel, Label, Button, Anchor, Layout, Style, Theme
+    from saga2d import Game, Scene, RenderLayer, SpriteAnchor, AssetManager
+    from saga2d import Panel, Label, Button, Anchor, Layout, Style, Theme
 
 Internal modules (backends, rendering internals) are **not** re-exported.
 """

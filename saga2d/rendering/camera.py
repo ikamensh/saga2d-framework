@@ -299,7 +299,7 @@ class Camera:
             x:        Target world x to center on.
             y:        Target world y to center on.
             duration: Seconds for the pan animation.
-            ease:     An :class:`~easygame.util.tween.Ease` value (default
+            ease:     An :class:`~saga2d.util.tween.Ease` value (default
                       ``Ease.EASE_IN_OUT``).
         """
         if not math.isfinite(x) or not math.isfinite(y):

@@ -1,7 +1,7 @@
-"""Utility modules for EasyGame: timers, tweens, FSM.
+"""Utility modules for Saga2D: timers, tweens, FSM.
 
 Re-exports: StateMachine, TimerHandle, Ease.
-The tween() function is available from easygame (not here) to avoid shadowing
+The tween() function is available from saga2d (not here) to avoid shadowing
 this package's tween submodule.
 """
 

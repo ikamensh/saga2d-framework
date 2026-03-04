@@ -14,7 +14,7 @@ Resolution variant support::
     # If scale_factor >= 1.5 and "knight@2x.png" exists alongside "knight.png",
     # the @2x variant is loaded automatically.
 
-The asset manager is owned by :class:`~easygame.game.Game` and exposed as
+The asset manager is owned by :class:`~saga2d.game.Game` and exposed as
 ``game.assets``.
 """
 

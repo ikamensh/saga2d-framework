@@ -1,4 +1,4 @@
-# EasyGame
+# Saga2D
 
 Python framework for 2D sprite-based games. You write game logic, not engine plumbing.
 A main menu with buttons is 10 lines. A scrolling world with animated units is 50.

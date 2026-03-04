@@ -1,1 +1,1 @@
-"""EasyGame test suite."""
+"""Saga2D test suite."""

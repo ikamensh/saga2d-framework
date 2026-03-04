@@ -1,6 +1,6 @@
 """Mock backend that records all operations for headless testing.
 
-``MockBackend`` satisfies the :class:`~easygame.backends.base.Backend`
+``MockBackend`` satisfies the :class:`~saga2d.backends.base.Backend`
 protocol without opening a window, rendering pixels, or playing audio.
 It serves two purposes:
 

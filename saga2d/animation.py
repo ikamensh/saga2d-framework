@@ -37,7 +37,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
-# AnimationDef — public, re-exported from easygame
+# AnimationDef — public, re-exported from saga2d
 # ---------------------------------------------------------------------------
 
 

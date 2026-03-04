@@ -1,7 +1,7 @@
 """TimerManager — delayed and repeating callbacks.
 
 Internal class. Users interact via :meth:`Game.after`, :meth:`Game.every`,
-and :meth:`Game.cancel`. Not re-exported from easygame.
+and :meth:`Game.cancel`. Not re-exported from saga2d.
 
 Timer IDs are monotonic ints. Safe iteration: snapshot copy, cancelled flag
 checked before firing, no catch-up on large dt for repeating timers.

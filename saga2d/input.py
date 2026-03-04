@@ -11,7 +11,7 @@ Game code checks ``event.action`` for intent-based input::
             self.select_current()
             return True
 
-The ``InputManager`` is owned by :class:`~easygame.game.Game` and exposed
+The ``InputManager`` is owned by :class:`~saga2d.game.Game` and exposed
 as ``game.input``.  It provides default bindings for common actions (confirm,
 cancel, directional) and supports rebinding at runtime.
 """
