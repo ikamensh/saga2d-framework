@@ -583,6 +583,38 @@ class PygletBackend:
         )
         self._rect_shapes.append(rect)
 
+    def draw_circle(
+        self,
+        x: int,
+        y: int,
+        radius: int,
+        color: tuple[int, int, int, int],
+        *,
+        opacity: float = 1.0,
+        segments: int | None = None,
+    ) -> None:
+        if self.batch is None:
+            return
+        import pyglet
+
+        # Framework (x,y) is the center in logical space
+        phys_x, phys_y = self._to_physical(x, y)
+        phys_radius = int(radius * self.scale_factor)
+        r, g, b, a = color
+        alpha = int(a * opacity)
+        rect_group, _ = self._get_ui_groups(self._current_ui_layer)
+
+        circle = pyglet.shapes.Circle(
+            int(phys_x),
+            int(phys_y),
+            phys_radius,
+            color=(r, g, b, alpha),
+            batch=self.batch,
+            group=rect_group,
+            segments=segments,  # None uses pyglet's default
+        )
+        self._rect_shapes.append(circle)
+
     def load_font(self, name: str, path: str | None = None) -> str:
         """Register a font from *path* or use system font when path is None."""
         if path is not None:

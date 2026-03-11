@@ -314,6 +314,24 @@ class Backend(Protocol):
         """Draw a filled RGBA rectangle. Per-frame call (cleared each begin_frame)."""
         ...
 
+    def draw_circle(
+        self,
+        x: int,
+        y: int,
+        radius: int,
+        color: tuple[int, int, int, int],
+        *,
+        opacity: float = 1.0,
+        segments: int | None = None,
+    ) -> None:
+        """Draw a filled RGBA circle centered at ``(x, y)`` with the given *radius*.
+
+        *segments* controls tessellation quality (higher = smoother).
+        ``None`` uses backend-specific defaults.
+        Per-frame call (cleared each begin_frame).
+        """
+        ...
+
     def load_font(self, name: str, path: str | None = None) -> FontHandle:
         """Load a font from *path* and register it as *name*.
 

@@ -62,6 +62,10 @@ class MockBackend:
         #: Cleared on every :meth:`begin_frame`.
         self.rects: list[dict[str, Any]] = []
 
+        #: ``draw_circle`` calls accumulated during the **current** frame.
+        #: Cleared on every :meth:`begin_frame`.
+        self.circles: list[dict[str, Any]] = []
+
         #: ``draw_image`` calls accumulated during the **current** frame.
         #: Cleared on every :meth:`begin_frame`.
         self.images: list[dict[str, Any]] = []
@@ -154,6 +158,7 @@ class MockBackend:
         self.clear_color = clear_color  # for tests
         self.texts.clear()
         self.rects.clear()
+        self.circles.clear()
         self.images.clear()
 
     def end_frame(self) -> None:
@@ -294,6 +299,28 @@ class MockBackend:
                 "height": height,
                 "color": color,
                 "opacity": opacity,
+            }
+        )
+
+    def draw_circle(
+        self,
+        x: int,
+        y: int,
+        radius: int,
+        color: tuple[int, int, int, int],
+        *,
+        opacity: float = 1.0,
+        segments: int | None = None,
+    ) -> None:
+        """Record a circle draw call for the current frame."""
+        self.circles.append(
+            {
+                "x": x,
+                "y": y,
+                "radius": radius,
+                "color": color,
+                "opacity": opacity,
+                "segments": segments,
             }
         )
 

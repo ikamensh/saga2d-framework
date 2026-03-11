@@ -27,6 +27,10 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "visual: visual demo test (requires display, pyglet)",
     )
+    config.addinivalue_line(
+        "markers",
+        "visual_ai: AI-powered visual quality verification test",
+    )
 
 
 # Exclude visual and screenshot tests (require display, pyglet) from collection.

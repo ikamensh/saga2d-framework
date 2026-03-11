@@ -92,6 +92,7 @@ class Theme:
         # List / Grid / DataTable defaults
         selected_color: Color = (56, 189, 248, 80),  # Sky 400 translucent
         list_alt_row_bg_color: Color = (30, 41, 59, 120),  # Slate 800
+        grid_cell_bg_color: Color = (40, 48, 68, 180),  # Slate 700 translucent
         # Tooltip defaults
         tooltip_background_color: Color = (15, 23, 42, 240),  # Slate 900
         tooltip_text_color: Color = (248, 250, 252, 255),  # Slate 50
@@ -138,6 +139,7 @@ class Theme:
         self._progressbar_bg_color = progressbar_bg_color
         self._selected_color = selected_color
         self._list_alt_row_bg_color = list_alt_row_bg_color
+        self._grid_cell_bg_color = grid_cell_bg_color
         self._tooltip_background_color = tooltip_background_color
         self._tooltip_text_color = tooltip_text_color
         self._tooltip_font_size = tooltip_font_size
@@ -246,6 +248,11 @@ class Theme:
     def list_alt_row_bg_color(self) -> Color:
         """Alternating row background color for List widget."""
         return self._list_alt_row_bg_color
+
+    @property
+    def grid_cell_bg_color(self) -> Color:
+        """Background color for Grid cells."""
+        return self._grid_cell_bg_color
 
     def resolve_list_style(self, explicit: Style | None) -> ResolvedStyle:
         """Merge explicit style with List defaults from theme.
