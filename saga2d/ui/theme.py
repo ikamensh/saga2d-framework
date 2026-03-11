@@ -63,46 +63,51 @@ class Theme:
         *,
         font: str = "serif",
         font_size: int = 24,
-        text_color: Color = (220, 225, 240, 255),
+        text_color: Color = (248, 250, 252, 255),  # Slate 50
         # Panel defaults
-        panel_background_color: Color = (32, 38, 54, 230),
+        panel_background_color: Color = (30, 41, 59, 255),  # Slate 800
         panel_padding: int = 16,
-        panel_border_color: Color | None = (80, 80, 110, 180),
-        panel_border_width: int = 1,
+        panel_border_color: Color | None = (71, 85, 105, 255),  # Slate 600
+        panel_border_width: int = 2,
+        # Shadow offset for Panel (pixels right/down)
+        panel_shadow_offset: int = 4,
+        panel_shadow_color: Color = (0, 0, 0, 120),
         # Button defaults
-        button_background_color: Color = (45, 55, 85, 255),
-        button_hover_color: Color = (65, 80, 120, 255),
-        button_press_color: Color = (35, 45, 75, 255),
-        button_disabled_color: Color = (30, 35, 45, 255),
-        button_text_color: Color = (240, 240, 240, 255),
-        button_disabled_text_color: Color = (100, 100, 110, 200),
+        button_background_color: Color = (51, 65, 85, 255),  # Slate 700
+        button_hover_color: Color = (71, 85, 105, 255),  # Slate 600
+        button_press_color: Color = (56, 189, 248, 255),  # Sky 400 (accent)
+        button_disabled_color: Color = (30, 41, 59, 255),  # Slate 800
+        button_text_color: Color = (248, 250, 252, 255),  # Slate 50
+        button_disabled_text_color: Color = (100, 116, 139, 200),  # Slate 500
+        button_hover_outline_color: Color = (100, 181, 246, 200),  # Light blue glow
+        button_hover_outline_width: int = 3,
         button_padding: int = 12,
         button_font_size: int = 24,
         button_min_width: int = 200,
         # Label defaults
-        label_text_color: Color = (220, 225, 240, 255),
+        label_text_color: Color = (248, 250, 252, 255),  # Slate 50
         # ProgressBar defaults
-        progressbar_color: Color = (80, 150, 220, 255),
-        progressbar_bg_color: Color = (28, 32, 42, 220),
+        progressbar_color: Color = (56, 189, 248, 255),  # Sky 400 (accent)
+        progressbar_bg_color: Color = (15, 23, 42, 220),  # Slate 900
         # List / Grid / DataTable defaults
-        selected_color: Color = (70, 90, 140, 200),
-        list_alt_row_bg_color: Color = (38, 44, 60, 120),
+        selected_color: Color = (56, 189, 248, 80),  # Sky 400 translucent
+        list_alt_row_bg_color: Color = (30, 41, 59, 120),  # Slate 800
         # Tooltip defaults
-        tooltip_background_color: Color = (25, 30, 42, 240),
-        tooltip_text_color: Color = (240, 242, 250, 255),
+        tooltip_background_color: Color = (15, 23, 42, 240),  # Slate 900
+        tooltip_text_color: Color = (248, 250, 252, 255),  # Slate 50
         tooltip_font_size: int = 18,
         tooltip_padding: int = 6,
         # TabGroup defaults
-        tab_active_color: Color = (50, 60, 90, 255),
-        tab_inactive_color: Color = (35, 42, 58, 220),
-        tab_text_color: Color = (220, 225, 240, 255),
+        tab_active_color: Color = (51, 65, 85, 255),  # Slate 700
+        tab_inactive_color: Color = (30, 41, 59, 220),  # Slate 800
+        tab_text_color: Color = (248, 250, 252, 255),  # Slate 50
         tab_font_size: int = 20,
         tab_padding: int = 10,
         # DataTable defaults
-        datatable_header_bg_color: Color = (42, 50, 72, 255),
-        datatable_header_text_color: Color = (240, 242, 250, 255),
-        datatable_row_bg_color: Color = (32, 38, 54, 180),
-        datatable_alt_row_bg_color: Color = (38, 44, 60, 180),
+        datatable_header_bg_color: Color = (51, 65, 85, 255),  # Slate 700
+        datatable_header_text_color: Color = (248, 250, 252, 255),  # Slate 50
+        datatable_row_bg_color: Color = (30, 41, 59, 180),  # Slate 800
+        datatable_alt_row_bg_color: Color = (15, 23, 42, 180),  # Slate 900
         # Drag-and-drop defaults
         drop_accept_color: Color = (0, 180, 0, 80),
         drop_reject_color: Color = (180, 0, 0, 80),
@@ -115,12 +120,16 @@ class Theme:
         self._panel_padding = panel_padding
         self._panel_border_color = panel_border_color
         self._panel_border_width = panel_border_width
+        self._panel_shadow_offset = panel_shadow_offset
+        self._panel_shadow_color = panel_shadow_color
         self._button_background_color = button_background_color
         self._button_hover_color = button_hover_color
         self._button_press_color = button_press_color
         self._button_disabled_color = button_disabled_color
         self._button_text_color = button_text_color
         self._button_disabled_text_color = button_disabled_text_color
+        self._button_hover_outline_color = button_hover_outline_color
+        self._button_hover_outline_width = button_hover_outline_width
         self._button_padding = button_padding
         self._button_font_size = button_font_size
         self._button_min_width = button_min_width
@@ -210,6 +219,16 @@ class Theme:
     @property
     def button_min_width(self) -> int:
         return self._button_min_width
+
+    @property
+    def button_hover_outline_color(self) -> Color:
+        """Outer-glow colour drawn around hovered buttons."""
+        return self._button_hover_outline_color
+
+    @property
+    def button_hover_outline_width(self) -> int:
+        """Border thickness (px) of the hover outline glow."""
+        return self._button_hover_outline_width
 
     @property
     def progressbar_color(self) -> Color:
@@ -375,3 +394,13 @@ class Theme:
     def ghost_opacity(self) -> float:
         """Opacity for the drag ghost overlay (0.0–1.0)."""
         return self._ghost_opacity
+
+    @property
+    def panel_shadow_offset(self) -> int:
+        """Shadow offset in pixels (right and down) for Panel."""
+        return self._panel_shadow_offset
+
+    @property
+    def panel_shadow_color(self) -> Color:
+        """Shadow colour for Panel."""
+        return self._panel_shadow_color

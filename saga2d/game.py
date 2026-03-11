@@ -87,6 +87,16 @@ class Game:
         self._save_dir_override = Path(save_dir) if save_dir is not None else None
         self._asset_path = Path(asset_path) if asset_path is not None else None
         self._resolution = resolution
+
+        # SAGA2D_HEADLESS env var forces non-fullscreen, hidden window.
+        # This prevents AI agents from accidentally opening GUI windows
+        # that steal focus and lock out the user.
+        import os
+
+        if os.environ.get("SAGA2D_HEADLESS", "").strip() not in ("", "0"):
+            fullscreen = False
+            visible = False
+
         self._fullscreen = fullscreen
         self._visible = visible
 
@@ -832,6 +842,15 @@ class Game:
         This is the production entry point.  For testing, use
         :meth:`tick` instead.
         """
+        import os
+
+        if os.environ.get("SAGA2D_HEADLESS", "").strip() not in ("", "0"):
+            raise RuntimeError(
+                "game.run() is disabled in headless mode (SAGA2D_HEADLESS is set). "
+                "Use game.tick(dt=0.016) to step frames, or the screenshot harness "
+                "(render_scene) for visual verification."
+            )
+
         self.push(start_scene)
 
         try:

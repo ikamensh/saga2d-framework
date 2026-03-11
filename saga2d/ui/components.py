@@ -219,6 +219,8 @@ class Label(Component):
             resolved.font_size,
             resolved.text_color,
             font=self._font_handle,
+            anchor_x="left",
+            anchor_y="top",
         )
 
     # -- Internal ----------------------------------------------------------
@@ -383,6 +385,19 @@ class Button(Component):
             self._computed_h,
             resolved.background_color,
         )
+
+        # Hover outline (outer glow effect when hovered).
+        if self._state == "hovered":
+            theme = self._game.theme
+            _draw_border(
+                self._game._backend,
+                self._computed_x - 2,
+                self._computed_y - 2,
+                self._computed_w + 4,
+                self._computed_h + 4,
+                theme.button_hover_outline_color,
+                theme.button_hover_outline_width,
+            )
 
         # Border (on top of background, below text).
         if resolved.border_width > 0 and resolved.border_color is not None:
@@ -580,10 +595,24 @@ class Panel(Component):
     # -- Drawing -----------------------------------------------------------
 
     def on_draw(self) -> None:
-        """Draw the panel's background rectangle and border."""
+        """Draw the panel's shadow, background rectangle, and border."""
         if self._game is None:
             return
         resolved = self._resolve_style()
+
+        # Shadow (offset dark rectangle behind the panel).
+        theme = self._game.theme
+        shadow_offset = theme.panel_shadow_offset
+        if shadow_offset > 0:
+            self._game._backend.draw_rect(
+                self._computed_x + shadow_offset,
+                self._computed_y + shadow_offset,
+                self._computed_w,
+                self._computed_h,
+                theme.panel_shadow_color,
+            )
+
+        # Background rect.
         bg = resolved.background_color
         if bg is not None:
             self._game._backend.draw_rect(
