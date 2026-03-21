@@ -361,9 +361,12 @@ class Sprite:
         """
         if self._current_action is None or self._removed:
             return
-        if self._current_action.update(dt):
-            self._current_action = None
-            self._game._action_sprites.discard(self)
+        action = self._current_action
+        if action.update(dt):
+            # Only clear if a callback didn't replace the action mid-update.
+            if self._current_action is action:
+                self._current_action = None
+                self._game._action_sprites.discard(self)
 
     # ------------------------------------------------------------------
     # Removal
@@ -411,6 +414,7 @@ class Sprite:
         anim: AnimationDef,
         *,
         on_complete: Callable[[], Any] | None = None,
+        _from_drain: bool = False,
     ) -> None:
         """Start *anim* immediately, replacing any current animation.
 
@@ -435,7 +439,8 @@ class Sprite:
                 on_complete()
             self._drain_queue()
 
-        self._anim_queue.clear()
+        if not _from_drain:
+            self._anim_queue.clear()
         self._anim_player = AnimationPlayer(
             frames=handles,
             frame_duration=anim.frame_duration,
@@ -588,7 +593,7 @@ class Sprite:
         """Pop the next queued animation and play it, if any."""
         if self._anim_queue:
             next_anim, next_cb = self._anim_queue.popleft()
-            self.play(next_anim, on_complete=next_cb)
+            self.play(next_anim, on_complete=next_cb, _from_drain=True)
 
     def _sync_to_backend(self, *, image: Any | None = None) -> None:
         """Push current visual state to the backend."""

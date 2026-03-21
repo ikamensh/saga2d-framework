@@ -561,10 +561,12 @@ class SceneStack:
         self._in_on_exit = True
         try:
             old = self._stack[-1]
-            old.on_exit()
-            self._cleanup_exiting_scene(old)
-            self._stack.pop()
-            self._teardown_exited_scene(old)
+            try:
+                old.on_exit()
+            finally:
+                self._cleanup_exiting_scene(old)
+                self._stack.pop()
+                self._teardown_exited_scene(old)
             if self._stack:
                 self._stack[-1].on_reveal()
         finally:
@@ -575,10 +577,12 @@ class SceneStack:
             old = self._stack[-1]
             self._in_on_exit = True
             try:
-                old.on_exit()
-                self._cleanup_exiting_scene(old)
-                self._stack.pop()
-                self._teardown_exited_scene(old)
+                try:
+                    old.on_exit()
+                finally:
+                    self._cleanup_exiting_scene(old)
+                    self._stack.pop()
+                    self._teardown_exited_scene(old)
             finally:
                 self._in_on_exit = False
         scene.game = self._game
@@ -591,14 +595,22 @@ class SceneStack:
 
     def _apply_clear_and_push(self, scene: Scene) -> None:
         self._in_on_exit = True
+        first_error: Exception | None = None
         try:
             for s in reversed(self._stack):
-                s.on_exit()
-                self._cleanup_exiting_scene(s)
-                self._teardown_exited_scene(s)
+                try:
+                    s.on_exit()
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
+                finally:
+                    self._cleanup_exiting_scene(s)
+                    self._teardown_exited_scene(s)
             self._stack.clear()
         finally:
             self._in_on_exit = False
+        if first_error is not None:
+            raise first_error
         scene.game = self._game
         self._stack.append(scene)
         try:
