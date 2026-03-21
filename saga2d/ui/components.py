@@ -353,6 +353,9 @@ class Button(Component):
             return False  # never consume moves — siblings need them
 
         if event.type == "click":
+            btn = getattr(event, "button", None)
+            if btn is not None and btn != "left":
+                return False
             if self.hit_test(event.x, event.y):
                 self._state = "pressed"
                 if self._on_click is not None:

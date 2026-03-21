@@ -506,6 +506,8 @@ class Sprite:
                 on_arrive()
             return
 
+        if speed <= 0:
+            raise ValueError(f"move_to speed must be positive, got {speed}")
         duration = distance / speed
 
         for tid in self._move_tween_ids:

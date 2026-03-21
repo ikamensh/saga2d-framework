@@ -523,7 +523,8 @@ class SceneStack:
         if scene.camera is not None:
             scene.camera._cancel_pan()
         # Reset cursor so the next scene starts with default (no custom cursor).
-        scene.game.cursor.set("default")
+        if hasattr(scene.game, 'cursor'):
+            scene.game.cursor.set("default")
 
     def _teardown_exited_scene(self, scene: Scene) -> None:
         """Final cleanup for a scene that is permanently leaving the stack.
