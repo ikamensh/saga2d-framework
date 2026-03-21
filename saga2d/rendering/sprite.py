@@ -261,7 +261,9 @@ class Sprite:
     @opacity.setter
     def opacity(self, value: int | float) -> None:
         if not math.isfinite(value):
-            value = 0.0 if value < 0 or value != value else 255.0  # -Inf/NaN->0, Inf->255
+            value = (
+                0.0 if value < 0 or value != value else 255.0
+            )  # -Inf/NaN->0, Inf->255
         self._opacity = max(0, min(255, int(value)))
         self._sync_to_backend()
 

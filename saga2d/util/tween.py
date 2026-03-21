@@ -157,8 +157,7 @@ class TweenManager:
                         t.on_complete()
                     except Exception:
                         _logger.exception(
-                            "Tween on_complete callback %r raised; "
-                            "removing tween %d",
+                            "Tween on_complete callback %r raised; removing tween %d",
                             t.on_complete,
                             tween_id,
                         )

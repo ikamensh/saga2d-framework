@@ -231,9 +231,7 @@ class Scene:
         try:
             self._key_handlers[key_or_action] = callback
         except AttributeError:
-            self._key_handlers: dict[str, Callable[[], Any]] = {
-                key_or_action: callback
-            }
+            self._key_handlers: dict[str, Callable[[], Any]] = {key_or_action: callback}
 
     def _dispatch_key_bindings(self, event: InputEvent) -> bool:
         """Dispatch *event* to registered key callbacks.
@@ -524,6 +522,8 @@ class SceneStack:
         # camera (and therefore the scene) after the scene exits.
         if scene.camera is not None:
             scene.camera._cancel_pan()
+        # Reset cursor so the next scene starts with default (no custom cursor).
+        scene.game.cursor.set("default")
 
     def _teardown_exited_scene(self, scene: Scene) -> None:
         """Final cleanup for a scene that is permanently leaving the stack.

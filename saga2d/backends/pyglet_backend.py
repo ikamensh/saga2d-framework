@@ -111,7 +111,9 @@ class PygletBackend:
         # one for rects (backgrounds) and one for text, so backgrounds
         # always render before text within the same layer.
         # Cache: layer_int -> (rect_group, text_group)
-        self._ui_layer_groups: dict[int, tuple[pyglet.graphics.Group, pyglet.graphics.Group]] = {}
+        self._ui_layer_groups: dict[
+            int, tuple[pyglet.graphics.Group, pyglet.graphics.Group]
+        ] = {}
         self._current_ui_layer: int = 0
 
     # ==================================================================
