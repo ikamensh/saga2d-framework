@@ -124,8 +124,15 @@ class SaveManager:
             return None
         try:
             text = path.read_text(encoding="utf-8")
-            return cast(dict[str, Any], json.loads(text))
-        except (json.JSONDecodeError, TypeError, OSError) as exc:
+            data = json.loads(text)
+            if not isinstance(data, dict):
+                raise SaveError(
+                    f"Corrupted save file in slot {slot}: {path} "
+                    f"(expected JSON object, got {type(data).__name__}; "
+                    f"delete the file to clear this slot)"
+                )
+            return cast(dict[str, Any], data)
+        except (json.JSONDecodeError, TypeError, OSError, UnicodeDecodeError) as exc:
             raise SaveError(
                 f"Corrupted save file in slot {slot}: {path} "
                 f"(delete the file to clear this slot)"
