@@ -474,11 +474,16 @@ class Game:
         """
         # Cancel all outstanding timers and tweens so their callbacks
         # (which may capture scenes, sprites, etc.) can be GC'd.
-        self._timer_manager.cancel_all()
-        self._tween_manager.cancel_all()
+        # Guard with hasattr — __del__ can fire after partial __init__.
+        if hasattr(self, "_timer_manager"):
+            self._timer_manager.cancel_all()
+        if hasattr(self, "_tween_manager"):
+            self._tween_manager.cancel_all()
 
         # Drain the scene stack: call on_exit + cleanup for every scene
         # so owned sprites, timers, and emitters are released.
+        if not hasattr(self, "_scene_stack"):
+            return  # __init__ failed before scene stack was created
         while self._scene_stack._stack:
             scene = self._scene_stack._stack.pop()
             try:

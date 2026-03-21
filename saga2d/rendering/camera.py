@@ -268,16 +268,30 @@ class Camera:
         sx: float,
         sy: float,
     ) -> tuple[float, float]:
-        """Convert screen (logical) coordinates to world coordinates."""
-        return (sx + self._x, sy + self._y)
+        """Convert screen (logical) coordinates to world coordinates.
+
+        Includes any active camera-shake offset so that a screen pixel
+        maps to the world position currently rendered there.
+        """
+        return (
+            sx + self._x + self._shake_offset_x,
+            sy + self._y + self._shake_offset_y,
+        )
 
     def world_to_screen(
         self,
         wx: float,
         wy: float,
     ) -> tuple[float, float]:
-        """Convert world coordinates to screen (logical) coordinates."""
-        return (wx - self._x, wy - self._y)
+        """Convert world coordinates to screen (logical) coordinates.
+
+        Includes any active camera-shake offset so that a world position
+        maps to where it is currently rendered on screen.
+        """
+        return (
+            wx - self._x - self._shake_offset_x,
+            wy - self._y - self._shake_offset_y,
+        )
 
     # ------------------------------------------------------------------
     # Smooth pan
