@@ -158,7 +158,14 @@ class Camera:
         """Manually scroll the camera by ``(dx, dy)`` pixels.
 
         Cancels any active pan and disables follow.
+
+        Raises:
+            ValueError: If *dx* or *dy* is NaN or Inf.
         """
+        if not math.isfinite(dx) or not math.isfinite(dy):
+            raise ValueError(
+                f"scroll deltas must be finite (not NaN or Inf), got ({dx}, {dy})"
+            )
         self._cancel_pan()
         self._follow_target = None
         self._x += dx
@@ -241,7 +248,15 @@ class Camera:
             decay:     Exponent applied to the linear progress
                        ``(1 - elapsed/duration)**decay`` — higher values
                        make the shake die out faster.
+
+        Raises:
+            ValueError: If *intensity*, *duration*, or *decay* is NaN or Inf.
         """
+        if not math.isfinite(intensity) or not math.isfinite(duration) or not math.isfinite(decay):
+            raise ValueError(
+                f"shake parameters must be finite (not NaN or Inf), "
+                f"got intensity={intensity}, duration={duration}, decay={decay}"
+            )
         if duration <= 0:
             # Treat zero/negative duration as a reset.
             self._shake_intensity = 0.0
@@ -384,6 +399,12 @@ class Camera:
             mouse_x: Current mouse x in logical screen coordinates (or ``None``).
             mouse_y: Current mouse y in logical screen coordinates (or ``None``).
         """
+        # Guard: non-finite dt would corrupt position via edge/key scroll and
+        # shake elapsed tracking.  Follow is dt-independent but we still skip
+        # the whole frame to stay consistent (matching TweenManager.update).
+        if not math.isfinite(dt):
+            return
+
         # 1. Follow tracking.
         if self._follow_target is not None:
             target = self._follow_target
@@ -391,9 +412,12 @@ class Camera:
             if hasattr(target, "is_removed") and target.is_removed:
                 self._follow_target = None
             else:
-                self._x = target.x - self._vw / 2
-                self._y = target.y - self._vh / 2
-                self._clamp()
+                tx, ty = target.x, target.y
+                # Guard against non-finite target position (e.g. physics NaN).
+                if math.isfinite(tx) and math.isfinite(ty):
+                    self._x = tx - self._vw / 2
+                    self._y = ty - self._vh / 2
+                    self._clamp()
 
         # 2. Edge scroll.
         if self._edge_scroll_enabled and mouse_x is not None and mouse_y is not None:
