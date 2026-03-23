@@ -328,6 +328,10 @@ class FadeOut(Action):
     """Fade opacity from current value to 0 over *duration* seconds."""
 
     def __init__(self, duration: float) -> None:
+        if not math.isfinite(duration) or duration < 0:
+            raise ValueError(
+                f"duration must be a finite number >= 0, got {duration}"
+            )
         self._duration = duration
         self._elapsed = 0.0
         self._start_opacity = 255
@@ -361,6 +365,10 @@ class FadeIn(Action):
     """Fade opacity from current value to 255 over *duration* seconds."""
 
     def __init__(self, duration: float) -> None:
+        if not math.isfinite(duration) or duration < 0:
+            raise ValueError(
+                f"duration must be a finite number >= 0, got {duration}"
+            )
         self._duration = duration
         self._elapsed = 0.0
         self._start_opacity = 0

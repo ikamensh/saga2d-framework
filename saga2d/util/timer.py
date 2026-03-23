@@ -133,8 +133,8 @@ class TimerManager:
         Raises:
             ValueError: If delay is negative.
         """
-        if delay < 0:
-            raise ValueError("delay must be >= 0")
+        if not math.isfinite(delay) or delay < 0:
+            raise ValueError(f"delay must be a finite number >= 0, got {delay}")
         timer_id = self._next_id
         self._next_id += 1
         chain_ids: list[int] = [timer_id]
@@ -155,8 +155,8 @@ class TimerManager:
         Raises:
             ValueError: If *interval* is zero or negative.
         """
-        if interval <= 0:
-            raise ValueError(f"interval must be > 0, got {interval}")
+        if not math.isfinite(interval) or interval <= 0:
+            raise ValueError(f"interval must be a finite number > 0, got {interval}")
         timer_id = self._next_id
         self._next_id += 1
         chain_ids: list[int] = [timer_id]

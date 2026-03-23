@@ -109,6 +109,10 @@ class TweenManager:
             raise ValueError(f"from_val must be finite, got {from_val}")
         if not math.isfinite(to_val):
             raise ValueError(f"to_val must be finite, got {to_val}")
+        if not math.isfinite(duration) or duration < 0:
+            raise ValueError(
+                f"duration must be a finite number >= 0, got {duration}"
+            )
         tween_id = self._next_id
         self._next_id += 1
         self._tweens[tween_id] = _Tween(
