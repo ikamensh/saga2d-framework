@@ -34,6 +34,7 @@ before assets are loaded.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,10 @@ class AnimationDef:
         frame_duration: float = 0.15,
         loop: bool = True,
     ) -> None:
+        if not math.isfinite(frame_duration) or frame_duration <= 0:
+            raise ValueError(
+                f"frame_duration must be a positive finite number, got {frame_duration}"
+            )
         self.frames: list[str] | str = frames
         self.frame_duration: float = frame_duration
         self.loop: bool = loop
@@ -119,6 +124,10 @@ class AnimationPlayer:
                 "Cannot play animation with zero frames. Check that your"
                 " AnimationDef has at least one frame name, or that the asset"
                 " prefix matches files on disk."
+            )
+        if not math.isfinite(frame_duration) or frame_duration <= 0:
+            raise ValueError(
+                f"frame_duration must be a positive finite number, got {frame_duration}"
             )
         self._frames = frames
         self._frame_duration = frame_duration
