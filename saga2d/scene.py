@@ -502,11 +502,19 @@ class SceneStack:
         finally:
             self._flushing = False
 
-    def _cleanup_exiting_scene(self, scene: Scene) -> None:
+    def _cleanup_exiting_scene(
+        self, scene: Scene, *, permanent: bool = True,
+    ) -> None:
         """Run common cleanup for a scene whose ``on_exit()`` has been called.
 
         Called **after** ``scene.on_exit()``.  Cleans up owned sprites,
-        timers, particle emitters, and cancels camera pan tweens.
+        particle emitters, and cancels camera pan tweens.
+
+        When *permanent* is ``True`` (pop, replace, clear_and_push), owned
+        timers are also cancelled.  When ``False`` (pushed over by another
+        scene), timers are preserved so they continue to fire while the
+        scene is covered and survive until the scene is revealed or
+        permanently removed.
 
         Note: the UI tree is NOT cleared here because this method is also
         called when a scene is *pushed over* (it stays on the stack and
@@ -514,7 +522,8 @@ class SceneStack:
         scenes that are permanently leaving the stack.
         """
         scene._cleanup_owned_sprites()
-        scene._cleanup_owned_timers()
+        if permanent:
+            scene._cleanup_owned_timers()
         # Remove any particle emitters the scene created from the game's
         # update set so they stop spawning after the scene is gone.
         scene._cleanup_owned_emitters()
@@ -544,7 +553,7 @@ class SceneStack:
             self._in_on_exit = True
             try:
                 old.on_exit()
-                self._cleanup_exiting_scene(old)
+                self._cleanup_exiting_scene(old, permanent=False)
             finally:
                 self._in_on_exit = False
         scene.game = self._game
