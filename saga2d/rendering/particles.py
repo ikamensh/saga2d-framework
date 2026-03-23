@@ -113,6 +113,19 @@ class ParticleEmitter:
         self._count = count
         self._speed = speed
         self._direction = direction
+
+        # Validate lifetime range — non-finite values (NaN, Inf, -Inf) cause
+        # particles to never expire because random.uniform returns NaN and
+        # ``NaN <= 0`` is always False (IEEE 754).
+        lt_min, lt_max = lifetime
+        if not math.isfinite(lt_min) or not math.isfinite(lt_max):
+            raise ValueError(
+                f"lifetime values must be finite numbers, got ({lt_min}, {lt_max})"
+            )
+        if lt_min < 0 or lt_max < 0:
+            raise ValueError(
+                f"lifetime values must be >= 0, got ({lt_min}, {lt_max})"
+            )
         self._lifetime = lifetime
         self._fade_out = fade_out
         self._layer = layer
