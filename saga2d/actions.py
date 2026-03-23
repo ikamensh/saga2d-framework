@@ -190,6 +190,8 @@ class Delay(Action):
     """Wait for *seconds*, then finish."""
 
     def __init__(self, seconds: float) -> None:
+        if not math.isfinite(seconds):
+            raise ValueError(f"seconds must be a finite number, got {seconds}")
         if seconds < 0:
             raise ValueError("seconds must be >= 0")
         self._seconds = seconds
@@ -279,6 +281,8 @@ class MoveTo(Action):
     """
 
     def __init__(self, position: tuple[float, float], speed: float) -> None:
+        if not math.isfinite(speed):
+            raise ValueError(f"speed must be a finite number > 0, got {speed}")
         if speed <= 0:
             raise ValueError(f"speed must be > 0, got {speed}")
         x, y = float(position[0]), float(position[1])

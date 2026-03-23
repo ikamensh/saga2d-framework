@@ -52,8 +52,8 @@ class SaveManager:
             automatically if it doesn't exist.
     """
 
-    def __init__(self, save_dir: Path) -> None:
-        self._save_dir = save_dir
+    def __init__(self, save_dir: Path | str) -> None:
+        self._save_dir = Path(save_dir) if not isinstance(save_dir, Path) else save_dir
 
     # ------------------------------------------------------------------
     # Public API
