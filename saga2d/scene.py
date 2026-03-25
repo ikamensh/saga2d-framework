@@ -438,6 +438,7 @@ class SceneStack:
             self._pending_ops.append(("push", scene))
             return
         self._apply_push(scene)
+        self._flush_after_direct_op()
 
     def pop(self) -> None:
         """Pop top scene. Top gets on_exit, new top (if any) gets on_reveal."""
@@ -445,6 +446,7 @@ class SceneStack:
             self._pending_ops.append(("pop",))
             return
         self._apply_pop()
+        self._flush_after_direct_op()
 
     def replace(self, scene: Scene) -> None:
         """Replace top scene. Old gets on_exit, new gets on_enter. No on_reveal.
@@ -459,6 +461,7 @@ class SceneStack:
             self._pending_ops.append(("replace", scene))
             return
         self._apply_replace(scene)
+        self._flush_after_direct_op()
 
     def clear_and_push(self, scene: Scene) -> None:
         """Clear stack, push scene. All cleared scenes get on_exit."""
@@ -468,10 +471,57 @@ class SceneStack:
             self._pending_ops.append(("clear_and_push", scene))
             return
         self._apply_clear_and_push(scene)
+        self._flush_after_direct_op()
 
     def begin_tick(self) -> None:
         """Mark start of tick. Operations will be deferred until flush."""
         self._in_tick = True
+
+    def _flush_after_direct_op(self) -> None:
+        """Flush any deferred ops that accumulated during a direct
+        (non-tick) scene operation.
+
+        Lifecycle hooks like ``on_exit`` and ``on_reveal`` set
+        ``_in_on_exit`` which defers operations.  When the direct
+        ``push``/``pop``/``replace``/``clear_and_push`` call returns,
+        those deferred ops need to be flushed immediately.
+
+        No-op when already inside a tick or another flush.
+        """
+        if self._in_tick or self._flushing or self._in_on_exit:
+            return
+        if not self._pending_ops:
+            return
+        self._flushing = True
+        try:
+            max_iterations = 1000
+            iterations = 0
+            while self._pending_ops and iterations < max_iterations:
+                iterations += 1
+                op = self._pending_ops.popleft()
+                kind = op[0]
+                if kind == "pop":
+                    self._apply_pop()
+                elif kind == "push":
+                    scene = op[1]  # type: ignore[misc]
+                    self._apply_push(scene)
+                elif kind == "replace":
+                    scene = op[1]  # type: ignore[misc]
+                    self._apply_replace(scene)
+                elif kind == "clear_and_push":
+                    scene = op[1]  # type: ignore[misc]
+                    self._apply_clear_and_push(scene)
+            if iterations >= max_iterations and self._pending_ops:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "SceneStack: deferred ops cap (%d) reached; "
+                    "%d ops discarded",
+                    max_iterations,
+                    len(self._pending_ops),
+                )
+                self._pending_ops.clear()
+        finally:
+            self._flushing = False
 
     def flush_pending_ops(self) -> None:
         """Execute all queued operations, then end tick."""
@@ -499,6 +549,20 @@ class SceneStack:
                 elif kind == "clear_and_push":
                     scene = op[1]  # type: ignore[misc]
                     self._apply_clear_and_push(scene)
+            if iterations >= max_iterations and self._pending_ops:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "SceneStack: deferred ops cap (%d) reached; "
+                    "%d ops discarded",
+                    max_iterations,
+                    len(self._pending_ops),
+                )
+                self._pending_ops.clear()
+        except Exception:
+            # Clear remaining ops to prevent stale operations from
+            # leaking into the next tick (F57).
+            self._pending_ops.clear()
+            raise
         finally:
             self._flushing = False
 
