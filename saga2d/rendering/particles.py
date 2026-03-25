@@ -111,7 +111,22 @@ class ParticleEmitter:
         self._x = float(position[0])
         self._y = float(position[1])
         self._count = count
+        # Validate speed range — non-finite values produce NaN velocities
+        # when random.uniform() is called during particle spawning.
+        sp_min, sp_max = speed
+        if not math.isfinite(sp_min) or not math.isfinite(sp_max):
+            raise ValueError(
+                f"speed values must be finite numbers, got ({sp_min}, {sp_max})"
+            )
         self._speed = speed
+
+        # Validate direction range — non-finite angles produce NaN via
+        # math.radians() → math.cos()/sin().
+        dir_min, dir_max = direction
+        if not math.isfinite(dir_min) or not math.isfinite(dir_max):
+            raise ValueError(
+                f"direction values must be finite numbers, got ({dir_min}, {dir_max})"
+            )
         self._direction = direction
 
         # Validate lifetime range — non-finite values (NaN, Inf, -Inf) cause

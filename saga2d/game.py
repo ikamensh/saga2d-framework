@@ -16,6 +16,7 @@ Scene stack convenience methods (``push``, ``pop``, ``replace``,
 from __future__ import annotations
 
 import logging
+import math
 import sys
 import weakref
 from pathlib import Path
@@ -566,6 +567,17 @@ class Game:
         """
         if dt is None:
             dt = self._backend.get_dt()
+
+        # Validate dt to prevent NaN/Inf/negative from poisoning all
+        # downstream systems (scene.update, timers, tweens, animations).
+        if not math.isfinite(dt):
+            raise ValueError(
+                f"dt must be a finite number, got {dt!r}"
+            )
+        if dt < 0:
+            raise ValueError(
+                f"dt must not be negative, got {dt!r}"
+            )
 
         # -- Input phase ---------------------------------------------------
         raw_events: list[Event] = self._backend.poll_events()

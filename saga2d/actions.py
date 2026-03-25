@@ -214,6 +214,10 @@ class Do(Action):
     """Call *fn* once, then finish immediately (instant action)."""
 
     def __init__(self, fn: Callable[[], Any]) -> None:
+        if not callable(fn):
+            raise TypeError(
+                f"Do() requires a callable, got {type(fn).__name__}"
+            )
         self._fn = fn
 
     def start(self, sprite: Sprite) -> None:
@@ -242,6 +246,13 @@ class PlayAnim(Action):
     """
 
     def __init__(self, anim_def: AnimationDef) -> None:
+        from saga2d.animation import AnimationDef as _AnimDef
+
+        if not isinstance(anim_def, _AnimDef):
+            raise TypeError(
+                f"PlayAnim requires an AnimationDef, "
+                f"got {type(anim_def).__name__}"
+            )
         self._anim_def = anim_def
         self._sprite: Sprite | None = None
         self._done = False
@@ -437,6 +448,12 @@ class Repeat(Action):
             raise TypeError(
                 f"Repeat child must be an Action, got {type(action).__name__}"
             )
+        if times is not None:
+            if not isinstance(times, int):
+                raise TypeError(
+                    f"Repeat times must be an int or None, "
+                    f"got {type(times).__name__}"
+                )
         self._action_template = action
         self._times = times  # None = forever
         self._count = 0
