@@ -296,10 +296,28 @@ class MoveTo(Action):
             raise ValueError(f"speed must be a finite number > 0, got {speed}")
         if speed <= 0:
             raise ValueError(f"speed must be > 0, got {speed}")
-        x, y = float(position[0]), float(position[1])
+        # Validate position is an iterable of at least 2 numbers.
+        try:
+            it = iter(position)
+            raw_x = next(it)
+            raw_y = next(it)
+        except TypeError:
+            raise TypeError(
+                f"position must be a (x, y) tuple, got {type(position).__name__}"
+            ) from None
+        except StopIteration:
+            raise TypeError(
+                f"position must have at least 2 elements, got {len(position)!r}"
+            ) from None
+        try:
+            x, y = float(raw_x), float(raw_y)
+        except (TypeError, ValueError):
+            raise TypeError(
+                f"position elements must be numbers, got ({raw_x!r}, {raw_y!r})"
+            ) from None
         if not (math.isfinite(x) and math.isfinite(y)):
             raise ValueError(
-                f"target position must be finite floats, got ({position[0]!r}, {position[1]!r})"
+                f"target position must be finite floats, got ({raw_x!r}, {raw_y!r})"
             )
         self._target_x = x
         self._target_y = y
@@ -449,10 +467,14 @@ class Repeat(Action):
                 f"Repeat child must be an Action, got {type(action).__name__}"
             )
         if times is not None:
-            if not isinstance(times, int):
+            if not isinstance(times, int) or isinstance(times, bool):
                 raise TypeError(
                     f"Repeat times must be an int or None, "
                     f"got {type(times).__name__}"
+                )
+            if times < 0:
+                raise ValueError(
+                    f"Repeat times must be >= 0, got {times}"
                 )
         self._action_template = action
         self._times = times  # None = forever
