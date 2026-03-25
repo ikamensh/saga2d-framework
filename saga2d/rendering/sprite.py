@@ -284,10 +284,15 @@ class Sprite:
 
     @tint.setter
     def tint(self, value: tuple[float, float, float]) -> None:
+        r, g, b = float(value[0]), float(value[1]), float(value[2])
+        if not math.isfinite(r) or not math.isfinite(g) or not math.isfinite(b):
+            raise ValueError(
+                f"Sprite tint components must be finite, got ({r}, {g}, {b})"
+            )
         self._tint = (
-            max(0.0, min(1.0, value[0])),
-            max(0.0, min(1.0, value[1])),
-            max(0.0, min(1.0, value[2])),
+            max(0.0, min(1.0, r)),
+            max(0.0, min(1.0, g)),
+            max(0.0, min(1.0, b)),
         )
         self._sync_to_backend()
 
@@ -502,6 +507,11 @@ class Sprite:
         use_ease = Ease.LINEAR if ease is None else ease
 
         target_x, target_y = float(target_pos[0]), float(target_pos[1])
+        if not math.isfinite(target_x) or not math.isfinite(target_y):
+            raise ValueError(
+                f"move_to target position must be finite, "
+                f"got ({target_x}, {target_y})"
+            )
         dx = target_x - self._x
         dy = target_y - self._y
         distance = math.hypot(dx, dy)

@@ -166,8 +166,13 @@ class ParticleEmitter:
 
     @position.setter
     def position(self, value: tuple[float, float]) -> None:
-        self._x = float(value[0])
-        self._y = float(value[1])
+        x, y = float(value[0]), float(value[1])
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise ValueError(
+                f"ParticleEmitter position must be finite, got ({x}, {y})"
+            )
+        self._x = x
+        self._y = y
 
     @property
     def is_active(self) -> bool:

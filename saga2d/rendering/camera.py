@@ -121,6 +121,23 @@ class Camera:
         self,
         value: tuple[float, float, float, float] | None,
     ) -> None:
+        if value is not None:
+            left, top, right, bottom = value
+            for v, name in ((left, "left"), (top, "top"),
+                            (right, "right"), (bottom, "bottom")):
+                if not math.isfinite(v):
+                    raise ValueError(
+                        f"world_bounds values must be finite, "
+                        f"got {name}={v!r}"
+                    )
+            if left > right:
+                raise ValueError(
+                    f"world_bounds left ({left}) must be <= right ({right})"
+                )
+            if top > bottom:
+                raise ValueError(
+                    f"world_bounds top ({top}) must be <= bottom ({bottom})"
+                )
         self._world_bounds = value
         self._clamp()
 
@@ -181,7 +198,15 @@ class Camera:
 
         When the mouse is within *margin* pixels of the viewport edge,
         the camera scrolls at *speed* pixels per second toward that edge.
+
+        Raises:
+            ValueError: If *margin* or *speed* is NaN or Inf.
         """
+        if not math.isfinite(margin) or not math.isfinite(speed):
+            raise ValueError(
+                f"edge scroll margin and speed must be finite, "
+                f"got margin={margin!r}, speed={speed!r}"
+            )
         self._edge_scroll_enabled = True
         self._edge_margin = margin
         self._edge_speed = speed
@@ -201,7 +226,14 @@ class Camera:
         second.  Tracks key_press/key_release internally; call
         :meth:`handle_input` from the game loop (the framework does this
         automatically when the scene has a camera).
+
+        Raises:
+            ValueError: If *speed* is NaN or Inf.
         """
+        if not math.isfinite(speed):
+            raise ValueError(
+                f"key scroll speed must be a finite number, got {speed!r}"
+            )
         self._key_scroll_enabled = True
         self._key_scroll_speed = speed
 

@@ -175,6 +175,9 @@ class AnimationPlayer:
         if self._finished:
             return None
 
+        if not math.isfinite(dt):
+            return None  # skip frame — matches Camera.update() pattern
+
         self._elapsed += dt
         old_index = self._frame_index
 

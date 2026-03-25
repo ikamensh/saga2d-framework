@@ -285,6 +285,8 @@ class Button(Component):
 
     @text.setter
     def text(self, value: str) -> None:
+        if value is None:
+            raise TypeError("Button text must be a string, got None")
         if value != self._text:
             self._text = value
             self._font_handle = None
