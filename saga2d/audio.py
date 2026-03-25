@@ -244,7 +244,16 @@ class AudioManager:
 
         If no music is playing, equivalent to :meth:`play_music`.
         If the same track is already playing, no-op.
+
+        Raises:
+            ValueError: If *duration* is not a finite number >= 0.
         """
+        import math
+
+        if not math.isfinite(duration) or duration < 0:
+            raise ValueError(
+                f"crossfade duration must be a finite number >= 0, got {duration}"
+            )
         if self._current_music_name == name:
             return
         if self._current_player_id is None:

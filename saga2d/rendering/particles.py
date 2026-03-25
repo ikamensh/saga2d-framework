@@ -180,7 +180,20 @@ class ParticleEmitter:
         """Start spawning at *rate* particles per second.
 
         Call ``stop()`` to cease continuous spawning.
+
+        Raises:
+            ValueError: If *rate* is not a finite number >= 0.  An infinite
+                rate would cause an infinite loop in :meth:`update`; a NaN
+                rate would silently disable spawning.
         """
+        if not math.isfinite(rate):
+            raise ValueError(
+                f"rate must be a finite number >= 0, got {rate}"
+            )
+        if rate < 0:
+            raise ValueError(
+                f"rate must be >= 0, got {rate}"
+            )
         self._continuous_rate = rate
         self._spawn_accum = 0.0
         # Ensure the emitter is registered (may have been auto-removed).
