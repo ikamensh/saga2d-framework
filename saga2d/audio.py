@@ -12,6 +12,7 @@ delegates to the backend for rendering.
 
 from __future__ import annotations
 
+import math
 import random
 from typing import TYPE_CHECKING
 
@@ -137,6 +138,10 @@ class AudioManager:
             raise KeyError(
                 f"Unknown audio channel {channel!r}. "
                 f"Valid channels: {sorted(self._volumes)}"
+            )
+        if not math.isfinite(level):
+            raise ValueError(
+                f"Volume level must be a finite number, got {level!r}"
             )
         self._volumes[channel] = max(0.0, min(1.0, level))
 
