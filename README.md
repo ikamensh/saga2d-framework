@@ -107,6 +107,12 @@ game's rules through the mock backend.
 | **Tweening** | `tween(obj, "x", 0, 100, 1.0)` for property interpolation. |
 | **Drag-and-drop** | `DragManager` for draggable UI. |
 
+New to saga2d? Start with **[`tutorials/declarative/tutorial.md`](tutorials/declarative/tutorial.md)**
+— a 5-step walk-through that builds a tiny guess-the-number game from
+scratch, introducing one declarative API per step. Each snippet in the
+tutorial is mirrored by a test in `tests/examples/test_tutorial_snippets.py`
+so it can't drift.
+
 See `DESIGN.md` for requirements, `BACKEND.md` for implementation details, and
 `keras.dev` for a round-by-round log of how the declarative APIs evolved.
 
