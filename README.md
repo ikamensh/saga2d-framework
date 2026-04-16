@@ -72,12 +72,16 @@ Everything in this scene is declarative:
 
 ## Examples
 
-Three complete examples ship under `examples/`, each under 150 lines:
+Four complete examples ship under `examples/`, each under 200 lines:
 
+* **`guess_the_number/`** — the tutorial's finished form. Pick a hidden
+  number with Up/Down (±1, Shift for ±10), Enter to lock in.
+  Demonstrates `Scene.controls`, reactive Label HUD, `Theme(text_styles=…)`,
+  event-aware modifier handlers. **Start here if you're new.**
 * **`ring_of_pain/`** — roguelike node ring. Player rotates around 8 nodes
   (enemies, treasure, heart, shop, portal), attacks or collects per node.
-  Demonstrates `ring_positions` + `ring_budget`, sub-labels on every node,
-  reactive HP bar, declarative controls.
+  Demonstrates `ring_positions` + `ring_budget`, reactive HP bar,
+  procedural sprite (`player_token.png`), procedural SFX, save/load.
 * **`dial_menu/`** — 6-option radial selector with gold highlight on the
   current option. Demonstrates `Selector` state helper, `ring_positions`
   at a different count, theme with three text styles.
@@ -86,7 +90,8 @@ Three complete examples ship under `examples/`, each under 150 lines:
   Scene.controls with modifier-aware event handlers, `draw_rect` borders.
 
 Each example has its own test file under `tests/examples/` exercising the
-game's rules through the mock backend.
+game's rules through the mock backend, plus a structured snapshot under
+`tests/examples/snapshots/` for regression.
 
 ## Core Features
 
