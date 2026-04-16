@@ -62,10 +62,18 @@ class KeyEvent:
         type: ``"key_press"`` or ``"key_release"``.
         key:  Backend-agnostic string name, e.g. ``"space"``, ``"a"``,
               ``"escape"``, ``"return"``, ``"up"``, ``"down"``.
+        shift/ctrl/alt/meta:
+              Modifier-key state at the time of the event. ``meta`` is
+              Cmd on macOS / Win on Windows / Super on Linux. Default
+              ``False`` so existing test fixtures don't break.
     """
 
     type: str  # "key_press" | "key_release"
     key: str
+    shift: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    meta: bool = False
 
 
 @dataclass(frozen=True)

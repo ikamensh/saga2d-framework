@@ -66,6 +66,20 @@ class InputEvent:
                   scene has a camera, equals ``camera.screen_to_world(x, y)[0]``.
                   When there is no camera, equals ``x``.
         world_y:  Camera-transformed y coordinate (see *world_x*).
+        shift/ctrl/alt/meta:
+                  Modifier-key state at the time of the event. ``True`` iff
+                  the corresponding modifier was held. ``meta`` is the
+                  Cmd key on macOS, the Windows key on Windows, Super on
+                  Linux. Handlers that take the event as an argument
+                  (event-aware dispatch, iter-11) can read these directly::
+
+                      class MyScene(Scene):
+                          controls = {"r": "restart"}
+                          def restart(self, event):
+                              if event.shift:
+                                  self._reset_to_checkpoint()
+                              else:
+                                  self._full_reset()
     """
 
     type: str
@@ -78,6 +92,10 @@ class InputEvent:
     dy: int = 0
     world_x: float | None = None
     world_y: float | None = None
+    shift: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    meta: bool = False
 
 
 # Mouse event types that carry meaningful coordinates.
@@ -198,6 +216,10 @@ class InputManager:
                         type=event.type,
                         key=event.key,
                         action=action,
+                        shift=event.shift,
+                        ctrl=event.ctrl,
+                        alt=event.alt,
+                        meta=event.meta,
                     )
                 )
             elif isinstance(event, MouseEvent):

@@ -445,13 +445,33 @@ class MockBackend:
     # Test helpers — event injection
     # ==================================================================
 
-    def inject_key(self, key: str, type: str = "key_press") -> None:
+    def inject_key(
+        self,
+        key: str,
+        type: str = "key_press",
+        *,
+        shift: bool = False,
+        ctrl: bool = False,
+        alt: bool = False,
+        meta: bool = False,
+    ) -> None:
         """Inject a keyboard event into the pending queue.
 
         >>> mock.inject_key("space")
         >>> mock.inject_key("escape", type="key_release")
+        >>> mock.inject_key("r", shift=True)         # Shift+R
+        >>> mock.inject_key("z", meta=True, ctrl=True)  # Meta+Ctrl+Z
         """
-        self._pending_events.append(KeyEvent(type=type, key=key))
+        self._pending_events.append(
+            KeyEvent(
+                type=type,
+                key=key,
+                shift=shift,
+                ctrl=ctrl,
+                alt=alt,
+                meta=meta,
+            )
+        )
 
     def inject_click(
         self,

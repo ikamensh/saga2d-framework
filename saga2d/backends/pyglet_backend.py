@@ -46,6 +46,28 @@ def _symbol_to_name(symbol: int) -> str:
     return overrides.get(symbol) or pyglet_key.symbol_string(symbol).lower()
 
 
+def _mods_to_kwargs(modifiers: int) -> dict[str, bool]:
+    """Decompose pyglet's modifier bitmask into our KeyEvent kwargs.
+
+    * ``shift`` = ``MOD_SHIFT``
+    * ``ctrl``  = ``MOD_CTRL``
+    * ``alt``   = ``MOD_ALT | MOD_OPTION`` (Alt on Windows, Option on macOS)
+    * ``meta``  = ``MOD_COMMAND | MOD_WINDOWS`` (Cmd on macOS, Win on Windows)
+    """
+    from pyglet.window import key as pyglet_key
+
+    alt_mask = pyglet_key.MOD_ALT | getattr(pyglet_key, "MOD_OPTION", 0)
+    meta_mask = getattr(pyglet_key, "MOD_COMMAND", 0) | getattr(
+        pyglet_key, "MOD_WINDOWS", 0,
+    )
+    return {
+        "shift": bool(modifiers & pyglet_key.MOD_SHIFT),
+        "ctrl":  bool(modifiers & pyglet_key.MOD_CTRL),
+        "alt":   bool(modifiers & alt_mask),
+        "meta":  bool(modifiers & meta_mask),
+    }
+
+
 def _button_to_name(button: int) -> str:
     """Convert a pyglet mouse button constant to left/right/middle."""
     from pyglet.window import mouse as pyglet_mouse
@@ -221,14 +243,22 @@ class PygletBackend:
         @self.window.event
         def on_key_press(symbol: int, modifiers: int) -> bool:
             backend._event_queue.append(
-                KeyEvent(type="key_press", key=_symbol_to_name(symbol)),
+                KeyEvent(
+                    type="key_press",
+                    key=_symbol_to_name(symbol),
+                    **_mods_to_kwargs(modifiers),
+                ),
             )
             return True  # EVENT_HANDLED — prevent pyglet's default ESC-closes-window
 
         @self.window.event
         def on_key_release(symbol: int, modifiers: int) -> bool:
             backend._event_queue.append(
-                KeyEvent(type="key_release", key=_symbol_to_name(symbol)),
+                KeyEvent(
+                    type="key_release",
+                    key=_symbol_to_name(symbol),
+                    **_mods_to_kwargs(modifiers),
+                ),
             )
             return True
 
