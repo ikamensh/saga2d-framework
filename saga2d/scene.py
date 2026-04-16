@@ -310,6 +310,60 @@ class Scene:
             opacity=opacity,
         )
 
+    def draw_circle(
+        self,
+        x: float,
+        y: float,
+        radius: float,
+        color: tuple[int, int, int, int],
+        *,
+        opacity: float = 1.0,
+        segments: int | None = None,
+    ) -> None:
+        """Draw a filled circle in **screen space** centred at ``(x, y)``.
+
+        Parameters match :meth:`draw_rect`; *segments* controls tessellation
+        quality (``None`` = backend default).
+        """
+        self.game._backend.draw_circle(
+            int(x),
+            int(y),
+            int(radius),
+            color,
+            opacity=opacity,
+            segments=segments,
+        )
+
+    def draw_text(
+        self,
+        text: str,
+        x: float,
+        y: float,
+        *,
+        font_size: int,
+        color: tuple[int, int, int, int],
+        font: Any | None = None,
+        anchor_x: str = "left",
+        anchor_y: str = "baseline",
+    ) -> None:
+        """Draw *text* at ``(x, y)`` in **screen space**.
+
+        Parallel to :meth:`draw_rect` / :meth:`draw_circle`, so a scene
+        never needs to touch ``self.game._backend`` for primitive draws.
+        *anchor_x* / *anchor_y* accept pyglet's anchor names ("center",
+        "left", "right", "top", "bottom", "baseline").
+        """
+        self.game._backend.draw_text(
+            text,
+            int(x),
+            int(y),
+            font_size,
+            color,
+            font=font,
+            anchor_x=anchor_x,
+            anchor_y=anchor_y,
+        )
+
     def draw_world_rect(
         self,
         x: float,

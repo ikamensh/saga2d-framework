@@ -177,6 +177,17 @@ class Game:
         return self._backend
 
     @property
+    def resolution(self) -> tuple[int, int]:
+        """The logical ``(width, height)`` set at :class:`Game` creation.
+
+        This is the coordinate space game code positions things in — not
+        the physical framebuffer size.  Scenes that draw absolutely-
+        positioned HUDs or lay sprites out procedurally (ring, grid,
+        fan) need this.
+        """
+        return self._resolution
+
+    @property
     def assets(self) -> AssetManager:
         """The :class:`~saga2d.assets.AssetManager`, created lazily.
 
