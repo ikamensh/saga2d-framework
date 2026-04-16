@@ -50,9 +50,40 @@ class Scene:
     # this color before drawing. Values 0–255. Default None = no clear.
     background_color: tuple[int, ...] | None = None
 
+    # Declarative input map — class-level dict from key/action name (or
+    # a tuple of aliases) to the name of a method on ``self``. Dispatched
+    # automatically after instance-level :meth:`bind_key` handlers. Example::
+    #
+    #     class RingOfPainScene(Scene):
+    #         controls = {
+    #             ("right", "d"):         "rotate_cw",
+    #             ("left", "a"):          "rotate_ccw",
+    #             ("confirm", "space"):   "interact",
+    #         }
+    #
+    # A zero-arg method call for each match. ``bind_key`` overrides
+    # the class-level binding when both exist for the same key.
+    controls: dict[str | tuple[str, ...], str] = {}
+
+    # Populated at class-definition time with the tuple-keys flattened —
+    # kept separate so the user-facing ``controls`` stays readable.
+    _normalised_controls: dict[str, str] = {}
+
     game: Game
     camera: Camera | None = None
     _ui: _UIRoot | None = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Flatten tuple-aliased keys in ``cls.controls`` once per subclass."""
+        super().__init_subclass__(**kwargs)
+        flat: dict[str, str] = {}
+        for keys, method_name in cls.controls.items():
+            if isinstance(keys, tuple):
+                for alias in keys:
+                    flat[alias] = method_name
+            else:
+                flat[keys] = method_name
+        cls._normalised_controls = flat
 
     # ------------------------------------------------------------------
     # Sprite ownership
@@ -256,16 +287,36 @@ class Scene:
 
         Called by the game loop before :meth:`handle_input`.  Returns
         ``True`` if a binding matched and consumed the event.
+
+        Two dispatch layers, checked in order:
+
+        1. Instance-level handlers registered via :meth:`bind_key` /
+           :meth:`bind_keys`. These always win when present — explicit
+           runtime binding overrides the class-level declaration.
+        2. Class-level :attr:`controls` dict. The matched value is a
+           method name; the method is resolved on ``self`` at dispatch
+           time and invoked with no arguments.
         """
+        if event.type != "key_press":
+            return False
+
         handlers: dict[str, Callable[[], Any]] | None = getattr(
             self, "_key_handlers", None
         )
-        if not handlers or event.type != "key_press":
-            return False
-        cb = handlers.get(event.action) or handlers.get(event.key)  # type: ignore[arg-type]
-        if cb is not None:
-            cb()
-            return True
+        if handlers:
+            cb = handlers.get(event.action) or handlers.get(event.key)  # type: ignore[arg-type]
+            if cb is not None:
+                cb()
+                return True
+
+        flat = type(self)._normalised_controls
+        if flat:
+            method_name = flat.get(event.action) or flat.get(event.key)  # type: ignore[arg-type]
+            if method_name is not None:
+                method = getattr(self, method_name, None)
+                if callable(method):
+                    method()
+                    return True
         return False
 
     def on_enter(self) -> None:
