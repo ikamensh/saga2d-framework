@@ -15,37 +15,30 @@ from typing import TYPE_CHECKING, Any, Callable
 from saga2d.util.timer import TimerHandle
 
 
-# Module-level cache so signature inspection doesn't fire on every
-# keypress. Key is the callable (id-based via WeakValueDictionary would
-# be ideal, but bound methods aren't weakref-able).
-_SIG_TAKES_EVENT: dict[int, bool] = {}
-
-
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
     """Call *cb*, passing *event* iff the signature accepts ≥1 positional arg.
 
-    Cached per callable id. Bound methods and lambdas get their
-    signature inspected once; subsequent dispatches use the cached
-    verdict.
+    Signature inspection runs on every call — ``inspect.signature`` is
+    ~1 μs for typical callables and key presses happen at human rate
+    (<10/sec), so there is no measurable dispatch overhead. The
+    previous id-keyed cache (iter-11) had a lifecycle hazard (bound
+    methods get a new object on every access, lambdas GC'd and reused
+    ids) for essentially no benefit; simpler is better.
     """
-    key = id(cb)
-    takes_event = _SIG_TAKES_EVENT.get(key)
-    if takes_event is None:
-        try:
-            params = inspect.signature(cb).parameters
-            takes_event = any(
-                p.kind
-                in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    inspect.Parameter.VAR_POSITIONAL,
-                )
-                for p in params.values()
+    try:
+        params = inspect.signature(cb).parameters
+        takes_event = any(
+            p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.VAR_POSITIONAL,
             )
-        except (ValueError, TypeError):
-            # C-implemented builtins sometimes refuse inspect.signature.
-            takes_event = False
-        _SIG_TAKES_EVENT[key] = takes_event
+            for p in params.values()
+        )
+    except (ValueError, TypeError):
+        # C-implemented builtins sometimes refuse inspect.signature.
+        takes_event = False
     if takes_event:
         cb(event)
     else:
@@ -415,6 +408,8 @@ class Scene:
         color: tuple[int, int, int, int],
         *,
         opacity: float = 1.0,
+        border_color: tuple[int, int, int, int] | None = None,
+        border_width: int = 0,
     ) -> None:
         """Draw a filled rectangle in **screen space**.
 
@@ -422,21 +417,40 @@ class Scene:
         inside :meth:`draw`.  Coordinates are in logical screen pixels.
 
         Parameters:
-            x:       Left edge in screen pixels.
-            y:       Top edge in screen pixels.
-            width:   Width in pixels.
-            height:  Height in pixels.
-            color:   ``(R, G, B, A)`` with values 0–255.
-            opacity: Extra opacity multiplier (0.0–1.0, default 1.0).
+            x:            Left edge in screen pixels.
+            y:            Top edge in screen pixels.
+            width:        Width in pixels.
+            height:       Height in pixels.
+            color:        ``(R, G, B, A)`` fill colour (0–255).
+            opacity:      Extra opacity multiplier (0.0–1.0, default 1.0).
+            border_color: ``(R, G, B, A)`` border colour. When given with
+                          a positive *border_width*, the method draws the
+                          border as an outer filled rect, then the inner
+                          fill inset by *border_width*. Saves tic-tac-toe-
+                          style grids from two calls per cell.
+            border_width: Pixel thickness of the border. Ignored when
+                          *border_color* is ``None``.
         """
-        self.game._backend.draw_rect(
-            int(x),
-            int(y),
-            int(width),
-            int(height),
-            color,
-            opacity=opacity,
-        )
+        backend = self.game._backend
+        if border_color is not None and border_width > 0:
+            backend.draw_rect(
+                int(x), int(y), int(width), int(height),
+                border_color, opacity=opacity,
+            )
+            bw = int(border_width)
+            backend.draw_rect(
+                int(x) + bw,
+                int(y) + bw,
+                max(0, int(width) - 2 * bw),
+                max(0, int(height) - 2 * bw),
+                color,
+                opacity=opacity,
+            )
+        else:
+            backend.draw_rect(
+                int(x), int(y), int(width), int(height),
+                color, opacity=opacity,
+            )
 
     def draw_circle(
         self,
