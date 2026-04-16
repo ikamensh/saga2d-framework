@@ -660,6 +660,33 @@ class Scene:
                 color, opacity=opacity,
             )
 
+    def draw_image(
+        self,
+        image_handle: Any,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        *,
+        opacity: float = 1.0,
+    ) -> None:
+        """Draw a loaded image in **screen space** at ``(x, y)`` with the
+        given size. *image_handle* comes from ``game.assets.image(name)``.
+
+        Parallel to :meth:`draw_rect` / :meth:`draw_circle` /
+        :meth:`draw_text` — the final scene-level draw helper that
+        completes the "no backend reach-in from game code" story.
+        Per-frame call (cleared each ``begin_frame``).
+        """
+        self.game._backend.draw_image(
+            image_handle,
+            int(x),
+            int(y),
+            int(width),
+            int(height),
+            opacity=opacity,
+        )
+
     def draw_circle(
         self,
         x: float,
