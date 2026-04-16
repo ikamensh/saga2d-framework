@@ -72,7 +72,7 @@ Everything in this scene is declarative:
 
 ## Examples
 
-Four complete examples ship under `examples/`, each under 200 lines:
+Five complete examples ship under `examples/`, each under 200 lines:
 
 * **`guess_the_number/`** — the tutorial's finished form. Pick a hidden
   number with Up/Down (±1, Shift for ±10), Enter to lock in.
@@ -88,6 +88,9 @@ Four complete examples ship under `examples/`, each under 200 lines:
 * **`tictactoe/`** — 3x3 grid with arrow-key cursor, win/draw detection,
   Shift+R shortcut to open with X in centre. Demonstrates `grid_positions`,
   Scene.controls with modifier-aware event handlers, `draw_rect` borders.
+* **`reaction_test/`** — disc turns green after a random delay; press
+  Space as fast as you can. Demonstrates `Scene.after(delay, cb)` timers,
+  a state-machine driven by them, reactive-Label status display.
 
 Each example has its own test file under `tests/examples/` exercising the
 game's rules through the mock backend, plus a structured snapshot under
