@@ -135,14 +135,25 @@ def _merge_label_style(
 
 
 class Label(Component):
-    """Static text display.
+    """Static or reactive text display.
 
     Draws a single line of text using the backend's ``draw_text()`` call.
     Sizes itself with a character-width heuristic when no explicit
     ``width``/``height`` is given.
 
+    *text* may be a plain string **or a zero-argument callable returning
+    a string**. A callable is re-evaluated on every frame before draw so
+    the HUD can be declarative::
+
+        panel.add(Label(lambda: f"HP {self.hp}/{self.max_hp}"))
+        panel.add(Label(lambda: f"Coins {self.coins}"))
+
+    — no manual ``label.text = "…"`` wiring after every state change.
+    Assigning to :attr:`text` explicitly unbinds the callable.
+
     Parameters:
-        text:       The text string to display.
+        text:       A string or ``Callable[[], str]``. ``None`` is
+                    treated as the empty string.
         font_size:  Convenience override for font size (avoids wrapping in Style).
         text_color: Convenience override for text color, e.g. ``(255, 255, 255, 255)``.
         font:       Convenience override for font family.
@@ -155,7 +166,7 @@ class Label(Component):
 
     def __init__(
         self,
-        text: str | None,
+        text: str | Callable[[], str] | None,
         *,
         font_size: int | None = None,
         text_color: tuple[int, int, int, int] | None = None,
@@ -165,23 +176,42 @@ class Label(Component):
     ) -> None:
         merged = _merge_label_style(style, font_size, text_color, font)
         super().__init__(style=merged, **kwargs)
-        self._text = text if text is not None else ""
+        if callable(text):
+            self._text_fn: Callable[[], str] | None = text
+            self._text: str = ""  # populated on first refresh
+        else:
+            self._text_fn = None
+            self._text = text if text is not None else ""
         self._font_handle: Any = None
 
     # -- Properties --------------------------------------------------------
 
     @property
     def text(self) -> str:
-        """The displayed text."""
+        """The currently displayed text.
+
+        For a reactive label, returns the last evaluated value. Reading
+        does not trigger a new evaluation; draw/layout do.
+        """
         return self._text
 
     @text.setter
     def text(self, value: str | None) -> None:
+        # Assigning explicitly unbinds any reactive callable.
+        self._text_fn = None
+        self._set_text(value)
+
+    def _set_text(self, value: str | None) -> None:
         new_text = value if value is not None else ""
         if new_text != self._text:
             self._text = new_text
             self._font_handle = None  # invalidate cached font
             self._mark_layout_dirty()
+
+    def _refresh_text(self) -> None:
+        """Re-evaluate the reactive text callable, if any."""
+        if self._text_fn is not None:
+            self._set_text(self._text_fn())
 
     # -- Layout ------------------------------------------------------------
 
@@ -191,8 +221,11 @@ class Label(Component):
         Uses :func:`_estimate_text_width` which weights uppercase letters
         wider than lowercase.  Height is ``font_size × 1.4``.
 
-        Explicit ``width``/``height`` override the heuristic.
+        Explicit ``width``/``height`` override the heuristic. Reactive
+        labels re-evaluate their text source here so layout tracks
+        whatever the callable returned most recently.
         """
+        self._refresh_text()
         resolved = self._resolve_style()
         font_size = resolved.font_size
         w = (
@@ -207,7 +240,10 @@ class Label(Component):
 
     def on_draw(self) -> None:
         """Draw the text at the computed position."""
-        if self._game is None or not self._text:
+        if self._game is None:
+            return
+        self._refresh_text()
+        if not self._text:
             return
         resolved = self._resolve_style()
         if self._font_handle is None:
@@ -605,10 +641,14 @@ class Panel(Component):
             return
         resolved = self._resolve_style()
 
-        # Shadow (offset dark rectangle behind the panel).
+        # Shadow (offset dark rectangle behind the panel).  Skipped when
+        # the resolved background is fully transparent — a shadow cast by
+        # nothing is a ghost rectangle that breaks transparent HUD rows.
         theme = self._game.theme
         shadow_offset = theme.panel_shadow_offset
-        if shadow_offset > 0:
+        bg = resolved.background_color
+        bg_visible = bg is not None and len(bg) >= 4 and bg[3] > 0
+        if shadow_offset > 0 and bg_visible:
             self._game._backend.draw_rect(
                 self._computed_x + shadow_offset,
                 self._computed_y + shadow_offset,
@@ -618,7 +658,6 @@ class Panel(Component):
             )
 
         # Background rect.
-        bg = resolved.background_color
         if bg is not None:
             self._game._backend.draw_rect(
                 self._computed_x,

@@ -75,6 +75,7 @@ class Game:
         visible: bool = True,
         save_dir: Path | str | None = None,
         asset_path: Path | str | None = None,
+        theme: Theme | None = None,
     ) -> None:
         import saga2d.rendering.sprite as _sprite_mod
 
@@ -124,7 +125,7 @@ class Game:
         self.running: bool = True
         self._assets: AssetManager | None = None
         self._audio: AudioManager | None = None
-        self._theme: Theme | None = None
+        self._theme: Theme | None = theme
         self._cursor: CursorManager | None = None
         self._save_manager: SaveManager | None = None
         self._hud: HUD | None = None
