@@ -10,7 +10,7 @@ Widgets still own their own validation (e.g. ``ProgressBar`` rejects
 NaN) because that's widget-specific; the helper only owns the binding
 mechanics::
 
-    self._text = ReactiveValue(text_or_callable, default="")
+    self._text = ReactiveValue(text_or_callable)   # callable seeds itself
 
     # Every frame before draw:
     self._text.refresh()
@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Callable, Generic, TypeVar
 
 T = TypeVar("T")
+_UNSET = object()
 
 
 class ReactiveValue(Generic[T]):
@@ -34,6 +35,15 @@ class ReactiveValue(Generic[T]):
     :attr:`value` after :meth:`refresh` returns the latest snapshot.
     Calling :meth:`set` unbinds any callable — explicit assignment
     always wins.
+
+    *default* is optional when *source* is a callable: the callable
+    is invoked once at construction to seed the snapshot. Pass an
+    explicit *default* only when you want the snapshot to start at a
+    specific value before the first :meth:`refresh` (e.g. when the
+    callable has side effects you'd rather defer). For non-callable
+    *source*, *default* is ignored when *source* is non-``None``; for
+    callable *source* without *default*, the callable is called once
+    at construction.
 
     *on_change* is an optional callback fired when the snapshot value
     actually changes between refreshes. Widgets use it to invalidate
@@ -46,15 +56,24 @@ class ReactiveValue(Generic[T]):
         self,
         source: T | Callable[[], T],
         *,
-        default: T,
+        default: T | object = _UNSET,
         on_change: Callable[[T, T], None] | None = None,
     ) -> None:
         if callable(source):
             self._fn: Callable[[], T] | None = source
-            self._value: T = default
+            if default is _UNSET:
+                # Seed the snapshot from a one-shot invocation. Nine out
+                # of ten reactive widgets want this; the other one can
+                # still pass ``default=`` explicitly.
+                self._value: T = source()
+            else:
+                self._value = default  # type: ignore[assignment]
         else:
             self._fn = None
-            self._value = source if source is not None else default  # type: ignore[assignment]
+            if source is None and default is not _UNSET:
+                self._value = default  # type: ignore[assignment]
+            else:
+                self._value = source  # type: ignore[assignment]
         self._on_change = on_change
 
     @property
