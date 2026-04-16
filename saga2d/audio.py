@@ -182,13 +182,25 @@ class AudioManager:
             name:    Sound name resolved via
                      :meth:`AssetManager.sound` (no extension needed).
             channel: Volume channel — ``"sfx"`` (default) or ``"ui"``.
-            optional: If True and the asset is missing, return None instead of
-                      raising :exc:`AssetNotFoundError`.
+            optional: If True and the asset is missing, emit a
+                      ``RuntimeWarning`` and return None instead of
+                      raising :exc:`AssetNotFoundError`. The warning
+                      (iter-35, parallel to iter-30's font warning)
+                      lets the developer notice silent fallbacks —
+                      silence was the iter-1..34 default and made
+                      "why is there no sound" hard to diagnose.
         """
         try:
             handle = self._assets.sound(name)
         except AssetNotFoundError:
             if optional:
+                import warnings
+                warnings.warn(
+                    f"saga2d: sound {name!r} not found; "
+                    f"optional=True so play is a no-op.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 return None
             raise
         if channel not in self._volumes:
