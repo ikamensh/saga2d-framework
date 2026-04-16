@@ -233,6 +233,24 @@ class Scene:
         except AttributeError:
             self._key_handlers: dict[str, Callable[[], Any]] = {key_or_action: callback}
 
+    def bind_keys(
+        self,
+        keys_or_actions: list[str] | tuple[str, ...],
+        callback: Callable[[], Any],
+    ) -> None:
+        """Register the same callback for several keys / actions.
+
+        Shortcut for multi-alias bindings (arrows + WASD, confirm +
+        space)::
+
+            self.bind_keys(["right", "d"], self._rotate_cw)
+            self.bind_keys(["confirm", "space"], self._interact)
+
+        Equivalent to calling :meth:`bind_key` once per name.
+        """
+        for name in keys_or_actions:
+            self.bind_key(name, callback)
+
     def _dispatch_key_bindings(self, event: InputEvent) -> bool:
         """Dispatch *event* to registered key callbacks.
 
