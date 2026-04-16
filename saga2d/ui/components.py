@@ -489,8 +489,19 @@ class Button(Component):
             resolved.background_color,
         )
 
-        # Hover outline (outer glow effect when hovered).
-        if self._state == "hovered":
+        # Hover outline (outer glow effect when hovered).  Skipped when
+        # the caller explicitly requested a ghost (alpha-0) background —
+        # a glow around an invisible button is a surprising phantom
+        # outline. Only the *explicit* style signals intent; the
+        # resolved hover-state bg is opaque by theme default.
+        explicit = self.style
+        explicit_bg = explicit.background_color if explicit is not None else None
+        explicit_transparent = (
+            explicit_bg is not None
+            and len(explicit_bg) >= 4
+            and explicit_bg[3] == 0
+        )
+        if self._state == "hovered" and not explicit_transparent:
             theme = self._game.theme
             _draw_border(
                 self._game._backend,
