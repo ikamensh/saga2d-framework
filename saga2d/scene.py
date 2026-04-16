@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from saga2d.util.timer import TimerHandle
 
 
-def _component_to_json(component: Any) -> dict[str, Any]:
+def _component_to_json(component: Any, include_bounds: bool = False) -> dict[str, Any]:
     """Convert a UI component to a JSON-serialisable dict.
 
     Recursive over children. The returned shape is stable enough for
@@ -23,6 +23,11 @@ def _component_to_json(component: Any) -> dict[str, Any]:
     Keys are omitted when not meaningful (no ``text_style`` key when
     the component has none), so a snapshot diff stays focused on
     actual differences.
+
+    When *include_bounds* is ``True``, each node carries
+    ``"bounds": [x, y, w, h]`` from the component's computed
+    rectangle. Off by default because bounds depend on viewport
+    size and so make snapshots resolution-coupled.
     """
     node: dict[str, Any] = {"type": type(component).__name__}
 
@@ -52,9 +57,20 @@ def _component_to_json(component: Any) -> dict[str, Any]:
     if margin:
         node["margin"] = margin
 
+    if include_bounds:
+        node["bounds"] = [
+            getattr(component, "_computed_x", 0),
+            getattr(component, "_computed_y", 0),
+            getattr(component, "_computed_w", 0),
+            getattr(component, "_computed_h", 0),
+        ]
+
     children = getattr(component, "_children", None)
     if children:
-        node["children"] = [_component_to_json(c) for c in children]
+        node["children"] = [
+            _component_to_json(c, include_bounds=include_bounds)
+            for c in children
+        ]
 
     return node
 
@@ -96,6 +112,9 @@ def _format_node(node: dict[str, Any]) -> str:
         parts.append(f"anchor={node['anchor']}")
     if "margin" in node:
         parts.append(f"margin={node['margin']}")
+    if "bounds" in node:
+        x, y, w, h = node["bounds"]
+        parts.append(f"bounds=[{x},{y} {w}x{h}]")
 
     if parts:
         return f"{cls} " + ", ".join(parts)
@@ -470,7 +489,7 @@ class Scene:
     # Introspection — Keras Model.summary()'s direct parallel
     # ------------------------------------------------------------------
 
-    def summary_json(self) -> dict[str, Any]:
+    def summary_json(self, *, include_bounds: bool = False) -> dict[str, Any]:
         """Return this scene's declared structure as a JSON-serialisable dict.
 
         Stable shape for tooling consumption (debug overlays, snapshot
@@ -480,6 +499,12 @@ class Scene:
         ``children`` list. Controls are emitted as a list of
         ``{"keys": [...], "method": "..."}`` objects so a consumer can
         preserve ordering and alias grouping.
+
+        When *include_bounds* is ``True``, each UI node also carries a
+        ``bounds: [x, y, w, h]`` entry from its most-recent computed
+        layout rectangle. Useful for answering "why is this label not
+        where I expected" — but snapshot tests should keep the default
+        ``False`` because bounds depend on viewport size.
 
         Example::
 
@@ -510,33 +535,36 @@ class Scene:
             ]
 
         if self._ui is not None:
-            result["ui"] = _component_to_json(self._ui)
+            if include_bounds:
+                self._ui._ensure_layout()
+            result["ui"] = _component_to_json(
+                self._ui, include_bounds=include_bounds,
+            )
 
         return result
 
-    def summary(self) -> str:
+    def summary(self, *, include_bounds: bool = False) -> str:
         """Return a human-readable dump of this scene's structure.
 
         Formats the same data :meth:`summary_json` produces — the two
         methods can never drift out of sync because :meth:`summary`
         runs through the JSON form internally. See
-        :meth:`summary_json` for the underlying schema.
+        :meth:`summary_json` for the underlying schema and for the
+        ``include_bounds`` flag semantics.
 
-        Typical output::
+        Typical output with ``include_bounds=True``::
 
             Scene: DialMenuScene
-              background_color: (16, 18, 28, 255)
-              controls:
-                confirm, space  → confirm
-                a, left         → rotate_ccw
-                d, right        → rotate_cw
-                cancel          → cancel
+              …
               ui:
-                Label "Dial Menu", text_style=title, anchor=TOP_LEFT, margin=20
-                Label ← callable, text_style=heading, anchor=CENTER
-                Label ← callable, text_style=caption, anchor=BOTTOM, margin=24
+                _UIRoot bounds=[0,0 800x600]
+                  Label "Dial Menu", text_style=title, anchor=TOP_LEFT,
+                    margin=20, bounds=[20,20 120x28]
+                  Label ← callable, text_style=heading, anchor=CENTER,
+                    bounds=[380,290 40x42]
+                  …
         """
-        data = self.summary_json()
+        data = self.summary_json(include_bounds=include_bounds)
         lines: list[str] = [f"Scene: {data['scene']}"]
         if "background_color" in data:
             lines.append(f"  background_color: {tuple(data['background_color'])}")
