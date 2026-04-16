@@ -1,7 +1,7 @@
 """UI components, layout, and theming."""
 
 from saga2d.ui.component import Component
-from saga2d.ui.components import Button, Label, Panel
+from saga2d.ui.components import Button, Column, Label, Panel, Row
 from saga2d.ui.drag_drop import DragManager
 from saga2d.ui.hud import HUD
 from saga2d.ui.layout import (
@@ -34,6 +34,7 @@ __all__ = [
     "Anchor",
     "Button",
     "ChoiceScreen",
+    "Column",
     "Component",
     "ConfirmDialog",
     "DataTable",
@@ -46,6 +47,7 @@ __all__ = [
     "MessageScreen",
     "Panel",
     "ProgressBar",
+    "Row",
     "SaveLoadScreen",
     "Style",
     "TabGroup",

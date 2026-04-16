@@ -22,7 +22,7 @@ from saga2d.ui.layout import (
     compute_content_size,
     compute_flow_layout,
 )
-from saga2d.ui.theme import ResolvedStyle, Style
+from saga2d.ui.theme import ResolvedStyle, Style, TextStyle
 
 if TYPE_CHECKING:
     from saga2d.input import InputEvent
@@ -154,6 +154,11 @@ class Label(Component):
     Parameters:
         text:       A string or ``Callable[[], str]``. ``None`` is
                     treated as the empty string.
+        text_style: Named theme text style (``"title"``, ``"hud"``,
+                    ``"sub"``, etc.) or a :class:`TextStyle` instance.
+                    Mirrors :meth:`saga2d.Scene.draw_text`'s ``style=``.
+                    Any of the convenience kwargs below override the
+                    named style's value for this label.
         font_size:  Convenience override for font size (avoids wrapping in Style).
         text_color: Convenience override for text color, e.g. ``(255, 255, 255, 255)``.
         font:       Convenience override for font family.
@@ -168,6 +173,7 @@ class Label(Component):
         self,
         text: str | Callable[[], str] | None,
         *,
+        text_style: str | TextStyle | None = None,
         font_size: int | None = None,
         text_color: tuple[int, int, int, int] | None = None,
         font: str | None = None,
@@ -176,6 +182,7 @@ class Label(Component):
     ) -> None:
         merged = _merge_label_style(style, font_size, text_color, font)
         super().__init__(style=merged, **kwargs)
+        self._text_style: str | TextStyle | None = text_style
         if callable(text):
             self._text_fn: Callable[[], str] | None = text
             self._text: str = ""  # populated on first refresh
@@ -261,14 +268,69 @@ class Label(Component):
 
     # -- Internal ----------------------------------------------------------
 
+    def _resolved_text_style(self) -> TextStyle | None:
+        """Return the label's :class:`TextStyle`, resolved from the theme
+        when supplied as a string name. ``None`` when no text_style is set
+        or when it is a string and the label is not yet attached to a game.
+        """
+        ts = self._text_style
+        if ts is None:
+            return None
+        if isinstance(ts, TextStyle):
+            return ts
+        # String name — needs theme access.
+        if self._game is None:
+            return None
+        return self._game.theme.get_text_style(ts)
+
     def _resolve_style(self) -> ResolvedStyle:
-        """Merge explicit style with label defaults from the theme."""
+        """Merge text_style, explicit Style, and theme label defaults.
+
+        Precedence (lowest → highest):
+        1. Theme label defaults.
+        2. ``text_style`` (resolved if a string name was passed).
+        3. Explicit ``style`` / ``font_size`` / ``text_color`` / ``font``
+           kwargs.
+        """
+        explicit = self.style
+        text_style = self._resolved_text_style()
+
+        if text_style is not None:
+            # Layer text_style as a base Style; explicit kwargs win on top.
+            base = Style(
+                font=text_style.font,
+                font_size=text_style.font_size,
+                text_color=text_style.color,
+            )
+            if explicit is not None:
+                base = Style(
+                    font=explicit.font if explicit.font is not None else base.font,
+                    font_size=(
+                        explicit.font_size
+                        if explicit.font_size is not None
+                        else base.font_size
+                    ),
+                    text_color=(
+                        explicit.text_color
+                        if explicit.text_color is not None
+                        else base.text_color
+                    ),
+                    background_color=explicit.background_color,
+                    padding=explicit.padding,
+                    border_color=explicit.border_color,
+                    border_width=explicit.border_width,
+                    hover_color=explicit.hover_color,
+                    press_color=explicit.press_color,
+                )
+            effective = base
+        else:
+            effective = explicit
+
         if self._game is not None:
-            return self._game.theme.resolve_label_style(self.style)
-        # Fallback when not yet attached to a game tree.
+            return self._game.theme.resolve_label_style(effective)
         from saga2d.ui.theme import Theme
 
-        return Theme().resolve_label_style(self.style)
+        return Theme().resolve_label_style(effective)
 
 
 # ---------------------------------------------------------------------------
@@ -688,3 +750,67 @@ class Panel(Component):
         from saga2d.ui.theme import Theme
 
         return Theme().resolve_panel_style(self.style)
+
+
+# ---------------------------------------------------------------------------
+# Row / Column — transparent-container shortcuts
+# ---------------------------------------------------------------------------
+
+
+_TRANSPARENT_CONTAINER_STYLE = Style(
+    background_color=(0, 0, 0, 0),
+    border_width=0,
+    padding=0,
+)
+
+
+class Row(Panel):
+    """Transparent horizontal container. Declarative-HUD shortcut.
+
+    Behaves like :class:`Panel` with ``layout=Layout.HORIZONTAL`` and a
+    fully transparent style (no background, border, or padding). Takes
+    children as positional arguments so the call site reads as naturally
+    as possible::
+
+        Row(
+            Label(lambda: f"HP {self.hp}"),
+            Label(lambda: f"Coins {self.coins}"),
+            spacing=26, anchor=Anchor.BOTTOM_LEFT, margin=16,
+        )
+
+    Pass an explicit ``style=`` to re-enable background/border.
+    """
+
+    def __init__(
+        self,
+        *children: Component,
+        spacing: int = 8,
+        style: Style | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            layout=Layout.HORIZONTAL,
+            spacing=spacing,
+            children=list(children),
+            style=style if style is not None else _TRANSPARENT_CONTAINER_STYLE,
+            **kwargs,
+        )
+
+
+class Column(Panel):
+    """Transparent vertical container. Mirror of :class:`Row`."""
+
+    def __init__(
+        self,
+        *children: Component,
+        spacing: int = 8,
+        style: Style | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            layout=Layout.VERTICAL,
+            spacing=spacing,
+            children=list(children),
+            style=style if style is not None else _TRANSPARENT_CONTAINER_STYLE,
+            **kwargs,
+        )
