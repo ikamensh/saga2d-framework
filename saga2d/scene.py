@@ -340,8 +340,9 @@ class Scene:
         x: float,
         y: float,
         *,
-        font_size: int,
-        color: tuple[int, int, int, int],
+        style: str | Any = None,
+        font_size: int | None = None,
+        color: tuple[int, int, int, int] | None = None,
         font: Any | None = None,
         anchor_x: str = "left",
         anchor_y: str = "baseline",
@@ -350,16 +351,57 @@ class Scene:
 
         Parallel to :meth:`draw_rect` / :meth:`draw_circle`, so a scene
         never needs to touch ``self.game._backend`` for primitive draws.
-        *anchor_x* / *anchor_y* accept pyglet's anchor names ("center",
-        "left", "right", "top", "bottom", "baseline").
+
+        *style* may be a string name registered on the active theme
+        (``"title"``, ``"heading"``, ``"hud"``, ``"body"``, ``"sub"``,
+        ``"caption"`` are pre-registered) or a
+        :class:`~saga2d.ui.theme.TextStyle` instance. *font_size* /
+        *color* / *font* passed alongside ``style`` override the style's
+        value for this one call.
+
+        If neither *style* nor *font_size* / *color* are given, the
+        theme's default font size and text colour are used.
+
+        *anchor_x* / *anchor_y* accept pyglet's anchor names
+        (``"center"``, ``"left"``, ``"right"``, ``"top"``, ``"bottom"``,
+        ``"baseline"``).
         """
+        from saga2d.ui.theme import TextStyle as _TextStyle
+
+        theme = self.game.theme
+        resolved_font_size: int
+        resolved_color: tuple[int, int, int, int]
+        resolved_font: Any | None
+
+        if style is not None:
+            text_style = (
+                theme.get_text_style(style)
+                if isinstance(style, str)
+                else style
+            )
+            if not isinstance(text_style, _TextStyle):
+                raise TypeError(
+                    f"style must be str or TextStyle, got {type(text_style).__name__}"
+                )
+            resolved_font_size = font_size if font_size is not None else text_style.font_size
+            resolved_color = color if color is not None else text_style.color
+            resolved_font = font if font is not None else text_style.font
+        else:
+            resolved_font_size = (
+                font_size if font_size is not None else theme.default_font_size
+            )
+            resolved_color = (
+                color if color is not None else theme.default_text_color
+            )
+            resolved_font = font
+
         self.game._backend.draw_text(
             text,
             int(x),
             int(y),
-            font_size,
-            color,
-            font=font,
+            resolved_font_size,
+            resolved_color,
+            font=resolved_font,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
         )

@@ -17,7 +17,7 @@ from saga2d.ui.screens import (
     MessageScreen,
     SaveLoadScreen,
 )
-from saga2d.ui.theme import Style, Theme
+from saga2d.ui.theme import Style, TextStyle, Theme
 from saga2d.ui.widgets import (
     DataTable,
     Grid,
@@ -50,6 +50,7 @@ __all__ = [
     "Style",
     "TabGroup",
     "TextBox",
+    "TextStyle",
     "Theme",
     "Tooltip",
     "compute_anchor_position",

@@ -32,6 +32,33 @@ class Style:
     press_color: Color | None = None
 
 
+@dataclass(frozen=True)
+class TextStyle:
+    """Named text style used by :meth:`saga2d.Scene.draw_text`.
+
+    Captures the "look" of a text role (title, HUD, caption) so scenes
+    refer to it by name (``style="title"``) instead of hand-picking
+    ``font_size`` and ``color`` at every call site. One theme change
+    then restyles every scene.
+    """
+
+    font_size: int
+    color: Color
+    font: str | None = None
+
+
+# ---- Default text styles -------------------------------------------------
+# Tuned for typical 800×600 to 1920×1080 logical viewports.
+_DEFAULT_TEXT_STYLES: dict[str, TextStyle] = {
+    "title":    TextStyle(font_size=28, color=(255, 220, 80, 255)),       # gold
+    "heading":  TextStyle(font_size=22, color=(248, 250, 252, 255)),      # near-white
+    "hud":      TextStyle(font_size=18, color=(248, 250, 252, 255)),      # near-white
+    "body":     TextStyle(font_size=16, color=(226, 232, 240, 255)),      # slate 200
+    "sub":      TextStyle(font_size=13, color=(210, 210, 225, 230)),      # muted slate
+    "caption":  TextStyle(font_size=12, color=(155, 155, 170, 255)),      # dim
+}
+
+
 @dataclass
 class ResolvedStyle:
     """Fully resolved style — all fields have concrete values after merging."""
@@ -113,6 +140,8 @@ class Theme:
         drop_accept_color: Color = (0, 180, 0, 80),
         drop_reject_color: Color = (180, 0, 0, 80),
         ghost_opacity: float = 0.5,
+        # Named text styles for Scene.draw_text(style=…)
+        text_styles: dict[str, TextStyle] | None = None,
     ) -> None:
         self._font = font
         self._font_size = font_size
@@ -156,6 +185,10 @@ class Theme:
         self._drop_accept_color = drop_accept_color
         self._drop_reject_color = drop_reject_color
         self._ghost_opacity = ghost_opacity
+        # Caller-provided styles override/extend the defaults.
+        self._text_styles: dict[str, TextStyle] = dict(_DEFAULT_TEXT_STYLES)
+        if text_styles:
+            self._text_styles.update(text_styles)
 
     def resolve_label_style(self, explicit: Style | None) -> ResolvedStyle:
         """Merge explicit style with label defaults from theme."""
@@ -401,6 +434,41 @@ class Theme:
     def ghost_opacity(self) -> float:
         """Opacity for the drag ghost overlay (0.0–1.0)."""
         return self._ghost_opacity
+
+    @property
+    def default_font(self) -> str:
+        """Theme-level default font name."""
+        return self._font
+
+    @property
+    def default_font_size(self) -> int:
+        """Theme-level default font size for untagged text."""
+        return self._font_size
+
+    @property
+    def default_text_color(self) -> Color:
+        """Theme-level default text colour for untagged text."""
+        return self._text_color
+
+    def get_text_style(self, name: str) -> TextStyle:
+        """Return the :class:`TextStyle` registered under *name*.
+
+        Names ``title`` / ``heading`` / ``hud`` / ``body`` / ``sub`` /
+        ``caption`` come pre-registered (see ``_DEFAULT_TEXT_STYLES``).
+        Pass ``text_styles={...}`` to the :class:`Theme` constructor to
+        add or override.
+        """
+        try:
+            return self._text_styles[name]
+        except KeyError as e:
+            known = ", ".join(sorted(self._text_styles))
+            raise KeyError(
+                f"Unknown text style {name!r}. Registered: {known}"
+            ) from e
+
+    def set_text_style(self, name: str, style: TextStyle) -> None:
+        """Register or replace the style under *name* after construction."""
+        self._text_styles[name] = style
 
     @property
     def panel_shadow_offset(self) -> int:
