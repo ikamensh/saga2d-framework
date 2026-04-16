@@ -88,11 +88,19 @@ class AssetManager:
         :class:`Theme(font="…")` can reference bundled fonts by their
         internal family name.
 
+        Each font is registered under the name its TTF ``name`` table
+        declares as the *typographic family* (name_id=16) or
+        *family* (name_id=1). This matches what pyglet resolves at
+        draw time — ``stem`` was iter-26's approximation. Parse
+        failure falls back to the filename stem silently.
+
         Silently no-op when the fonts directory doesn't exist or when
-        the backend doesn't implement ``load_font``. Bundled fonts ship
-        under a permissive license (SIL OFL); see
-        ``assets/fonts/OFL.txt`` for the Cinzel license.
+        the backend doesn't implement ``load_font``. Bundled fonts
+        ship under a permissive licence (SIL OFL); see
+        ``assets/fonts/OFL.txt``.
         """
+        from saga2d.util.fontname import parse_font_family_name
+
         fonts_dir = self._base_path / "fonts"
         if not fonts_dir.is_dir():
             return
@@ -106,7 +114,8 @@ class AssetManager:
             if key in self._registered_fonts:
                 continue
             try:
-                load_font(path.stem, str(path))
+                family = parse_font_family_name(path) or path.stem
+                load_font(family, str(path))
                 self._registered_fonts.add(key)
             except Exception:
                 # Font registration is best-effort; a corrupt file
