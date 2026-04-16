@@ -15,57 +15,99 @@ from typing import TYPE_CHECKING, Any, Callable
 from saga2d.util.timer import TimerHandle
 
 
-def _walk_with_depth(component, depth: int = 0):
-    """Depth-first walk yielding ``(depth, component)`` pairs. Used by
-    :meth:`Scene.summary` for indented tree rendering — not public API."""
-    for child in component._children:
-        yield (depth, child)
-        yield from _walk_with_depth(child, depth + 1)
+def _component_to_json(component: Any) -> dict[str, Any]:
+    """Convert a UI component to a JSON-serialisable dict.
 
-
-def _describe_component(component: Any) -> str:
-    """One-line human-readable description of a UI component.
-
-    Shows the class name, text content (if Label) or value source (if
-    reactive), plus anchor/margin/text_style when set. Kept internal
-    to the Scene.summary() helpers — the logic is presentation-only.
+    Recursive over children. The returned shape is stable enough for
+    tooling to consume — debug overlays, snapshot tests, IDE plugins.
+    Keys are omitted when not meaningful (no ``text_style`` key when
+    the component has none), so a snapshot diff stays focused on
+    actual differences.
     """
-    cls = type(component).__name__
-    parts: list[str] = []
+    node: dict[str, Any] = {"type": type(component).__name__}
 
-    # Label: show text literal or "← callable" for reactive.
     if hasattr(component, "_text_rv"):
         rv = component._text_rv
         if getattr(rv, "is_reactive", False):
-            parts.append("← callable")
+            node["text"] = {"reactive": True}
         else:
-            text = rv.value
-            parts.append(f'"{text}"' if text else '""')
+            node["text"] = {"reactive": False, "value": rv.value}
 
-    # ProgressBar: show value source.
     if hasattr(component, "_value_rv"):
         rv = component._value_rv
         if getattr(rv, "is_reactive", False):
-            parts.append("← callable")
+            node["value"] = {"reactive": True}
         else:
-            parts.append(f"value={rv.value}")
+            node["value"] = {"reactive": False, "value": rv.value}
 
-    # Text style tag.
     text_style = getattr(component, "_text_style", None)
     if isinstance(text_style, str):
-        parts.append(f"text_style={text_style}")
+        node["text_style"] = text_style
 
-    # Anchor + margin.
     anchor = getattr(component, "_anchor", None)
     if anchor is not None:
-        parts.append(f"anchor={anchor.name}")
+        node["anchor"] = anchor.name
+
     margin = getattr(component, "_margin", 0)
     if margin:
-        parts.append(f"margin={margin}")
+        node["margin"] = margin
+
+    children = getattr(component, "_children", None)
+    if children:
+        node["children"] = [_component_to_json(c) for c in children]
+
+    return node
+
+
+def _describe_component(component: Any) -> str:
+    """One-line human-readable description — format from the JSON node.
+
+    Keeping a single canonical data shape (the JSON node) and formatting
+    from it means :meth:`Scene.summary` and :meth:`Scene.summary_json`
+    can never drift out of sync.
+    """
+    node = _component_to_json(component)
+    return _format_node(node)
+
+
+def _format_node(node: dict[str, Any]) -> str:
+    """Render a ``_component_to_json`` node as the iter-20 one-line form."""
+    cls = node["type"]
+    parts: list[str] = []
+
+    text = node.get("text")
+    if text is not None:
+        if text["reactive"]:
+            parts.append("← callable")
+        else:
+            value = text["value"]
+            parts.append(f'"{value}"' if value else '""')
+
+    value = node.get("value")
+    if value is not None:
+        if value["reactive"]:
+            parts.append("← callable")
+        else:
+            parts.append(f"value={value['value']}")
+
+    if "text_style" in node:
+        parts.append(f"text_style={node['text_style']}")
+    if "anchor" in node:
+        parts.append(f"anchor={node['anchor']}")
+    if "margin" in node:
+        parts.append(f"margin={node['margin']}")
 
     if parts:
         return f"{cls} " + ", ".join(parts)
     return cls
+
+
+def _walk_json_with_depth(node: dict[str, Any], depth: int = 0):
+    """Depth-first walk over a JSON node's children, yielding
+    ``(depth, node)`` pairs starting from direct children."""
+    for child in node.get("children", []):
+        yield (depth, child)
+        yield from _walk_json_with_depth(child, depth + 1)
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
@@ -428,13 +470,57 @@ class Scene:
     # Introspection — Keras Model.summary()'s direct parallel
     # ------------------------------------------------------------------
 
+    def summary_json(self) -> dict[str, Any]:
+        """Return this scene's declared structure as a JSON-serialisable dict.
+
+        Stable shape for tooling consumption (debug overlays, snapshot
+        tests, IDE plugins). Each UI node carries ``type``, optional
+        ``text`` / ``value`` sub-objects with a ``reactive`` flag,
+        ``text_style`` / ``anchor`` / ``margin`` when set, and a
+        ``children`` list. Controls are emitted as a list of
+        ``{"keys": [...], "method": "..."}`` objects so a consumer can
+        preserve ordering and alias grouping.
+
+        Example::
+
+            {
+                "scene": "DialMenuScene",
+                "background_color": [16, 18, 28, 255],
+                "controls": [
+                    {"keys": ["confirm", "space"], "method": "confirm"},
+                    {"keys": ["a", "left"], "method": "rotate_ccw"},
+                    ...
+                ],
+                "ui": {"type": "_UIRoot", "children": [...]},
+            }
+        """
+        result: dict[str, Any] = {"scene": type(self).__name__}
+
+        if self.background_color is not None:
+            result["background_color"] = list(self.background_color)
+
+        flat = type(self)._normalised_controls
+        if flat:
+            by_method: dict[str, list[str]] = {}
+            for key, method in flat.items():
+                by_method.setdefault(method, []).append(key)
+            result["controls"] = [
+                {"keys": sorted(by_method[method]), "method": method}
+                for method in sorted(by_method)
+            ]
+
+        if self._ui is not None:
+            result["ui"] = _component_to_json(self._ui)
+
+        return result
+
     def summary(self) -> str:
         """Return a human-readable dump of this scene's structure.
 
-        Mirrors the role of :meth:`keras.Model.summary` for ML models:
-        given a scene, tell the developer *what is in it* — its class,
-        background, declarative controls, and UI tree with indented
-        depth and reactive-binding markers.
+        Formats the same data :meth:`summary_json` produces — the two
+        methods can never drift out of sync because :meth:`summary`
+        runs through the JSON form internally. See
+        :meth:`summary_json` for the underlying schema.
 
         Typical output::
 
@@ -442,39 +528,27 @@ class Scene:
               background_color: (16, 18, 28, 255)
               controls:
                 confirm, space  → confirm
-                left, a         → rotate_ccw
-                right, d        → rotate_cw
+                a, left         → rotate_ccw
+                d, right        → rotate_cw
                 cancel          → cancel
               ui:
-                Label "Dial Menu" (text_style=title, anchor=TOP_LEFT, margin=20)
-                Label ← callable (text_style=heading, anchor=CENTER)
-                Label ← callable (text_style=caption, anchor=BOTTOM, margin=24)
-
-        Use cases: debugging a scene that "isn't responding" (did the
-        control actually bind?); pasting the output into a bug report;
-        snapshot-testing a scene's declared structure.
+                Label "Dial Menu", text_style=title, anchor=TOP_LEFT, margin=20
+                Label ← callable, text_style=heading, anchor=CENTER
+                Label ← callable, text_style=caption, anchor=BOTTOM, margin=24
         """
-        lines: list[str] = [f"Scene: {type(self).__name__}"]
-        if self.background_color is not None:
-            lines.append(f"  background_color: {self.background_color}")
-
-        # Controls grouped by target method for readability: "right, d → cw"
-        # is more useful than two separate lines.
-        flat = type(self)._normalised_controls
-        if flat:
-            by_method: dict[str, list[str]] = {}
-            for key, method in flat.items():
-                by_method.setdefault(method, []).append(key)
+        data = self.summary_json()
+        lines: list[str] = [f"Scene: {data['scene']}"]
+        if "background_color" in data:
+            lines.append(f"  background_color: {tuple(data['background_color'])}")
+        if "controls" in data:
             lines.append("  controls:")
-            for method in sorted(by_method):
-                keys = ", ".join(sorted(by_method[method]))
-                lines.append(f"    {keys}  → {method}")
-
-        if self._ui is not None:
+            for entry in data["controls"]:
+                keys = ", ".join(entry["keys"])
+                lines.append(f"    {keys}  → {entry['method']}")
+        if "ui" in data:
             lines.append("  ui:")
-            for depth, component in _walk_with_depth(self._ui):
-                lines.append("    " + "  " * depth + _describe_component(component))
-
+            for depth, node in _walk_json_with_depth(data["ui"]):
+                lines.append("    " + "  " * depth + _format_node(node))
         return "\n".join(lines)
 
     def on_enter(self) -> None:
