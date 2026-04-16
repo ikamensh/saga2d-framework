@@ -117,10 +117,19 @@ class AssetManager:
                 family = parse_font_family_name(path) or path.stem
                 load_font(family, str(path))
                 self._registered_fonts.add(key)
-            except Exception:
+            except Exception as exc:
                 # Font registration is best-effort; a corrupt file
-                # shouldn't break the whole AssetManager.
-                pass
+                # shouldn't break the whole AssetManager. Previously
+                # swallowed silently (iter-26); now warns so a
+                # developer dropping a malformed TTF into
+                # ``assets/fonts/`` notices.
+                import warnings
+                warnings.warn(
+                    f"saga2d: failed to register font "
+                    f"{path.name}: {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
     # ------------------------------------------------------------------
     # Image loading
