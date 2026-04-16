@@ -77,6 +77,41 @@ class AssetManager:
         # Music paths are cached (not handles) because streaming sources
         # cannot be reused across players in pyglet.
         self._music_path_cache: dict[str, str] = {}
+        # Track fonts we've auto-registered so a second AssetManager in
+        # the same process doesn't re-register the same path.
+        self._registered_fonts: set[str] = set()
+        self._register_bundled_fonts()
+
+    def _register_bundled_fonts(self) -> None:
+        """Auto-register every ``.ttf`` / ``.otf`` file under
+        ``<base_path>/fonts/`` with the backend so that
+        :class:`Theme(font="…")` can reference bundled fonts by their
+        internal family name.
+
+        Silently no-op when the fonts directory doesn't exist or when
+        the backend doesn't implement ``load_font``. Bundled fonts ship
+        under a permissive license (SIL OFL); see
+        ``assets/fonts/OFL.txt`` for the Cinzel license.
+        """
+        fonts_dir = self._base_path / "fonts"
+        if not fonts_dir.is_dir():
+            return
+        load_font = getattr(self._backend, "load_font", None)
+        if load_font is None:
+            return
+        for path in sorted(fonts_dir.iterdir()):
+            if path.suffix.lower() not in {".ttf", ".otf"}:
+                continue
+            key = str(path.resolve())
+            if key in self._registered_fonts:
+                continue
+            try:
+                load_font(path.stem, str(path))
+                self._registered_fonts.add(key)
+            except Exception:
+                # Font registration is best-effort; a corrupt file
+                # shouldn't break the whole AssetManager.
+                pass
 
     # ------------------------------------------------------------------
     # Image loading
