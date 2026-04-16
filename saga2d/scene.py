@@ -9,9 +9,47 @@ deferred and flushed after those phases complete.
 from __future__ import annotations
 
 import collections
+import inspect
 from typing import TYPE_CHECKING, Any, Callable
 
 from saga2d.util.timer import TimerHandle
+
+
+# Module-level cache so signature inspection doesn't fire on every
+# keypress. Key is the callable (id-based via WeakValueDictionary would
+# be ideal, but bound methods aren't weakref-able).
+_SIG_TAKES_EVENT: dict[int, bool] = {}
+
+
+def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
+    """Call *cb*, passing *event* iff the signature accepts ≥1 positional arg.
+
+    Cached per callable id. Bound methods and lambdas get their
+    signature inspected once; subsequent dispatches use the cached
+    verdict.
+    """
+    key = id(cb)
+    takes_event = _SIG_TAKES_EVENT.get(key)
+    if takes_event is None:
+        try:
+            params = inspect.signature(cb).parameters
+            takes_event = any(
+                p.kind
+                in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.VAR_POSITIONAL,
+                )
+                for p in params.values()
+            )
+        except (ValueError, TypeError):
+            # C-implemented builtins sometimes refuse inspect.signature.
+            takes_event = False
+        _SIG_TAKES_EVENT[key] = takes_event
+    if takes_event:
+        cb(event)
+    else:
+        cb()
 
 if TYPE_CHECKING:
     from saga2d.game import Game
@@ -74,15 +112,29 @@ class Scene:
     _ui: _UIRoot | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Flatten tuple-aliased keys in ``cls.controls`` once per subclass."""
+        """Flatten tuple-aliased keys in ``cls.controls`` once per subclass
+        and verify every target method exists on the class.
+
+        Raises :class:`AttributeError` at import time for typo'd method
+        names — far better than silently swallowing the keypress at
+        runtime (the iter-10 friction point).
+        """
         super().__init_subclass__(**kwargs)
         flat: dict[str, str] = {}
+        missing: list[str] = []
         for keys, method_name in cls.controls.items():
             if isinstance(keys, tuple):
                 for alias in keys:
                     flat[alias] = method_name
             else:
                 flat[keys] = method_name
+            if not hasattr(cls, method_name):
+                missing.append(method_name)
+        if missing:
+            raise AttributeError(
+                f"{cls.__name__}.controls references methods that do not "
+                f"exist on the class: {', '.join(sorted(set(missing)))}"
+            )
         cls._normalised_controls = flat
 
     # ------------------------------------------------------------------
@@ -295,7 +347,14 @@ class Scene:
            runtime binding overrides the class-level declaration.
         2. Class-level :attr:`controls` dict. The matched value is a
            method name; the method is resolved on ``self`` at dispatch
-           time and invoked with no arguments.
+           time.
+
+        Handlers may optionally accept the :class:`InputEvent` as a
+        single positional argument. The framework inspects the
+        callable's signature and passes the event when accepted, or
+        calls with no args otherwise. This lets modifier-aware
+        handlers receive the raw event without breaking zero-arg
+        callers.
         """
         if event.type != "key_press":
             return False
@@ -306,7 +365,7 @@ class Scene:
         if handlers:
             cb = handlers.get(event.action) or handlers.get(event.key)  # type: ignore[arg-type]
             if cb is not None:
-                cb()
+                _call_with_optional_event(cb, event)
                 return True
 
         flat = type(self)._normalised_controls
@@ -315,7 +374,7 @@ class Scene:
             if method_name is not None:
                 method = getattr(self, method_name, None)
                 if callable(method):
-                    method()
+                    _call_with_optional_event(method, event)
                     return True
         return False
 
