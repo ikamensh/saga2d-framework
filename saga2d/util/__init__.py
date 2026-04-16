@@ -14,12 +14,14 @@ from saga2d.util.layout import (
     ring_positions,
 )
 from saga2d.util.reactive import ReactiveValue
+from saga2d.util.selector import Selector
 from saga2d.util.timer import TimerHandle
 from saga2d.util.tween import Ease
 
 __all__ = [
     "Ease",
     "ReactiveValue",
+    "Selector",
     "StateMachine",
     "TimerHandle",
     "grid_positions",

@@ -78,6 +78,8 @@ from saga2d.util.layout import (
     ring_budget,
     ring_positions,
 )
+from saga2d.util.reactive import ReactiveValue
+from saga2d.util.selector import Selector
 from saga2d.util.timer import TimerHandle
 from saga2d.util.tween import Ease, tween
 
@@ -122,6 +124,7 @@ __all__ = [
     "ParticleEmitter",
     "PlayAnim",
     "ProgressBar",
+    "ReactiveValue",
     "Remove",
     "RenderLayer",
     "Repeat",
@@ -130,6 +133,7 @@ __all__ = [
     "SaveLoadScreen",
     "SaveManager",
     "Scene",
+    "Selector",
     "Sequence",
     "Sprite",
     "SpriteAnchor",

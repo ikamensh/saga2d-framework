@@ -4,7 +4,14 @@ from enum import Enum
 
 
 class Anchor(Enum):
-    """Where a component is positioned relative to its parent."""
+    """Where a component is positioned relative to its parent.
+
+    ``TOP_CENTER`` / ``BOTTOM_CENTER`` / ``LEFT_CENTER`` / ``RIGHT_CENTER``
+    are aliases for ``TOP`` / ``BOTTOM`` / ``LEFT`` / ``RIGHT`` — those
+    anchors already centre on the perpendicular axis, but the explicit
+    name reads more clearly at call sites where the author wants to
+    signal "centered at top" rather than just "top."
+    """
 
     CENTER = "center"
     TOP = "top"
@@ -15,6 +22,12 @@ class Anchor(Enum):
     TOP_RIGHT = "top_right"
     BOTTOM_LEFT = "bottom_left"
     BOTTOM_RIGHT = "bottom_right"
+    # Aliases — duplicate values become aliases in Python enums, so
+    # ``Anchor.TOP_CENTER is Anchor.TOP`` == True.
+    TOP_CENTER = "top"
+    BOTTOM_CENTER = "bottom"
+    LEFT_CENTER = "left"
+    RIGHT_CENTER = "right"
 
 
 class Layout(Enum):
