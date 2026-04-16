@@ -15,6 +15,59 @@ from typing import TYPE_CHECKING, Any, Callable
 from saga2d.util.timer import TimerHandle
 
 
+def _walk_with_depth(component, depth: int = 0):
+    """Depth-first walk yielding ``(depth, component)`` pairs. Used by
+    :meth:`Scene.summary` for indented tree rendering — not public API."""
+    for child in component._children:
+        yield (depth, child)
+        yield from _walk_with_depth(child, depth + 1)
+
+
+def _describe_component(component: Any) -> str:
+    """One-line human-readable description of a UI component.
+
+    Shows the class name, text content (if Label) or value source (if
+    reactive), plus anchor/margin/text_style when set. Kept internal
+    to the Scene.summary() helpers — the logic is presentation-only.
+    """
+    cls = type(component).__name__
+    parts: list[str] = []
+
+    # Label: show text literal or "← callable" for reactive.
+    if hasattr(component, "_text_rv"):
+        rv = component._text_rv
+        if getattr(rv, "is_reactive", False):
+            parts.append("← callable")
+        else:
+            text = rv.value
+            parts.append(f'"{text}"' if text else '""')
+
+    # ProgressBar: show value source.
+    if hasattr(component, "_value_rv"):
+        rv = component._value_rv
+        if getattr(rv, "is_reactive", False):
+            parts.append("← callable")
+        else:
+            parts.append(f"value={rv.value}")
+
+    # Text style tag.
+    text_style = getattr(component, "_text_style", None)
+    if isinstance(text_style, str):
+        parts.append(f"text_style={text_style}")
+
+    # Anchor + margin.
+    anchor = getattr(component, "_anchor", None)
+    if anchor is not None:
+        parts.append(f"anchor={anchor.name}")
+    margin = getattr(component, "_margin", 0)
+    if margin:
+        parts.append(f"margin={margin}")
+
+    if parts:
+        return f"{cls} " + ", ".join(parts)
+    return cls
+
+
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
     """Call *cb*, passing *event* iff the signature accepts ≥1 positional arg.
 
@@ -370,6 +423,59 @@ class Scene:
                     _call_with_optional_event(method, event)
                     return True
         return False
+
+    # ------------------------------------------------------------------
+    # Introspection — Keras Model.summary()'s direct parallel
+    # ------------------------------------------------------------------
+
+    def summary(self) -> str:
+        """Return a human-readable dump of this scene's structure.
+
+        Mirrors the role of :meth:`keras.Model.summary` for ML models:
+        given a scene, tell the developer *what is in it* — its class,
+        background, declarative controls, and UI tree with indented
+        depth and reactive-binding markers.
+
+        Typical output::
+
+            Scene: DialMenuScene
+              background_color: (16, 18, 28, 255)
+              controls:
+                confirm, space  → confirm
+                left, a         → rotate_ccw
+                right, d        → rotate_cw
+                cancel          → cancel
+              ui:
+                Label "Dial Menu" (text_style=title, anchor=TOP_LEFT, margin=20)
+                Label ← callable (text_style=heading, anchor=CENTER)
+                Label ← callable (text_style=caption, anchor=BOTTOM, margin=24)
+
+        Use cases: debugging a scene that "isn't responding" (did the
+        control actually bind?); pasting the output into a bug report;
+        snapshot-testing a scene's declared structure.
+        """
+        lines: list[str] = [f"Scene: {type(self).__name__}"]
+        if self.background_color is not None:
+            lines.append(f"  background_color: {self.background_color}")
+
+        # Controls grouped by target method for readability: "right, d → cw"
+        # is more useful than two separate lines.
+        flat = type(self)._normalised_controls
+        if flat:
+            by_method: dict[str, list[str]] = {}
+            for key, method in flat.items():
+                by_method.setdefault(method, []).append(key)
+            lines.append("  controls:")
+            for method in sorted(by_method):
+                keys = ", ".join(sorted(by_method[method]))
+                lines.append(f"    {keys}  → {method}")
+
+        if self._ui is not None:
+            lines.append("  ui:")
+            for depth, component in _walk_with_depth(self._ui):
+                lines.append("    " + "  " * depth + _describe_component(component))
+
+        return "\n".join(lines)
 
     def on_enter(self) -> None:
         """Called when this scene becomes active (top of stack)."""
