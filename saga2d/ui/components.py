@@ -23,6 +23,7 @@ from saga2d.ui.layout import (
     compute_flow_layout,
 )
 from saga2d.ui.theme import ResolvedStyle, Style, TextStyle
+from saga2d.util.reactive import ReactiveValue
 
 if TYPE_CHECKING:
     from saga2d.input import InputEvent
@@ -183,12 +184,14 @@ class Label(Component):
         merged = _merge_label_style(style, font_size, text_color, font)
         super().__init__(style=merged, **kwargs)
         self._text_style: str | TextStyle | None = text_style
-        if callable(text):
-            self._text_fn: Callable[[], str] | None = text
-            self._text: str = ""  # populated on first refresh
-        else:
-            self._text_fn = None
-            self._text = text if text is not None else ""
+        # Reactive slot — callable evaluated each frame via refresh();
+        # explicit .text = ... unbinds. on_change invalidates font cache
+        # and layout so sizing re-computes when the string changes.
+        self._text_rv: ReactiveValue[str] = ReactiveValue(
+            text if text is not None else "",
+            default="",
+            on_change=self._on_text_changed,
+        )
         self._font_handle: Any = None
 
     # -- Properties --------------------------------------------------------
@@ -200,25 +203,26 @@ class Label(Component):
         For a reactive label, returns the last evaluated value. Reading
         does not trigger a new evaluation; draw/layout do.
         """
-        return self._text
+        return self._text_rv.value
 
     @text.setter
     def text(self, value: str | None) -> None:
         # Assigning explicitly unbinds any reactive callable.
-        self._text_fn = None
-        self._set_text(value)
+        self._text_rv.set(value if value is not None else "")
 
-    def _set_text(self, value: str | None) -> None:
-        new_text = value if value is not None else ""
-        if new_text != self._text:
-            self._text = new_text
-            self._font_handle = None  # invalidate cached font
-            self._mark_layout_dirty()
+    def _on_text_changed(self, _old: str, _new: str) -> None:
+        """Invalidate the cached font handle and mark layout dirty."""
+        self._font_handle = None
+        self._mark_layout_dirty()
 
     def _refresh_text(self) -> None:
         """Re-evaluate the reactive text callable, if any."""
-        if self._text_fn is not None:
-            self._set_text(self._text_fn())
+        self._text_rv.refresh()
+
+    @property
+    def _text(self) -> str:
+        """Internal accessor for the last-evaluated text (for tests)."""
+        return self._text_rv.value
 
     # -- Layout ------------------------------------------------------------
 
