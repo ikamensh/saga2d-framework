@@ -10,47 +10,105 @@ Python framework for 2D sprite-based games. You write game logic, not engine plu
 pip install -e .
 ```
 
+A scene is a class. State is attributes. Controls are a dict. HUD reads from
+state reactively — no manual `label.text = …` after every mutation:
+
 ```python
-from saga2d import Game, Scene, Button, Label, Panel, Layout, Anchor
+from saga2d import (
+    Anchor, Game, Label, ProgressBar, Row, Scene, TextStyle, Theme,
+)
 
 
-class MenuScene(Scene):
-    def on_enter(self) -> None:
-        self.ui.add(Panel(
-            layout=Layout.VERTICAL,
-            spacing=20,
-            anchor=Anchor.CENTER,
-            children=[
-                Label("My Game", font_size=48),
-                Button("Play", on_click=lambda: self.game.pop()),
-            ],
+class GameScene(Scene):
+    background_color = (18, 14, 28, 255)
+    controls = {
+        ("right", "d"):        "gain_coin",
+        ("left", "a"):         "take_damage",
+        ("confirm", "space"):  "reset",
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.hp = 10
+        self.coins = 0
+
+    def gain_coin(self):    self.coins += 1
+    def take_damage(self):  self.hp = max(0, self.hp - 1)
+    def reset(self):        self.hp, self.coins = 10, 0
+
+    def on_enter(self):
+        self.ui.add(Label("My Game", text_style="title",
+                          anchor=Anchor.TOP_LEFT, margin=20))
+        self.ui.add(Row(
+            Label(lambda: f"HP {self.hp}/10", text_style="hud"),
+            ProgressBar(value=lambda: self.hp, max_value=10,
+                        width=120, height=12),
+            Label(lambda: f"Coins {self.coins}", text_style="hud"),
+            spacing=16,
+            anchor=Anchor.BOTTOM_LEFT, margin=16,
         ))
 
 
-game = Game("My Game", resolution=(960, 540))
-game.run(MenuScene())
+game = Game("My Game", resolution=(800, 600),
+            theme=Theme(text_styles={"title": TextStyle(28, (255, 215, 100, 255)),
+                                     "hud":   TextStyle(18, (245, 245, 250, 255))}))
+game.run(GameScene())
 ```
 
-> **Headless / CI:** Pass `backend="mock"` to `Game(...)` to run without a display
-> server. The mock backend stubs out all rendering and audio, making it suitable for
-> automated tests and continuous integration environments.
+Everything in this scene is declarative:
+
+* **State** — plain Python attributes. No observable machinery, no decorators.
+* **Controls** — a class-level dict. Method names are validated at class-def
+  time; typos raise `AttributeError` at import, not on the first keypress.
+* **HUD** — `Label(lambda: …)` and `ProgressBar(value=lambda: …)` re-evaluate
+  each frame. Mutate `self.hp` anywhere and the HUD updates with zero wiring.
+* **Layout** — `Row(...)` / `Column(...)` are transparent containers, no
+  `Panel(style=HUD_BG, layout=…, children=[…])` scaffolding.
+* **Typography** — `text_style="hud"` looks up one centrally-defined
+  `TextStyle`. Change the theme once, every HUD label restyles.
+
+> **Headless / CI:** Pass `backend="mock"` to `Game(...)` to run without a
+> display server. Saga2D's own test suite has ~700 mock-backend tests.
+
+## Examples
+
+Three complete examples ship under `examples/`, each under 150 lines:
+
+* **`ring_of_pain/`** — roguelike node ring. Player rotates around 8 nodes
+  (enemies, treasure, heart, shop, portal), attacks or collects per node.
+  Demonstrates `ring_positions` + `ring_budget`, sub-labels on every node,
+  reactive HP bar, declarative controls.
+* **`dial_menu/`** — 6-option radial selector with gold highlight on the
+  current option. Demonstrates `Selector` state helper, `ring_positions`
+  at a different count, theme with three text styles.
+* **`tictactoe/`** — 3x3 grid with arrow-key cursor, win/draw detection,
+  Shift+R shortcut to open with X in centre. Demonstrates `grid_positions`,
+  Scene.controls with modifier-aware event handlers, `draw_rect` borders.
+
+Each example has its own test file under `tests/examples/` exercising the
+game's rules through the mock backend.
 
 ## Core Features
 
 | Feature | Description |
 |---------|-------------|
-| **Scene stack** | Push/pop scenes. Each scene has `on_enter`, `on_exit`, `on_reveal` hooks. |
-| **Sprites** | Position, animate, layer. Actions: `Sequence`, `Parallel`, `MoveTo`, `FadeIn`, etc. |
-| **Camera** | Follow, scroll, pan, bounds. `camera.shake()` for screen shake. |
-| **UI** | `Button`, `Label`, `Panel`, `List`, `ProgressBar`, `DataTable`. Layout and anchoring. |
-| **Theme** | Global style defaults. `game.theme` or per-component `Style`. |
-| **Audio** | Channels (master, music, sfx, ui). `play_music`, `crossfade_music`, sound pools. |
-| **Input** | Action mapping (bind keys to actions). `handle_input(event)` in scenes. |
+| **Scene stack** | Push/pop scenes. `on_enter`, `on_exit`, `on_reveal`, `update`, `draw` hooks. |
+| **Declarative controls** | `class MyScene(Scene): controls = {"right": "step"}` — tuple-aliased keys, validated at import, optional event arg. |
+| **Reactive HUD** | `Label(text=lambda: …)` and `ProgressBar(value=lambda: …)` re-evaluate every frame. |
+| **Layout primitives** | `ring_positions`, `grid_positions`, `line_positions`, `ring_budget` — pure-math helpers for procedural layout. |
+| **Selector** | `Selector[T]` wraps choose-one-of-N state (options, index, next/prev/set_index, replace). |
+| **Theme text styles** | `Theme(text_styles={"title": TextStyle(28, gold), …})` — centrally-named text appearance. |
+| **Row / Column** | Transparent horizontal / vertical containers — no background, no border, no padding. HUD one-liners. |
+| **Sprites & actions** | Position, animate, layer. `Sequence`, `Parallel`, `MoveTo`, `FadeIn`, composable. |
+| **Camera** | Follow, scroll, pan, bounds, shake. |
+| **Audio** | Channels, crossfade, sound pools. |
+| **Input** | Action mapping + modifier booleans (shift / ctrl / alt / meta) on every event. |
 | **Save/load** | `game.save(slot)`, `game.load(slot)`. JSON-based, slot metadata. |
 | **Tweening** | `tween(obj, "x", 0, 100, 1.0)` for property interpolation. |
 | **Drag-and-drop** | `DragManager` for draggable UI. |
 
-See `tutorials/tower_defense/` for a complete tutorial. `DESIGN.md` for requirements, `BACKEND.md` for implementation details.
+See `DESIGN.md` for requirements, `BACKEND.md` for implementation details, and
+`keras.dev` for a round-by-round log of how the declarative APIs evolved.
 
 ---
 
