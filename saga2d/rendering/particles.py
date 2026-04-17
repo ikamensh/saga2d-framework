@@ -85,6 +85,14 @@ class ParticleEmitter:
         fade_out:  If ``True``, particle opacity lerps from 255 to 0 over
                    its lifetime.
         layer:     Render layer for particle sprites.
+        rng:       Optional :class:`random.Random` instance used for every
+                   random choice the emitter makes (image variant, speed,
+                   direction, lifetime). ``None`` (default) falls back to
+                   the module-level ``random``, which is appropriate for
+                   gameplay. Pass a seeded ``Random()`` when you need
+                   reproducible particle output — e.g. for PNG snapshot
+                   tests (iter-45 added the parameter after the dodge
+                   PNG snapshot went non-deterministic on CI).
     """
 
     def __init__(
@@ -97,6 +105,7 @@ class ParticleEmitter:
         lifetime: tuple[float, float] = (0.3, 0.8),
         fade_out: bool = True,
         layer: RenderLayer = RenderLayer.EFFECTS,
+        rng: random.Random | None = None,
     ) -> None:
         from saga2d.rendering.sprite import _current_game
 
@@ -144,6 +153,13 @@ class ParticleEmitter:
         self._lifetime = lifetime
         self._fade_out = fade_out
         self._layer = layer
+        # iter-45: caller-supplied RNG for deterministic particle output.
+        # Falls back to the random module for backwards compatibility —
+        # existing call sites don't need to change. The module's free
+        # functions (``random.uniform``, ``random.choice``) have the
+        # same signatures as :class:`random.Random` methods, so the
+        # single attribute works either way.
+        self._rng: Any = rng if rng is not None else random
 
         # Living particles.
         self._particles: list[_Particle] = []
@@ -281,7 +297,7 @@ class ParticleEmitter:
         """Create one particle sprite with randomised velocity and lifetime."""
         from saga2d.rendering.sprite import Sprite
 
-        image_name = random.choice(self._images)
+        image_name = self._rng.choice(self._images)
 
         sprite = Sprite(
             image_name,
@@ -290,13 +306,13 @@ class ParticleEmitter:
             layer=self._layer,
         )
 
-        speed = random.uniform(self._speed[0], self._speed[1])
-        angle_deg = random.uniform(self._direction[0], self._direction[1])
+        speed = self._rng.uniform(self._speed[0], self._speed[1])
+        angle_deg = self._rng.uniform(self._direction[0], self._direction[1])
         angle_rad = math.radians(angle_deg)
         vx = speed * math.cos(angle_rad)
         vy = speed * math.sin(angle_rad)
 
-        lt = random.uniform(self._lifetime[0], self._lifetime[1])
+        lt = self._rng.uniform(self._lifetime[0], self._lifetime[1])
 
         self._particles.append(
             _Particle(
