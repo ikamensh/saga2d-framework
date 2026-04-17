@@ -42,6 +42,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from saga2d.testing.plot_scene import plot_scene
 from saga2d.testing.png_snapshot import assert_scene_matches_png_snapshot
 
 if TYPE_CHECKING:
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
 __all__ = [
     "assert_scene_matches_snapshot",
     "assert_scene_matches_png_snapshot",
+    "plot_scene",
 ]
 
 
