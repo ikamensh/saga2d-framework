@@ -156,6 +156,13 @@ class InputManager:
     def __init__(self) -> None:
         self._key_to_action: dict[str, str] = {}
         self._action_to_key: dict[str, str] = {}
+        # iter-44: maintain a level-triggered "held keys" set alongside
+        # the edge-triggered event stream. Updated by :meth:`translate`
+        # on every tick; queried by game code via :meth:`is_pressed`
+        # and :meth:`pressed_keys`. Previously every example that
+        # wanted continuous motion had to re-implement this block in
+        # its own ``handle_input`` (iter-43 ``dodge`` did so).
+        self._pressed: set[str] = set()
         self._setup_defaults()
 
     # ------------------------------------------------------------------
@@ -193,6 +200,52 @@ class InputManager:
         return dict(self._action_to_key)
 
     # ------------------------------------------------------------------
+    # Held-keys query — level-triggered companion to edge-triggered events
+    # ------------------------------------------------------------------
+
+    def is_pressed(self, key: str) -> bool:
+        """Return ``True`` while *key* is currently held down.
+
+        Use for continuous per-frame polling (smooth movement, charge
+        attacks, anything that should happen *while* a key is held
+        rather than once on press). The edge-triggered :class:`InputEvent`
+        stream stays the right tool for one-shot actions (menu
+        navigation, fire-button, restart).
+
+        ``key`` is the same raw-key string the backend reports —
+        ``"a"``, ``"left"``, ``"space"``, etc.
+
+        Example — continuous horizontal motion::
+
+            def update(self, dt: float) -> None:
+                if self.game.input.is_pressed("a"):
+                    self.player.x -= 300 * dt
+                if self.game.input.is_pressed("d"):
+                    self.player.x += 300 * dt
+        """
+        return key in self._pressed
+
+    def pressed_keys(self) -> frozenset[str]:
+        """Return a snapshot of all currently-held keys.
+
+        Returns a ``frozenset`` so the caller can't mutate internal
+        state. Useful when you want to check several keys at once::
+
+            held = self.game.input.pressed_keys()
+            if "shift" in held and "a" in held:
+                self.player.x -= 600 * dt   # sprint-left
+        """
+        return frozenset(self._pressed)
+
+    def _clear_pressed(self) -> None:
+        """Release-all helper — clears the held-keys set.
+
+        Called by :class:`Game` on focus-loss or teardown so stuck
+        keys don't persist across scene or window transitions.
+        """
+        self._pressed.clear()
+
+    # ------------------------------------------------------------------
     # Translation
     # ------------------------------------------------------------------
 
@@ -211,6 +264,13 @@ class InputManager:
         for event in raw_events:
             if isinstance(event, KeyEvent):
                 action = self._key_to_action.get(event.key)
+                # iter-44: level-triggered held-keys set. key_press
+                # adds, key_release removes. Game code queries via
+                # ``game.input.is_pressed(key)``.
+                if event.type == "key_press":
+                    self._pressed.add(event.key)
+                elif event.type == "key_release":
+                    self._pressed.discard(event.key)
                 result.append(
                     InputEvent(
                         type=event.type,

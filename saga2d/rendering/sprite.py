@@ -334,6 +334,47 @@ class Sprite:
         """The opaque backend sprite id (read-only, for testing)."""
         return self._sprite_id
 
+    @property
+    def size(self) -> tuple[int, int]:
+        """Return the underlying image's ``(width, height)`` in pixels.
+
+        Cached at construction time from
+        :meth:`saga2d.backends.base.Backend.get_image_size`. Read-only —
+        changing the image via :attr:`image` refreshes this cache.
+        """
+        return (self._img_w, self._img_h)
+
+    @property
+    def aabb(self) -> "Rect":
+        """Axis-aligned bounding box (iter-44).
+
+        Returns a :class:`saga2d.util.collision.Rect` centred on the
+        sprite's *visual* centre — accounting for the sprite's anchor.
+        For a ``BOTTOM_CENTER``-anchored 48×48 ship at ``(300, 720)``,
+        the AABB is ``Rect(cx=300, cy=696, w=48, h=48)``.
+
+        Use this for collision checks::
+
+            if player.aabb.overlaps(rock.aabb):
+                game_over()
+
+        Not suitable for rotated sprites — saga2d doesn't yet support
+        sprite rotation, but when it does, this property will need to
+        be revisited (an AABB of a rotated sprite is conservatively
+        larger than the sprite itself).
+        """
+        from saga2d.util.collision import Rect
+        dx, dy = _anchor_offset(self._anchor, self._img_w, self._img_h)
+        # Top-left draw corner.
+        tl_x = self._x - dx
+        tl_y = self._y - dy
+        return Rect(
+            cx=tl_x + self._img_w / 2,
+            cy=tl_y + self._img_h / 2,
+            w=float(self._img_w),
+            h=float(self._img_h),
+        )
+
     # ------------------------------------------------------------------
     # Composable Actions
     # ------------------------------------------------------------------
