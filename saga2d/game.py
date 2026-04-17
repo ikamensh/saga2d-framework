@@ -132,6 +132,10 @@ class Game:
         self._animated_sprites: WeakSet[Any] = WeakSet()
         self._all_sprites: WeakSet[Any] = WeakSet()
         self._action_sprites: WeakSet[Any] = WeakSet()
+        # iter-47: sprites registered via :meth:`Sprite.follow`. Their
+        # position is synced to the follow target once per tick in
+        # :meth:`_update_sprite_follows`.
+        self._follow_sprites: WeakSet[Any] = WeakSet()
         self._particle_emitters: weakref.WeakSet[Any] = weakref.WeakSet()
 
         # Latest mouse position in logical screen coords (for camera edge scroll).
@@ -520,6 +524,7 @@ class Game:
         self._all_sprites.clear()
         self._animated_sprites.clear()
         self._action_sprites.clear()
+        self._follow_sprites.clear()
         self._particle_emitters.clear()
 
         # Null out subsystem references to break reference cycles and
@@ -674,6 +679,14 @@ class Game:
         # -- Action phase --------------------------------------------------
         self._update_actions(dt)
 
+        # -- Follow phase (iter-47) ----------------------------------------
+        # Sprite.follow()-registered sprites sync to their target each
+        # tick. Runs *after* actions so MoveTo/etc. on the target have
+        # taken effect first, but *before* particles so an emitter
+        # following a sprite sees the freshly-updated position. Order:
+        # actions → follows → particles.
+        self._update_sprite_follows(dt)
+
         # -- Particle phase ------------------------------------------------
         self._update_particles(dt)
 
@@ -729,6 +742,17 @@ class Game:
     # ------------------------------------------------------------------
     # Particle update
     # ------------------------------------------------------------------
+
+    def _update_sprite_follows(self, dt: float) -> None:
+        """Sync ``follow``-registered sprites to their targets.
+
+        Iterates a copy of the set so a sprite that detaches during
+        update (because its target was just removed) can safely
+        ``_follow_sprites.discard(self)`` without mutating the
+        iterating collection.
+        """
+        for sprite in list(self._follow_sprites):
+            sprite._sync_follow()
 
     def _update_particles(self, dt: float) -> None:
         """Advance all particle emitters.

@@ -164,6 +164,11 @@ class Sprite:
         # Action state (Stage 10 Composable Actions).
         self._current_action: Action | None = None
 
+        # iter-47: sprite-to-sprite follow. Set by :meth:`follow`;
+        # synced by :meth:`Game._update_sprite_follows` each tick.
+        self._follow_target: "Sprite | None" = None
+        self._follow_offset: tuple[float, float] = (0.0, 0.0)
+
         # Scene ownership (set by Scene.add_sprite).
         self._owning_scene: Any = None
 
@@ -376,6 +381,81 @@ class Sprite:
         )
 
     # ------------------------------------------------------------------
+    # iter-47: sprite-to-sprite follow
+    # ------------------------------------------------------------------
+
+    def follow(
+        self,
+        target: "Sprite | None",
+        offset: tuple[float, float] = (0.0, 0.0),
+    ) -> None:
+        """Attach this sprite to *target* so it tracks the target's
+        position each tick.
+
+        Symmetric with :meth:`saga2d.rendering.particles.ParticleEmitter.follow`
+        (iter-46). Common uses:
+
+        *   **HP bar above an enemy**: the bar sprite follows the
+            enemy sprite with an upward offset.
+        *   **Orbiting sidekick**: a companion sprite follows the
+            player with a rotating offset (offset updated each
+            frame from game code — saga2d has no rotation inheritance
+            yet).
+        *   **Projectile smoke trail**: an emitter following a
+            projectile sprite, combined with ``ParticleEmitter.follow``.
+
+        When *target* is removed (``target.is_removed``), the follow
+        silently detaches on the next update — no stale reference
+        kept, no exception. Pass ``target=None`` to clear manually.
+
+        Example::
+
+            hpbar = self.add_sprite(Sprite("hp_full", position=(0, 0)))
+            hpbar.follow(enemy_sprite, offset=(0, -40))
+        """
+        if target is None:
+            self._follow_target = None
+            self._follow_offset = (0.0, 0.0)
+            self._game._follow_sprites.discard(self)
+            return
+        if self._removed:
+            return
+        ox, oy = float(offset[0]), float(offset[1])
+        if not (math.isfinite(ox) and math.isfinite(oy)):
+            raise ValueError(
+                f"Sprite.follow offset must be finite, got ({ox}, {oy})"
+            )
+        self._follow_target = target
+        self._follow_offset = (ox, oy)
+        # Snap to target immediately so the first rendered frame is
+        # already in sync — avoids a one-frame "jump" when the follow
+        # is set on the same tick the target just moved.
+        self._x = float(target.x) + ox
+        self._y = float(target.y) + oy
+        self._sync_to_backend()
+        self._game._follow_sprites.add(self)
+
+    def _sync_follow(self) -> None:
+        """Called once per tick by :meth:`Game._update_sprite_follows`.
+
+        Pushes the follow target's current position (plus offset)
+        into the sprite. If the target is removed, detaches so the
+        target can be garbage-collected.
+        """
+        if self._removed:
+            self._game._follow_sprites.discard(self)
+            return
+        target = self._follow_target
+        if target is None or getattr(target, "is_removed", False):
+            self._follow_target = None
+            self._game._follow_sprites.discard(self)
+            return
+        ox, oy = self._follow_offset
+        self._x = float(target.x) + ox
+        self._y = float(target.y) + oy
+        self._sync_to_backend()
+
+    # ------------------------------------------------------------------
     # Composable Actions
     # ------------------------------------------------------------------
 
@@ -440,6 +520,9 @@ class Sprite:
         self._game._animated_sprites.discard(self)
         self._game._all_sprites.discard(self)
         self._game._action_sprites.discard(self)
+        # iter-47: deregister from follow tracking too.
+        self._game._follow_sprites.discard(self)
+        self._follow_target = None
         # Deregister from owning scene (if any).
         if self._owning_scene is not None:
             self._owning_scene._owned_sprites.discard(self)
