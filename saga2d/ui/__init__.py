@@ -19,6 +19,7 @@ from saga2d.ui.screens import (
 )
 from saga2d.ui.theme import Style, TextStyle, Theme
 from saga2d.ui.widgets import (
+    CircularGauge,
     DataTable,
     Grid,
     ImageBox,
@@ -34,6 +35,7 @@ __all__ = [
     "Anchor",
     "Button",
     "ChoiceScreen",
+    "CircularGauge",
     "Column",
     "Component",
     "ConfirmDialog",
