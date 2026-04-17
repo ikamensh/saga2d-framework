@@ -1,25 +1,37 @@
 """Testing helpers for saga2d games.
 
-One public helper today: :func:`assert_scene_matches_snapshot`, which
-compares a scene's declared structure (via :meth:`Scene.summary_json`
-from iter-22) against a stored JSON snapshot. First run writes the
-snapshot; subsequent runs compare and fail with a unified-diff message
-on mismatch.
+Two public helpers:
 
-Snapshot testing is the natural consumer of ``summary_json`` — once
-you have a stable, machine-readable representation of a scene, you can
-regression-test that a feature addition didn't silently restructure an
-unrelated scene's UI tree or rebind a key.
+*   :func:`assert_scene_matches_snapshot` — JSON snapshot of a scene's
+    declared structure (via :meth:`Scene.summary_json` from iter-22).
+*   :func:`assert_scene_matches_png_snapshot` — PNG snapshot of a
+    scene's rendered output (via the iter-38 mock-to-PIL renderer).
 
-Example usage in a test::
+The pair answers two different regression questions:
+
+*   Structural: "did the widget tree change?" — JSON snapshot.
+*   Visual: "did the rendered pixels change?" — PNG snapshot.
+
+Together they form saga2d's equivalent of Keras's
+``model.save() / load()`` for regression testing.
+
+Example usage::
 
     from saga2d.testing import assert_scene_matches_snapshot
+    from saga2d.testing import assert_scene_matches_png_snapshot
 
     def test_dial_menu_scene_shape(game, snapshot_dir):
         scene = DialMenuScene()
         game._scene_stack.push(scene)
         game.tick(dt=1 / 60)
         assert_scene_matches_snapshot(scene, "dial_menu", snapshot_dir)
+
+    def test_dial_menu_visual(snapshot_dir):
+        def setup(game):
+            game._scene_stack.push(DialMenuScene())
+        assert_scene_matches_png_snapshot(
+            setup, "dial_menu", snapshot_dir, theme=build_theme(),
+        )
 """
 
 from __future__ import annotations
@@ -30,8 +42,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from saga2d.testing.png_snapshot import assert_scene_matches_png_snapshot
+
 if TYPE_CHECKING:
     from saga2d.scene import Scene
+
+__all__ = [
+    "assert_scene_matches_snapshot",
+    "assert_scene_matches_png_snapshot",
+]
 
 
 _UPDATE_ENV_VAR = "SAGA2D_UPDATE_SNAPSHOTS"
