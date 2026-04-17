@@ -168,6 +168,13 @@ class ParticleEmitter:
         self._continuous_rate: float = 0.0  # particles per second (0 = off)
         self._spawn_accum: float = 0.0  # fractional particle accumulator
 
+        # iter-46: optional parent-tracking. When ``_follow_target`` is
+        # set, ``update(dt)`` moves the emitter position to the target
+        # sprite's position each tick before spawning new particles.
+        # Auto-detaches when the target is removed.
+        self._follow_target: Any = None
+        self._follow_offset: tuple[float, float] = (0.0, 0.0)
+
         # Register for automatic updates.
         self._game._particle_emitters.add(self)
 
@@ -244,11 +251,57 @@ class ParticleEmitter:
     # Per-frame update
     # ------------------------------------------------------------------
 
+    def follow(
+        self,
+        target: Any,
+        offset: tuple[float, float] = (0.0, 0.0),
+    ) -> None:
+        """Attach the emitter to *target* so its position tracks.
+
+        After calling ``follow(sprite, offset=(0, 4))``, the emitter's
+        position is set to ``(sprite.x + 0, sprite.y + 4)`` at the
+        start of every :meth:`update` call — no scene-level bookkeeping
+        needed. When the target sprite is removed (``target.is_removed``
+        becomes ``True``), the follow is silently detached so no stale
+        reference is retained.
+
+        Example::
+
+            thruster = ParticleEmitter(image="dust", ...)
+            thruster.follow(player_sprite, offset=(0, 4))
+            thruster.continuous(rate=40)
+
+        Pass ``target=None`` to clear an existing follow attachment.
+        """
+        self._follow_target = target
+        ox, oy = float(offset[0]), float(offset[1])
+        if not (math.isfinite(ox) and math.isfinite(oy)):
+            raise ValueError(
+                f"ParticleEmitter.follow offset must be finite, got ({ox}, {oy})"
+            )
+        self._follow_offset = (ox, oy)
+        # Snap position immediately so particles spawned in the
+        # same frame as follow() is called are already correct.
+        if target is not None and not getattr(target, "is_removed", False):
+            self._x = float(target.x) + ox
+            self._y = float(target.y) + oy
+
     def update(self, dt: float) -> None:
         """Advance all particles: move, age, fade, remove dead ones.
 
         Also spawns new particles if in continuous mode.
         """
+        # --- iter-46 follow — sync position to target sprite first. ---
+        # If the target has been removed, drop the reference so we
+        # don't silently keep a dead Sprite alive via this link.
+        if self._follow_target is not None:
+            if getattr(self._follow_target, "is_removed", False):
+                self._follow_target = None
+            else:
+                ox, oy = self._follow_offset
+                self._x = float(self._follow_target.x) + ox
+                self._y = float(self._follow_target.y) + oy
+
         # --- Continuous spawning ---
         if self._continuous_rate > 0:
             self._spawn_accum += self._continuous_rate * dt

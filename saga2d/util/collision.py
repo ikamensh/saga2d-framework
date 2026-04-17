@@ -67,7 +67,7 @@ class Rect:
 RectLike = Union[Rect, tuple[float, float, float, float]]
 
 
-def aabb_overlap(a: RectLike, b: RectLike) -> bool:
+def aabb_overlap(a: RectLike, b: RectLike, *, strict: bool = False) -> bool:
     """Return ``True`` iff the two AABBs overlap.
 
     Both arguments accept a :class:`Rect` or a centre-anchored tuple
@@ -76,12 +76,23 @@ def aabb_overlap(a: RectLike, b: RectLike) -> bool:
     distance between their centres on each axis is less than the
     sum of their half-extents on that axis.
 
+    ``strict=False`` (default, saga2d convention since iter-44):
+    AABBs whose edges exactly touch are **not** considered
+    overlapping. Tile-based games placing square tiles edge-to-edge
+    don't trigger spurious self-collisions.
+
+    ``strict=True``: edges that touch *are* considered overlapping.
+    Bullet-vs-player in shoot'em-ups often wants a bullet tangent to
+    the player's edge to tag as a hit on the first contact frame.
+
     >>> aabb_overlap((0, 0, 10, 10), (8, 0, 10, 10))
+    True
+    >>> aabb_overlap((0, 0, 10, 10), (10, 0, 10, 10))   # touching edges
+    False
+    >>> aabb_overlap((0, 0, 10, 10), (10, 0, 10, 10), strict=True)
     True
     >>> aabb_overlap((0, 0, 10, 10), (11, 0, 10, 10))
     False
-    >>> aabb_overlap(Rect(0, 0, 10, 10), Rect(5, 5, 20, 20))
-    True
     """
     if isinstance(a, Rect):
         ax, ay, aw, ah = a.cx, a.cy, a.w, a.h
@@ -91,6 +102,11 @@ def aabb_overlap(a: RectLike, b: RectLike) -> bool:
         bx, by, bw, bh = b.cx, b.cy, b.w, b.h
     else:
         bx, by, bw, bh = b
+    if strict:
+        return (
+            abs(ax - bx) * 2 <= (aw + bw)
+            and abs(ay - by) * 2 <= (ah + bh)
+        )
     return (
         abs(ax - bx) * 2 < (aw + bw)
         and abs(ay - by) * 2 < (ah + bh)
