@@ -7,7 +7,7 @@ front-most child first, and draws itself before its children.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from saga2d.ui.layout import Anchor, compute_anchor_position
 from saga2d.ui.theme import Style
@@ -15,6 +15,7 @@ from saga2d.ui.theme import Style
 if TYPE_CHECKING:
     from saga2d.game import Game
     from saga2d.input import InputEvent
+    from saga2d.scene import Scene
 
 
 class Component:
@@ -175,13 +176,14 @@ class Component:
 
     @property
     def _order(self) -> int:
-        """Screen-space draw order for this component's scene level."""
+        """Screen-space draw order: the owning scene's level in the stack."""
         from saga2d.scene import UI_ORDER_BASE
 
         root = self
         while root._parent is not None:
             root = root._parent
-        return UI_ORDER_BASE + getattr(root, "_level", 0)
+        scene = getattr(root, "_scene", None)
+        return UI_ORDER_BASE + (scene._level if scene is not None else 0)
 
     @staticmethod
     def _propagate_game(component: Component, game: Game | None) -> None:
@@ -193,11 +195,11 @@ class Component:
 class _UIRoot(Component):
     """Invisible full-screen root of a scene's UI tree."""
 
-    def __init__(self, game: Game, level: int = 0) -> None:
-        w, h = game.resolution
+    def __init__(self, scene: Scene) -> None:
+        w, h = scene.game.resolution
         super().__init__(width=w, height=h)
-        self._game = game
-        self._level = level
+        self._game = scene.game
+        self._scene = scene
         self._computed_w, self._computed_h = w, h
 
     def get_preferred_size(self) -> tuple[int, int]:

@@ -1,33 +1,32 @@
 # Saga2D
 
-Python framework for 2D sprite-based games. You write game logic, not engine plumbing.
-A main menu with buttons is 10 lines. A scrolling world with animated units is 50.
+A Python framework for 2D games where the developer writes game logic,
+not engine plumbing — and Tribes, the Polytopia-style strategy game that
+keeps it honest.
 
 ## What it is
 
-Rendering, animation, UI, audio, and scene management — the parts that are identical
-whether you're building Heroes 2, Warcraft 2, or Baldur's Gate. Sprites in layers with
-y-sorting. UI components with layout and theming. Scenes that push/pop like a stack.
-Assets loaded by name. Input mapped to actions. Sound with channels and crossfade.
-Camera over a world bigger than the screen. Tweening, timers, particles, save/load.
+Sprites in ordered layers under a zoomable camera, immediate-mode shapes
+and text, a small UI toolkit with reactive labels, a scene stack with
+overlays, declarative hotkeys, actions and particles for juice, and a
+mock backend that makes all of it testable without a window.
 
 ## What it isn't
 
-No tile maps, pathfinding, fog of war, entity model, or combat system. Those differ
-per game. The framework renders sprites wherever you put them — your game decides what
-a "tile" or "unit" or "inventory" means. Sprite is visual; game objects are yours.
+No tile maps, pathfinding, fog of war, entity model, combat system, drag
+and drop, palette swaps or settings screens.  Those differ per game;
+Tribes implements its own in a few hundred lines on top of the framework
+and that is the intended shape of any saga2d game.
 
 ## Key decisions
 
-- **Pixel positions, not tiles.** Framework is world-model agnostic. Works for hex
-  grids, rect grids, and free-scrolling RPG backgrounds equally.
-- **GPU-first.** Pyglet (OpenGL) as first backend, not pygame. Removes the performance
-  ceiling. Hundreds of sprites and particles without worry.
-- **Backend-agnostic protocol.** Opaque handles, begin/end frame batching. Pyglet can
-  be swapped without touching game code or framework logic.
-- **Logical coordinates, native rendering.** Game positions things in 1920x1080 (or
-  whatever). Rendering happens at physical resolution — text is always sharp, even on
-  retina. Asset manager loads @2x variants automatically.
-- **Particles are just sprites.** No special system. An emitter manages short-lived
-  sprites with velocity and lifetime. Spell effects, weather, explosions — all covered.
-
+- **GPU-first via pyglet.**  A view matrix moves the camera; a triangle
+  soup draws the shapes; text is rasterised at native pixel density.
+- **Two coordinate spaces, one integer draw order.**  World content sits
+  below screen content; layers and stack position decide the rest.
+- **Sprites have a logical size.**  Procedural art is generated at the
+  display's density and drawn crisp at any zoom.
+- **Hotkeys are first-class.**  A class-level dict, chords included,
+  validated at import time.
+- **Delete rather than deprecate.**  Features exist because a concrete
+  game needed them in that exact form.

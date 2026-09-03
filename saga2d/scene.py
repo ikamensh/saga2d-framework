@@ -281,5 +281,5 @@ class Scene:
         if self._ui is None:
             from saga2d.ui.base import _UIRoot
 
-            self._ui = _UIRoot(self.game)
+            self._ui = _UIRoot(self)
         return self._ui

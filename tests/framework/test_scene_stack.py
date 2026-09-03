@@ -158,3 +158,29 @@ def test_scene_that_fails_on_enter_is_not_left_on_the_stack(game: Game) -> None:
     with pytest.raises(RuntimeError):
         game.push(Broken())
     assert names(game) == ["a"]
+
+
+def test_overlay_ui_draws_above_the_base_scene_hud_and_banner(game: Game, backend) -> None:
+    from saga2d import Anchor, Label
+
+    class Base(Scene):
+        def on_enter(self) -> None:
+            self.ui.add(Label("hud", anchor=Anchor.TOP_LEFT))
+
+        def draw(self) -> None:
+            self.draw_text("banner", 10, 10)
+
+    class Overlay(Scene):
+        transparent = True
+
+        def on_enter(self) -> None:
+            self.ui.add(Label("menu", anchor=Anchor.CENTER))
+
+        def draw(self) -> None:
+            self.draw_rect(0, 0, 10, 10, (0, 0, 0, 100))
+
+    game.push(Base())
+    game.push(Overlay())
+    game.tick(0.016)
+    order = {t["text"]: t["order"] for t in backend.texts}
+    assert order["hud"] == order["banner"] < backend.rects[0]["order"] == order["menu"]
