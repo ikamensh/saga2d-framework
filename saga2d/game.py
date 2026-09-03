@@ -114,13 +114,8 @@ class Game:
         sprite_mod._current_game = self
 
     def _fit_screen(self, fullscreen: bool) -> tuple[int, int]:
-        screen_size = getattr(self._backend, "screen_size", None)
-        if screen_size is None:
-            return (1280, 800)
-        w, h = screen_size()
-        if fullscreen:
-            return (w, h)
-        return (w - 80, h - 120)
+        w, h = self._backend.screen_size()
+        return (w, h) if fullscreen else (w - 80, h - 120)
 
     # -- Subsystems ------------------------------------------------------------
 

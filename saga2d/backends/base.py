@@ -73,6 +73,10 @@ class Backend(Protocol):
 
     # -- Lifecycle -----------------------------------------------------------
 
+    def screen_size(self) -> tuple[int, int]:
+        """Size of the primary display in logical units."""
+        ...
+
     def create_window(
         self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True,
     ) -> None: ...

@@ -56,6 +56,9 @@ class MockBackend:
 
     # -- Lifecycle -----------------------------------------------------------
 
+    def screen_size(self) -> tuple[int, int]:
+        return (1920, 1080)
+
     def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True) -> None:
         self.logical_width = width
         self.logical_height = height
