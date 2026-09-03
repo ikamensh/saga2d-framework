@@ -503,6 +503,11 @@ class Game:
             return  # __init__ failed before scene stack was created
         while self._scene_stack._stack:
             scene = self._scene_stack._stack.pop()
+            # on_exit() is user code and might raise; keep draining the
+            # stack so framework-owned resources (sprites, timers,
+            # emitters) are released for every scene. Framework cleanup
+            # below is intentionally not wrapped — if it raises that's a
+            # real bug we want surfaced.
             try:
                 scene.on_exit()
             except Exception:
@@ -510,14 +515,8 @@ class Game:
                     "Error in on_exit() during teardown for %s",
                     type(scene).__name__,
                 )
-            try:
-                self._scene_stack._cleanup_exiting_scene(scene)
-                self._scene_stack._teardown_exited_scene(scene)
-            except Exception:
-                _logger.exception(
-                    "Error in cleanup during teardown for %s",
-                    type(scene).__name__,
-                )
+            self._scene_stack._cleanup_exiting_scene(scene)
+            self._scene_stack._teardown_exited_scene(scene)
 
         # Clear sprite and emitter tracking sets so remaining objects
         # (e.g. sprites not owned by any scene) can be GC'd.

@@ -1,6 +1,6 @@
 """UI components, layout, and theming."""
 
-from saga2d.ui.component import Component
+from saga2d.ui.base import Component
 from saga2d.ui.components import Button, Column, Label, Panel, Row
 from saga2d.ui.drag_drop import DragManager
 from saga2d.ui.hud import HUD

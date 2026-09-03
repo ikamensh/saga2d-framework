@@ -6,7 +6,7 @@ These are the three building blocks for in-game menus and HUDs.
 *   :class:`Button` — clickable rectangle with hover / press states.
 *   :class:`Panel` — container with optional flow layout and background.
 
-All three inherit from :class:`~saga2d.ui.component.Component` and
+All three inherit from :class:`~saga2d.ui.base.Component` and
 access the backend through ``self._game._backend`` and the theme
 through ``self._game.theme``.
 """
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
-from saga2d.ui.component import Component
+from saga2d.ui.base import Component
 from saga2d.ui.layout import (
     Layout,
     compute_anchor_position,

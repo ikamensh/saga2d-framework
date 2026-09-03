@@ -1,132 +1,22 @@
-"""Scene base class and SceneStack.
+"""Scene base class.
 
-Scene is a concrete base class with no-op lifecycle hooks. Subclasses override
-only what they need. SceneStack manages a stack of scenes with push/pop/replace/
-clear_and_push. Operations triggered during update() or handle_input() are
-deferred and flushed after those phases complete.
+Scene is a concrete base class with no-op lifecycle hooks. Subclasses
+override only what they need. ``SceneStack`` (push/pop/replace/clear_and_push)
+is re-exported from :mod:`saga2d._scene_stack` at the bottom of this file
+so existing ``from saga2d.scene import SceneStack`` imports keep working.
 """
 
 from __future__ import annotations
 
-import collections
 import inspect
 from typing import TYPE_CHECKING, Any, Callable
 
+from saga2d._scene_summary import (
+    _component_to_json,
+    _format_node,
+    _walk_json_with_depth,
+)
 from saga2d.util.timer import TimerHandle
-
-
-def _component_to_json(component: Any, include_bounds: bool = False) -> dict[str, Any]:
-    """Convert a UI component to a JSON-serialisable dict.
-
-    Recursive over children. The returned shape is stable enough for
-    tooling to consume — debug overlays, snapshot tests, IDE plugins.
-    Keys are omitted when not meaningful (no ``text_style`` key when
-    the component has none), so a snapshot diff stays focused on
-    actual differences.
-
-    When *include_bounds* is ``True``, each node carries
-    ``"bounds": [x, y, w, h]`` from the component's computed
-    rectangle. Off by default because bounds depend on viewport
-    size and so make snapshots resolution-coupled.
-    """
-    node: dict[str, Any] = {"type": type(component).__name__}
-
-    if hasattr(component, "_text_rv"):
-        rv = component._text_rv
-        if getattr(rv, "is_reactive", False):
-            node["text"] = {"reactive": True}
-        else:
-            node["text"] = {"reactive": False, "value": rv.value}
-
-    if hasattr(component, "_value_rv"):
-        rv = component._value_rv
-        if getattr(rv, "is_reactive", False):
-            node["value"] = {"reactive": True}
-        else:
-            node["value"] = {"reactive": False, "value": rv.value}
-
-    text_style = getattr(component, "_text_style", None)
-    if isinstance(text_style, str):
-        node["text_style"] = text_style
-
-    anchor = getattr(component, "_anchor", None)
-    if anchor is not None:
-        node["anchor"] = anchor.name
-
-    margin = getattr(component, "_margin", 0)
-    if margin:
-        node["margin"] = margin
-
-    if include_bounds:
-        node["bounds"] = [
-            getattr(component, "_computed_x", 0),
-            getattr(component, "_computed_y", 0),
-            getattr(component, "_computed_w", 0),
-            getattr(component, "_computed_h", 0),
-        ]
-
-    children = getattr(component, "_children", None)
-    if children:
-        node["children"] = [
-            _component_to_json(c, include_bounds=include_bounds)
-            for c in children
-        ]
-
-    return node
-
-
-def _describe_component(component: Any) -> str:
-    """One-line human-readable description — format from the JSON node.
-
-    Keeping a single canonical data shape (the JSON node) and formatting
-    from it means :meth:`Scene.summary` and :meth:`Scene.summary_json`
-    can never drift out of sync.
-    """
-    node = _component_to_json(component)
-    return _format_node(node)
-
-
-def _format_node(node: dict[str, Any]) -> str:
-    """Render a ``_component_to_json`` node as the iter-20 one-line form."""
-    cls = node["type"]
-    parts: list[str] = []
-
-    text = node.get("text")
-    if text is not None:
-        if text["reactive"]:
-            parts.append("← callable")
-        else:
-            value = text["value"]
-            parts.append(f'"{value}"' if value else '""')
-
-    value = node.get("value")
-    if value is not None:
-        if value["reactive"]:
-            parts.append("← callable")
-        else:
-            parts.append(f"value={value['value']}")
-
-    if "text_style" in node:
-        parts.append(f"text_style={node['text_style']}")
-    if "anchor" in node:
-        parts.append(f"anchor={node['anchor']}")
-    if "margin" in node:
-        parts.append(f"margin={node['margin']}")
-    if "bounds" in node:
-        x, y, w, h = node["bounds"]
-        parts.append(f"bounds=[{x},{y} {w}x{h}]")
-
-    if parts:
-        return f"{cls} " + ", ".join(parts)
-    return cls
-
-
-def _walk_json_with_depth(node: dict[str, Any], depth: int = 0):
-    """Depth-first walk over a JSON node's children, yielding
-    ``(depth, node)`` pairs starting from direct children."""
-    for child in node.get("children", []):
-        yield (depth, child)
-        yield from _walk_json_with_depth(child, depth + 1)
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
@@ -163,7 +53,7 @@ if TYPE_CHECKING:
     from saga2d.input import InputEvent
     from saga2d.rendering.camera import Camera
     from saga2d.rendering.sprite import Sprite
-    from saga2d.ui.component import _UIRoot
+    from saga2d.ui.base import _UIRoot
 
 
 class Scene:
@@ -852,382 +742,27 @@ class Scene:
     def ui(self) -> _UIRoot:
         """The UI component tree root, created lazily on first access.
 
-        Returns a :class:`~saga2d.ui.component._UIRoot` that covers the
+        Returns a :class:`~saga2d.ui.base._UIRoot` that covers the
         full logical screen.  Add components via ``self.ui.add(panel)``.
 
         The root is created on first access (after ``game`` is set by the
         scene stack), so it is safe to use inside :meth:`on_enter`.
         """
         if self._ui is None:
-            from saga2d.ui.component import _UIRoot
+            from saga2d.ui.base import _UIRoot
 
             self._ui = _UIRoot(self.game)
         return self._ui
 
 
-class SceneStack:
-    """Manages a stack of scenes with deferred push/pop/replace/clear_and_push.
 
-    Operations requested during update() or handle_input() are queued and
-    flushed after those phases complete. This avoids modifying the stack
-    mid-iteration (e.g. scene receiving on_exit during its own update).
-    """
+# ----------------------------------------------------------------------
+# Re-export ``SceneStack`` from its own module so existing
+# ``from saga2d.scene import SceneStack`` call-sites keep working.
+# The import must be at the bottom so ``SceneStack``'s type annotations
+# can reference the :class:`Scene` defined above without an ordering
+# problem at class-body evaluation time.
+# ----------------------------------------------------------------------
+from saga2d._scene_stack import SceneStack  # noqa: E402
 
-    def __init__(self, game: Game) -> None:
-        self._game: Game = game
-        self._stack: list[Scene] = []
-        self._pending_ops: collections.deque[tuple[str] | tuple[str, Scene]] = (
-            collections.deque()
-        )
-        self._in_tick: bool = False
-        self._flushing: bool = False
-        self._in_on_exit: bool = False
-
-    def top(self) -> Scene | None:
-        """Return the top scene, or None if stack is empty."""
-        return self._stack[-1] if self._stack else None
-
-    def get_base_scene(self) -> Scene | None:
-        """Return the lowest visible scene (opaque or bottom of transparent chain).
-
-        Used to determine which scene's background_color to apply when clearing.
-        """
-        if not self._stack:
-            return None
-        start = len(self._stack) - 1
-        while start > 0 and self._stack[start].transparent:
-            start -= 1
-        return self._stack[start]
-
-    def _should_defer(self) -> bool:
-        """True when stack mutations must be queued instead of applied."""
-        return self._in_tick or self._flushing or self._in_on_exit
-
-    def push(self, scene: Scene) -> None:
-        """Push scene on top. Current top gets on_exit, new scene gets on_enter."""
-        if scene is None:
-            raise ValueError("push() requires a Scene instance, got None")
-        if self._should_defer():
-            self._pending_ops.append(("push", scene))
-            return
-        self._apply_push(scene)
-        self._flush_after_direct_op()
-
-    def pop(self) -> None:
-        """Pop top scene. Top gets on_exit, new top (if any) gets on_reveal."""
-        if self._should_defer():
-            self._pending_ops.append(("pop",))
-            return
-        self._apply_pop()
-        self._flush_after_direct_op()
-
-    def replace(self, scene: Scene) -> None:
-        """Replace top scene. Old gets on_exit, new gets on_enter. No on_reveal.
-
-        The old scene is popped before the new one is pushed. If the new
-        scene's on_enter raises, rollback only pops the failed scene; the
-        old scene is not restored.
-        """
-        if scene is None:
-            raise ValueError("replace() requires a Scene instance, got None")
-        if self._should_defer():
-            self._pending_ops.append(("replace", scene))
-            return
-        self._apply_replace(scene)
-        self._flush_after_direct_op()
-
-    def clear_and_push(self, scene: Scene) -> None:
-        """Clear stack, push scene. All cleared scenes get on_exit."""
-        if scene is None:
-            raise ValueError("clear_and_push() requires a Scene instance, got None")
-        if self._should_defer():
-            self._pending_ops.append(("clear_and_push", scene))
-            return
-        self._apply_clear_and_push(scene)
-        self._flush_after_direct_op()
-
-    def begin_tick(self) -> None:
-        """Mark start of tick. Operations will be deferred until flush."""
-        self._in_tick = True
-
-    def _flush_after_direct_op(self) -> None:
-        """Flush any deferred ops that accumulated during a direct
-        (non-tick) scene operation.
-
-        Lifecycle hooks like ``on_exit`` and ``on_reveal`` set
-        ``_in_on_exit`` which defers operations.  When the direct
-        ``push``/``pop``/``replace``/``clear_and_push`` call returns,
-        those deferred ops need to be flushed immediately.
-
-        No-op when already inside a tick or another flush.
-        """
-        if self._in_tick or self._flushing or self._in_on_exit:
-            return
-        if not self._pending_ops:
-            return
-        self._flushing = True
-        try:
-            max_iterations = 1000
-            iterations = 0
-            while self._pending_ops and iterations < max_iterations:
-                iterations += 1
-                op = self._pending_ops.popleft()
-                kind = op[0]
-                if kind == "pop":
-                    self._apply_pop()
-                elif kind == "push":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_push(scene)
-                elif kind == "replace":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_replace(scene)
-                elif kind == "clear_and_push":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_clear_and_push(scene)
-            if iterations >= max_iterations and self._pending_ops:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "SceneStack: deferred ops cap (%d) reached; "
-                    "%d ops discarded",
-                    max_iterations,
-                    len(self._pending_ops),
-                )
-                self._pending_ops.clear()
-        finally:
-            self._flushing = False
-
-    def flush_pending_ops(self) -> None:
-        """Execute all queued operations, then end tick."""
-        self._in_tick = False
-        if self._flushing:
-            # Re-entrant call (e.g. on_exit triggers pop) — the outer
-            # loop will pick up any newly appended ops.
-            return
-        self._flushing = True
-        try:
-            max_iterations = 1000  # Cap to prevent infinite hang if on_enter
-            iterations = 0
-            while self._pending_ops and iterations < max_iterations:
-                iterations += 1
-                op = self._pending_ops.popleft()
-                kind = op[0]
-                if kind == "pop":
-                    self._apply_pop()
-                elif kind == "push":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_push(scene)
-                elif kind == "replace":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_replace(scene)
-                elif kind == "clear_and_push":
-                    scene = op[1]  # type: ignore[misc]
-                    self._apply_clear_and_push(scene)
-            if iterations >= max_iterations and self._pending_ops:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "SceneStack: deferred ops cap (%d) reached; "
-                    "%d ops discarded",
-                    max_iterations,
-                    len(self._pending_ops),
-                )
-                self._pending_ops.clear()
-        except Exception:
-            # Clear remaining ops to prevent stale operations from
-            # leaking into the next tick (F57).
-            self._pending_ops.clear()
-            raise
-        finally:
-            self._flushing = False
-
-    def _cleanup_exiting_scene(
-        self, scene: Scene, *, permanent: bool = True,
-    ) -> None:
-        """Run common cleanup for a scene whose ``on_exit()`` has been called.
-
-        Called **after** ``scene.on_exit()``.  Cleans up owned sprites,
-        particle emitters, and cancels camera pan tweens.
-
-        When *permanent* is ``True`` (pop, replace, clear_and_push), owned
-        timers are also cancelled.  When ``False`` (pushed over by another
-        scene), timers are preserved so they continue to fire while the
-        scene is covered and survive until the scene is revealed or
-        permanently removed.
-
-        Note: the UI tree is NOT cleared here because this method is also
-        called when a scene is *pushed over* (it stays on the stack and
-        may be revealed later).  Use :meth:`_teardown_exited_scene` for
-        scenes that are permanently leaving the stack.
-        """
-        scene._cleanup_owned_sprites()
-        if permanent:
-            scene._cleanup_owned_timers()
-        # Remove any particle emitters the scene created from the game's
-        # update set so they stop spawning after the scene is gone.
-        scene._cleanup_owned_emitters()
-        # Cancel camera pan tweens so they don't hold a strong ref to the
-        # camera (and therefore the scene) after the scene exits.
-        if scene.camera is not None:
-            scene.camera._cancel_pan()
-        # Reset cursor so the next scene starts with default (no custom cursor).
-        if hasattr(scene.game, 'cursor'):
-            scene.game.cursor.set("default")
-
-    def _teardown_exited_scene(self, scene: Scene) -> None:
-        """Final cleanup for a scene that is permanently leaving the stack.
-
-        Clears the UI tree (including any active drag session) and sets
-        ``scene.game = None`` so the entire scene graph can be GC'd.
-        """
-        if scene._ui is not None:
-            if scene._ui._drag_manager is not None:
-                scene._ui._drag_manager.cancel_active()
-            scene._ui = None
-        scene.game = None  # type: ignore[assignment]
-
-    def _apply_push(self, scene: Scene) -> None:
-        if self._stack:
-            old = self._stack[-1]
-            self._in_on_exit = True
-            try:
-                old.on_exit()
-                self._cleanup_exiting_scene(old, permanent=False)
-            finally:
-                self._in_on_exit = False
-        scene.game = self._game
-        self._stack.append(scene)
-        try:
-            scene.on_enter()
-        except Exception:
-            self._stack.pop()
-            raise
-
-    def _apply_pop(self) -> None:
-        if not self._stack:
-            return
-        self._in_on_exit = True
-        try:
-            old = self._stack[-1]
-            try:
-                old.on_exit()
-            finally:
-                self._cleanup_exiting_scene(old)
-                self._stack.pop()
-                self._teardown_exited_scene(old)
-            if self._stack:
-                self._stack[-1].on_reveal()
-        finally:
-            self._in_on_exit = False
-
-    def _apply_replace(self, scene: Scene) -> None:
-        if self._stack:
-            old = self._stack[-1]
-            self._in_on_exit = True
-            try:
-                try:
-                    old.on_exit()
-                finally:
-                    self._cleanup_exiting_scene(old)
-                    self._stack.pop()
-                    self._teardown_exited_scene(old)
-            finally:
-                self._in_on_exit = False
-        scene.game = self._game
-        self._stack.append(scene)
-        try:
-            scene.on_enter()
-        except Exception:
-            self._stack.pop()
-            raise
-
-    def _apply_clear_and_push(self, scene: Scene) -> None:
-        self._in_on_exit = True
-        first_error: Exception | None = None
-        try:
-            for s in reversed(self._stack):
-                try:
-                    s.on_exit()
-                except Exception as exc:
-                    if first_error is None:
-                        first_error = exc
-                finally:
-                    self._cleanup_exiting_scene(s)
-                    self._teardown_exited_scene(s)
-            self._stack.clear()
-        finally:
-            self._in_on_exit = False
-        if first_error is not None:
-            raise first_error
-        scene.game = self._game
-        self._stack.append(scene)
-        try:
-            scene.on_enter()
-        except Exception:
-            self._stack.pop()
-            raise
-
-    def update(self, dt: float) -> None:
-        """Update the top scene (and below if pause_below=False)."""
-        top = self.top()
-        if not top:
-            return
-        scenes_to_update: list[Scene] = []
-        i = len(self._stack) - 1
-        while i >= 0:
-            scenes_to_update.append(self._stack[i])
-            if self._stack[i].pause_below:
-                break
-            i -= 1
-        for s in reversed(scenes_to_update):
-            s.update(dt)
-
-    def draw(self) -> None:
-        """Draw visible scenes from bottom to top, with HUD interleaved.
-
-        Draw order:
-
-        1.  Find the lowest visible scene (walk down from top through
-            transparent scenes).
-        2.  Draw the **base scene** (the lowest opaque one) + its UI.
-        3.  Draw the **HUD** (if it exists, is visible, and the top
-            scene's ``show_hud`` is ``True``).
-        4.  Draw **transparent overlay scenes** + their UIs, from the
-            overlay just above the base upward.
-
-        This ensures the HUD sits above the base scene's content but
-        below modal overlays like ``MessageScreen`` or ``ConfirmDialog``.
-        """
-        if not self._stack:
-            return
-        # Find the lowest scene we need to draw.  Start at the top and
-        # walk downward — stop as soon as we hit an opaque scene because
-        # it covers everything below.
-        start = len(self._stack) - 1
-        while start > 0 and self._stack[start].transparent:
-            start -= 1
-
-        backend = self._game._backend
-
-        # --- Step 1: draw the base scene (the opaque one at ``start``).
-        backend.set_ui_layer(0)
-        base = self._stack[start]
-        base.draw()
-        if base._ui is not None:
-            base._ui._ensure_layout()
-            base._ui.draw()
-
-        # --- Step 2: draw the HUD between base and overlays.
-        backend.set_ui_layer(1)
-        hud = self._game._hud
-        if hud is not None:
-            top = self._stack[-1]
-            if hud._should_draw(top.show_hud):
-                hud._draw()
-
-        # --- Step 3: draw overlay scenes above the base.
-        for i in range(start + 1, len(self._stack)):
-            backend.set_ui_layer(2 + (i - start - 1))
-            scene = self._stack[i]
-            scene.draw()
-            if scene._ui is not None:
-                scene._ui._ensure_layout()
-                scene._ui.draw()
+__all__ = ["Scene", "SceneStack"]
