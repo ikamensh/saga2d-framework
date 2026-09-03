@@ -40,6 +40,25 @@ def test_controls_dispatch_on_key_press_with_aliases_and_chords(game: Game, back
     assert scene.calls == ["end_turn", "next:n", "next:tab", "prev", "save"]
 
 
+def test_handlers_with_defaulted_parameters_are_called_bare(game: Game, backend) -> None:
+    seen: list[object] = []
+
+    class S(Scene):
+        controls = {"n": "step", "m": "with_event"}
+
+        def step(self, amount: int = 1) -> None:
+            seen.append(amount)
+
+        def with_event(self, event: InputEvent) -> None:
+            seen.append(event.key)
+
+    game.push(S())
+    backend.inject_key("n")
+    backend.inject_key("m")
+    game.tick(0.016)
+    assert seen == [1, "m"]
+
+
 def test_unbound_modifier_chord_falls_back_to_bare_key(game: Game, backend) -> None:
     scene = Hotkeys()
     game.push(scene)

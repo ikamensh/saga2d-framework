@@ -29,14 +29,18 @@ UI_ORDER_BASE = 1_000_000
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
-    """Call *cb* with *event* if it accepts a positional argument, else bare."""
+    """Call ``cb(event)`` if *cb* has a required positional parameter, else ``cb()``.
+
+    So ``def end_turn(self)`` and ``lambda t=tech: buy(t)`` run bare, while
+    ``def next_unit(self, event)`` receives the :class:`InputEvent`.
+    """
     try:
         params = inspect.signature(cb).parameters.values()
     except (ValueError, TypeError):
         cb()
         return
-    positional = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.VAR_POSITIONAL)
-    if any(p.kind in positional for p in params):
+    positional = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    if any(p.kind in positional and p.default is inspect.Parameter.empty for p in params):
         cb(event)
     else:
         cb()
@@ -59,8 +63,9 @@ class Scene:
         pop_on_cancel:    Escape pops this scene when nothing else consumed it.
         background_color: Clear colour when this scene is the visible base.
         controls:         ``{"key" | ("k1", "k2"): "method_name"}`` — dispatched
-                          on key press; chords like ``"ctrl+s"`` work.  Methods
-                          may take the :class:`InputEvent` as their one argument.
+                          on key press; chords like ``"ctrl+s"`` work.  A method
+                          with a required positional parameter receives the
+                          :class:`InputEvent`; one without is called bare.
     """
 
     transparent: bool = False
