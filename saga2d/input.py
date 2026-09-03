@@ -1,19 +1,8 @@
-"""Input translation layer: raw backend events → action-mapped InputEvents.
+"""Raw backend events → :class:`InputEvent`, plus held-key state.
 
-:class:`InputEvent` is a frozen dataclass that unifies keyboard and mouse
-events with an optional ``action`` field.  The ``action`` is populated by
-:class:`InputManager`, which maintains a configurable key→action mapping.
-
-Game code checks ``event.action`` for intent-based input::
-
-    def handle_input(self, event: InputEvent) -> bool:
-        if event.action == "confirm":
-            self.select_current()
-            return True
-
-The ``InputManager`` is owned by :class:`~saga2d.game.Game` and exposed
-as ``game.input``.  It provides default bindings for common actions (confirm,
-cancel, directional) and supports rebinding at runtime.
+Keys are plain lowercase names (``"a"``, ``"space"``, ``"escape"``,
+``"return"``, ``"tab"``, ``"up"``…).  :func:`key_combo` renders an event
+as ``"ctrl+shift+s"`` so :attr:`Scene.controls` can bind modifier chords.
 """
 
 from __future__ import annotations
@@ -26,65 +15,22 @@ from saga2d.backends.base import Event, KeyEvent, MouseEvent
 if TYPE_CHECKING:
     from saga2d.rendering.camera import Camera
 
-
-# ---------------------------------------------------------------------------
-# InputEvent — frozen dataclass, public
-# ---------------------------------------------------------------------------
+_MODIFIER_KEYS = frozenset({"lshift", "rshift", "lctrl", "rctrl", "lalt", "ralt", "loption", "roption", "lcommand", "rcommand", "lmeta", "rmeta", "lwindows", "rwindows"})
 
 
 @dataclass(frozen=True)
 class InputEvent:
-    """Translated input event with optional action mapping.
+    """A keyboard or mouse event.
 
-    For keyboard events::
-
-        type: "key_press" | "key_release"
-        key: raw key string (e.g. "a", "space", "return")
-        action: mapped action (e.g. "confirm", "attack") or None
-
-    For mouse events::
-
-        type: "click" | "release" | "move" | "drag" | "scroll"
-        x, y: logical coordinates (already converted by backend)
-        button: "left" | "right" | "middle" | None
-        dx, dy: drag/scroll deltas
-        action: None (mouse events don't map to actions)
-        world_x, world_y: camera-transformed coordinates (auto-populated)
-
-    Attributes:
-        type:     Event type string.
-        key:      Raw key name for keyboard events, ``None`` for mouse.
-        action:   Mapped action name, or ``None`` if no binding exists.
-        x:        Logical x coordinate (mouse events).
-        y:        Logical y coordinate (mouse events).
-        button:   Mouse button name, or ``None``.
-        dx:       Horizontal delta (drag/scroll).
-        dy:       Vertical delta (drag/scroll).
-        world_x:  Camera-transformed x coordinate, or ``None`` for non-mouse
-                  events.  Populated automatically by the framework before
-                  the event reaches :meth:`Scene.handle_input`.  When the
-                  scene has a camera, equals ``camera.screen_to_world(x, y)[0]``.
-                  When there is no camera, equals ``x``.
-        world_y:  Camera-transformed y coordinate (see *world_x*).
-        shift/ctrl/alt/meta:
-                  Modifier-key state at the time of the event. ``True`` iff
-                  the corresponding modifier was held. ``meta`` is the
-                  Cmd key on macOS, the Windows key on Windows, Super on
-                  Linux. Handlers that take the event as an argument
-                  (event-aware dispatch, iter-11) can read these directly::
-
-                      class MyScene(Scene):
-                          controls = {"r": "restart"}
-                          def restart(self, event):
-                              if event.shift:
-                                  self._reset_to_checkpoint()
-                              else:
-                                  self._full_reset()
+    Keyboard: ``type`` is ``"key_press"``/``"key_release"``, ``key`` is set.
+    Mouse: ``type`` is ``"click"``/``"release"``/``"move"``/``"drag"``/
+    ``"scroll"``; ``x``/``y`` are logical screen coordinates and
+    ``world_x``/``world_y`` the camera-transformed position (equal to
+    ``x``/``y`` when the scene has no camera).
     """
 
     type: str
     key: str | None = None
-    action: str | None = None
     x: int = 0
     y: int = 0
     button: str | None = None
@@ -97,214 +43,84 @@ class InputEvent:
     alt: bool = False
     meta: bool = False
 
+    @property
+    def is_mouse(self) -> bool:
+        return self.key is None
 
-# Mouse event types that carry meaningful coordinates.
-_MOUSE_EVENT_TYPES = frozenset({"click", "release", "move", "drag", "scroll"})
+    @property
+    def combo(self) -> str | None:
+        """``"ctrl+shift+s"``-style name for keyboard events, else ``None``."""
+        if self.key is None:
+            return None
+        return key_combo(self.key, ctrl=self.ctrl, alt=self.alt, shift=self.shift, meta=self.meta)
 
 
-def _with_world_coords(
-    event: InputEvent,
-    camera: Camera | None,
-) -> InputEvent:
-    """Return *event* with ``world_x``/``world_y`` populated.
+def key_combo(key: str, *, ctrl: bool = False, alt: bool = False, shift: bool = False, meta: bool = False) -> str:
+    parts = []
+    if ctrl:
+        parts.append("ctrl")
+    if alt:
+        parts.append("alt")
+    if shift:
+        parts.append("shift")
+    if meta:
+        parts.append("meta")
+    parts.append(key)
+    return "+".join(parts)
 
-    * **Mouse events** — if *camera* is not ``None``, world coordinates are
-      computed via ``camera.screen_to_world(event.x, event.y)``.  If *camera*
-      is ``None`` (UI-only scene), world coordinates equal screen coordinates.
-    * **Non-mouse events** — returned unchanged (``world_x``/``world_y`` stay
-      ``None``).
 
-    This is called by :meth:`Game.tick` before dispatching to scenes so that
-    game code never needs to call ``camera.screen_to_world`` manually.
-    """
-    if event.type not in _MOUSE_EVENT_TYPES:
+def normalize_combo(combo: str) -> str:
+    """Canonical modifier order for a user-written chord like ``"shift+ctrl+s"``."""
+    parts = [p.strip().lower() for p in combo.split("+")]
+    key = parts[-1]
+    mods = set(parts[:-1])
+    unknown = mods - {"ctrl", "alt", "shift", "meta"}
+    if unknown:
+        raise ValueError(f"unknown modifier(s) {sorted(unknown)} in key combo {combo!r}")
+    return key_combo(key, ctrl="ctrl" in mods, alt="alt" in mods, shift="shift" in mods, meta="meta" in mods)
+
+
+def with_world_coords(event: InputEvent, camera: Camera | None) -> InputEvent:
+    if not event.is_mouse:
         return event
     if camera is not None:
         wx, wy = camera.screen_to_world(event.x, event.y)
     else:
-        wx = float(event.x)
-        wy = float(event.y)
+        wx, wy = float(event.x), float(event.y)
     return replace(event, world_x=wx, world_y=wy)
 
 
-# ---------------------------------------------------------------------------
-# InputManager — internal, accessed via game.input
-# ---------------------------------------------------------------------------
-
-
 class InputManager:
-    """Translates raw backend events into :class:`InputEvent` objects.
-
-    Maintains a bidirectional key↔action mapping.  Each action maps to
-    exactly one key; binding a new key to an existing action replaces the
-    old binding.  Binding a key that is already bound to a *different*
-    action steals it (unbinds the old action first).
-
-    Currently only one key can be bound to one action (1:1 mapping).
-    Multi-key support may be added in a future version if needed.
-
-    Default bindings::
-
-        confirm → return
-        cancel  → escape
-        up      → up
-        down    → down
-        left    → left
-        right   → right
-    """
+    """Translates backend events and tracks which keys are held."""
 
     def __init__(self) -> None:
-        self._key_to_action: dict[str, str] = {}
-        self._action_to_key: dict[str, str] = {}
-        # iter-44: maintain a level-triggered "held keys" set alongside
-        # the edge-triggered event stream. Updated by :meth:`translate`
-        # on every tick; queried by game code via :meth:`is_pressed`
-        # and :meth:`pressed_keys`. Previously every example that
-        # wanted continuous motion had to re-implement this block in
-        # its own ``handle_input`` (iter-43 ``dodge`` did so).
         self._pressed: set[str] = set()
-        self._setup_defaults()
-
-    # ------------------------------------------------------------------
-    # Binding API
-    # ------------------------------------------------------------------
-
-    def bind(self, action: str, key: str) -> None:
-        """Bind *action* to *key*.
-
-        If *action* was already bound to a different key, the old binding
-        is removed.  If *key* was already bound to a different action, that
-        action is unbound first (key stealing).
-        """
-        # Remove old key for this action (if any).
-        old_key = self._action_to_key.pop(action, None)
-        if old_key is not None:
-            self._key_to_action.pop(old_key, None)
-
-        # Steal key from any other action that had it.
-        old_action = self._key_to_action.pop(key, None)
-        if old_action is not None:
-            self._action_to_key.pop(old_action, None)
-
-        self._key_to_action[key] = action
-        self._action_to_key[action] = key
-
-    def unbind(self, action: str) -> None:
-        """Remove the binding for *action*.  No-op if not bound."""
-        key = self._action_to_key.pop(action, None)
-        if key is not None:
-            self._key_to_action.pop(key, None)
-
-    def get_bindings(self) -> dict[str, str]:
-        """Return a copy of the current action→key mapping."""
-        return dict(self._action_to_key)
-
-    # ------------------------------------------------------------------
-    # Held-keys query — level-triggered companion to edge-triggered events
-    # ------------------------------------------------------------------
 
     def is_pressed(self, key: str) -> bool:
-        """Return ``True`` while *key* is currently held down.
-
-        Use for continuous per-frame polling (smooth movement, charge
-        attacks, anything that should happen *while* a key is held
-        rather than once on press). The edge-triggered :class:`InputEvent`
-        stream stays the right tool for one-shot actions (menu
-        navigation, fire-button, restart).
-
-        ``key`` is the same raw-key string the backend reports —
-        ``"a"``, ``"left"``, ``"space"``, etc.
-
-        Example — continuous horizontal motion::
-
-            def update(self, dt: float) -> None:
-                if self.game.input.is_pressed("a"):
-                    self.player.x -= 300 * dt
-                if self.game.input.is_pressed("d"):
-                    self.player.x += 300 * dt
-        """
         return key in self._pressed
 
     def pressed_keys(self) -> frozenset[str]:
-        """Return a snapshot of all currently-held keys.
-
-        Returns a ``frozenset`` so the caller can't mutate internal
-        state. Useful when you want to check several keys at once::
-
-            held = self.game.input.pressed_keys()
-            if "shift" in held and "a" in held:
-                self.player.x -= 600 * dt   # sprint-left
-        """
         return frozenset(self._pressed)
 
-    def _clear_pressed(self) -> None:
-        """Release-all helper — clears the held-keys set.
-
-        Called by :class:`Game` on focus-loss or teardown so stuck
-        keys don't persist across scene or window transitions.
-        """
+    def release_all(self) -> None:
         self._pressed.clear()
 
-    # ------------------------------------------------------------------
-    # Translation
-    # ------------------------------------------------------------------
-
-    def translate(self, raw_events: list[Event] | None) -> list[InputEvent]:
-        """Translate a list of raw backend events into :class:`InputEvent` s.
-
-        :class:`WindowEvent` objects are **not** translated — they are
-        handled by the framework before this method is called and should
-        not appear in *raw_events*.
-
-        If *raw_events* is ``None``, returns ``[]``.
-        """
-        if raw_events is None:
-            return []
+    def translate(self, raw_events: list[Event]) -> list[InputEvent]:
         result: list[InputEvent] = []
         for event in raw_events:
             if isinstance(event, KeyEvent):
-                action = self._key_to_action.get(event.key)
-                # iter-44: level-triggered held-keys set. key_press
-                # adds, key_release removes. Game code queries via
-                # ``game.input.is_pressed(key)``.
                 if event.type == "key_press":
                     self._pressed.add(event.key)
                 elif event.type == "key_release":
                     self._pressed.discard(event.key)
-                result.append(
-                    InputEvent(
-                        type=event.type,
-                        key=event.key,
-                        action=action,
-                        shift=event.shift,
-                        ctrl=event.ctrl,
-                        alt=event.alt,
-                        meta=event.meta,
-                    )
-                )
+                if event.key in _MODIFIER_KEYS:
+                    continue
+                result.append(InputEvent(
+                    type=event.type, key=event.key,
+                    shift=event.shift, ctrl=event.ctrl, alt=event.alt, meta=event.meta,
+                ))
             elif isinstance(event, MouseEvent):
-                result.append(
-                    InputEvent(
-                        type=event.type,
-                        x=event.x,
-                        y=event.y,
-                        button=event.button,
-                        dx=event.dx,
-                        dy=event.dy,
-                    )
-                )
-            # WindowEvent is intentionally skipped — handled by Game.tick().
+                result.append(InputEvent(
+                    type=event.type, x=event.x, y=event.y, button=event.button, dx=event.dx, dy=event.dy,
+                ))
         return result
-
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
-
-    def _setup_defaults(self) -> None:
-        """Install the default action bindings."""
-        self.bind("confirm", "return")
-        self.bind("cancel", "escape")
-        self.bind("up", "up")
-        self.bind("down", "down")
-        self.bind("left", "left")
-        self.bind("right", "right")

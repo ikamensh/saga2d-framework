@@ -1,17 +1,11 @@
-"""Mock backend that records all operations for headless testing.
+"""Mock backend: records every operation for headless tests.
 
-``MockBackend`` satisfies the :class:`~saga2d.backends.base.Backend`
-protocol without opening a window, rendering pixels, or playing audio.
-It serves two purposes:
-
-1. **Assertions** — tests inspect ``mock.sprites``, ``mock.texts``,
-   ``mock.rects``, ``mock.images``, ``mock.fonts``, ``mock.sounds_played``,
-   ``mock.frame_count``, etc.
-2. **Simulation** — tests call ``mock.inject_key("space")``,
-   ``mock.inject_click(400, 300)`` to feed events into the framework.
-
-All coordinates stay in *logical* space (no y-flip, no scaling, no offset).
-``scale_factor`` is always 1.0.
+Tests inspect ``mock.sprites``, ``mock.rects``, ``mock.circles``,
+``mock.lines``, ``mock.polygons``, ``mock.texts``, ``mock.images``,
+``mock.camera``, ``mock.sounds_played``, ``mock.frame_count`` and feed
+input with ``inject_key`` / ``inject_click`` / ``inject_mouse_move`` /
+``inject_scroll`` / ``inject_drag``.  Coordinates are recorded as given
+(logical space, no flip, no scaling).
 """
 
 from __future__ import annotations
@@ -20,552 +14,208 @@ from typing import Any
 
 from PIL import Image
 
-from saga2d.backends.base import (
-    Event,
-    KeyEvent,
-    MouseEvent,
-    WindowEvent,
-)
+from saga2d.backends.base import Color, Event, KeyEvent, MouseEvent, Space, WindowEvent
 
 
 class MockBackend:
-    """Backend that records all operations for testing.
-
-    Does not inherit from or register with :class:`Backend` — it satisfies
-    the protocol via structural subtyping (duck typing).
-    """
-
-    # ------------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------------
-
-    def __init__(
-        self,
-        logical_width: int = 1920,
-        logical_height: int = 1080,
-    ) -> None:
+    def __init__(self, logical_width: int = 1920, logical_height: int = 1080) -> None:
         self.logical_width = logical_width
         self.logical_height = logical_height
-        self.scale_factor: float = 1.0  # no physical scaling in tests
+        self.scale_factor: float = 1.0
 
-        # === Recorded state (what tests assert on) =====================
-
-        #: Registered sprites.  ``sprite_id -> {image, x, y, opacity,
-        #: visible, layer}``.
         self.sprites: dict[str, dict[str, Any]] = {}
-
-        #: ``draw_text`` calls accumulated during the **current** frame.
-        #: Cleared on every :meth:`begin_frame`.
         self.texts: list[dict[str, Any]] = []
-
-        #: ``draw_rect`` calls accumulated during the **current** frame.
-        #: Cleared on every :meth:`begin_frame`.
         self.rects: list[dict[str, Any]] = []
-
-        #: ``draw_circle`` calls accumulated during the **current** frame.
-        #: Cleared on every :meth:`begin_frame`.
         self.circles: list[dict[str, Any]] = []
-
-        #: ``draw_image`` calls accumulated during the **current** frame.
-        #: Cleared on every :meth:`begin_frame`.
+        self.lines: list[dict[str, Any]] = []
+        self.polygons: list[dict[str, Any]] = []
         self.images: list[dict[str, Any]] = []
-
-        #: ``load_font`` registrations. ``name -> path`` (path may be None for system fonts).
         self.fonts: dict[str, str | None] = {}
-
-        #: Number of completed frames (incremented by :meth:`end_frame`).
+        self.camera: tuple[float, float, float] = (0.0, 0.0, 1.0)
+        self.clear_color: Color | None = None
         self.frame_count: int = 0
-
-        #: ``True`` until :meth:`quit` is called.
         self.is_running: bool = True
 
-        # === Audio recording ===========================================
-
-        #: Every ``play_sound`` call appended here (cumulative, never
-        #: cleared automatically).  Each entry is ``{"handle": str,
-        #: "volume": float}``.
         self.sounds_played: list[dict[str, Any]] = []
-
-        #: Handle string of the music track currently playing, or
-        #: ``None`` if nothing is playing.
         self.music_playing: str | None = None
-
-        #: Volume of the current music player (last value set via
-        #: :meth:`set_player_volume` on the active player).
         self.music_volume: float = 1.0
-
-        # === Music player tracking =====================================
-
-        #: ``player_id -> {handle, volume, loop, playing}``
         self._music_players: dict[str, dict[str, Any]] = {}
 
-        # === Event injection (how tests simulate input) ================
-
         self._pending_events: list[Event] = []
-
-        # === Handle bookkeeping ========================================
-
         self._next_id: int = 0
-        self._loaded_images: dict[str, str] = {}  # path -> handle
-        self._loaded_sounds: dict[str, str] = {}  # path -> handle
-        self._loaded_music: dict[str, str] = {}  # path -> handle
-
-        # === Image size tracking ============================================
-
-        #: Default size returned by :meth:`get_image_size` when no override
-        #: has been set via :meth:`set_image_size`.
+        self._loaded_images: dict[str, str] = {}
+        self._loaded_sounds: dict[str, str] = {}
+        self._loaded_music: dict[str, str] = {}
         self._default_image_size: tuple[int, int] = (64, 64)
-
-        #: Per-handle overrides.  ``image_handle -> (width, height)``.
         self._image_sizes: dict[str, tuple[int, int]] = {}
 
-        # === Cursor tracking ===========================================
-        self.cursor_image: str | None = None
-        self.cursor_hotspot: tuple[int, int] = (0, 0)
-        self.cursor_visible: bool = True
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _make_id(self, prefix: str) -> str:
-        """Return a unique string id like ``"sprite_7"``."""
         handle = f"{prefix}_{self._next_id}"
         self._next_id += 1
         return handle
 
-    # ==================================================================
-    # Backend protocol — lifecycle
-    # ==================================================================
+    # -- Lifecycle -----------------------------------------------------------
 
-    def create_window(
-        self,
-        width: int,
-        height: int,
-        title: str,
-        fullscreen: bool,
-        visible: bool = True,
-    ) -> None:
-        """No-op — there is no window in the mock."""
+    def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True) -> None:
         self.logical_width = width
         self.logical_height = height
 
-    def begin_frame(
-        self,
-        clear_color: tuple[int, ...] | None = None,
-    ) -> None:
-        """Reset per-frame recorded state."""
-        self.clear_color = clear_color  # for tests
+    def begin_frame(self, clear_color: Color | None = None) -> None:
+        self.clear_color = clear_color
         self.texts.clear()
         self.rects.clear()
         self.circles.clear()
+        self.lines.clear()
+        self.polygons.clear()
         self.images.clear()
 
     def end_frame(self) -> None:
-        """Increment the frame counter."""
         self.frame_count += 1
 
     def poll_events(self) -> list[Event]:
-        """Drain and return all injected events."""
         events = self._pending_events.copy()
         self._pending_events.clear()
         return events
 
     def get_dt(self) -> float:
-        """Return a fixed 16ms delta (≈60 fps).
-
-        In tests the caller usually passes an explicit ``dt`` via
-        ``Game.tick(dt=...)``, so this is rarely used.
-        """
         return 1.0 / 60.0
 
     def quit(self) -> None:
-        """Mark the backend as no longer running."""
         self.is_running = False
 
-    # ==================================================================
-    # Backend protocol — image / sprite rendering
-    # ==================================================================
+    def capture_frame(self) -> Image.Image:
+        return Image.new("RGBA", (self.logical_width, self.logical_height), (0, 0, 0, 255))
+
+    def set_camera(self, x: float, y: float, zoom: float) -> None:
+        self.camera = (x, y, zoom)
+
+    # -- Images --------------------------------------------------------------
 
     def load_image(self, path: str) -> str:
-        """Return a cached string handle like ``"img_3"``."""
         if path not in self._loaded_images:
             self._loaded_images[path] = self._make_id("img")
         return self._loaded_images[path]
 
     def load_image_from_pil(self, pil_image: Image.Image) -> str:
-        """Create an image handle from a PIL Image. Stores dimensions for get_image_size."""
-        handle = self._make_id("pil_img")
-        self._image_sizes[handle] = (pil_image.width, pil_image.height)
+        handle = self._make_id("pil")
+        self._image_sizes[handle] = pil_image.size
         return handle
 
-    def create_solid_color_image(
-        self,
-        r: int,
-        g: int,
-        b: int,
-        a: int,
-        width: int,
-        height: int,
-    ) -> str:
-        """Return a mock image handle for a solid-color image."""
-        handle = self._make_id("solid")
-        self._image_sizes[handle] = (width, height)
-        return handle
+    def get_image_size(self, image_handle: str) -> tuple[int, int]:
+        return self._image_sizes.get(image_handle, self._default_image_size)
 
-    def create_sprite(self, image_handle: str, layer_order: int) -> str:
-        """Register a new sprite and return its id."""
+    def set_image_size(self, image_handle: str, width: int, height: int) -> None:
+        """Test helper: control what :meth:`get_image_size` reports."""
+        self._image_sizes[image_handle] = (width, height)
+
+    # -- Retained sprites ----------------------------------------------------
+
+    def create_sprite(self, image_handle: str, order: int, space: Space) -> str:
         sid = self._make_id("sprite")
         self.sprites[sid] = {
-            "image": image_handle,
-            "x": 0,
-            "y": 0,
-            "opacity": 255,
-            "visible": True,
-            "layer": layer_order,
-            "tint": (1.0, 1.0, 1.0),
+            "image": image_handle, "x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0,
+            "opacity": 255, "visible": True, "tint": (1.0, 1.0, 1.0), "rotation": 0.0,
+            "order": order, "space": space,
         }
         return sid
 
     def update_sprite(
-        self,
-        sprite_id: str,
-        x: int,
-        y: int,
-        *,
-        image: str | None = None,
-        opacity: int = 255,
-        visible: bool = True,
-        tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
+        self, sprite_id: str, x: float, y: float, width: float, height: float, *,
+        image: str | None = None, opacity: int = 255, visible: bool = True,
+        tint: tuple[float, float, float] = (1.0, 1.0, 1.0), rotation: float = 0.0,
     ) -> None:
-        """Record updated position / visual properties."""
         s = self.sprites[sprite_id]
-        s["x"] = x
-        s["y"] = y
-        s["opacity"] = opacity
-        s["visible"] = visible
-        s["tint"] = tint
+        s.update(x=x, y=y, width=width, height=height, opacity=opacity, visible=visible, tint=tint, rotation=rotation)
         if image is not None:
             s["image"] = image
 
+    def set_sprite_order(self, sprite_id: str, order: int) -> None:
+        self.sprites[sprite_id]["order"] = order
+
     def remove_sprite(self, sprite_id: str) -> None:
-        """Remove a sprite from the recorded state."""
         del self.sprites[sprite_id]
 
-    def get_image_size(self, image_handle: str) -> tuple[int, int]:
-        """Return ``(width, height)`` for a loaded image.
+    # -- Immediate-mode drawing ----------------------------------------------
 
-        Returns the size set via :meth:`set_image_size`, or the default
-        ``(64, 64)`` if no override exists.
-        """
-        return self._image_sizes.get(image_handle, self._default_image_size)
+    def draw_rect(self, x, y, width, height, color, *, space: Space = "screen", order: int = 0) -> None:
+        self.rects.append({"x": x, "y": y, "width": width, "height": height, "color": color, "space": space, "order": order})
 
-    def set_sprite_order(self, sprite_id: str, order: int) -> None:
-        """Update the draw order of an existing sprite."""
-        self.sprites[sprite_id]["layer"] = order
+    def draw_circle(self, x, y, radius, color, *, space: Space = "screen", order: int = 0) -> None:
+        self.circles.append({"x": x, "y": y, "radius": radius, "color": color, "space": space, "order": order})
 
-    def capture_frame(self) -> Image.Image:
-        """Return a blank RGBA image of the window dimensions."""
-        return Image.new(
-            "RGBA",
-            (self.logical_width, self.logical_height),
-            (0, 0, 0, 0),
-        )
+    def draw_line(self, x1, y1, x2, y2, color, width=1.0, *, space: Space = "screen", order: int = 0) -> None:
+        self.lines.append({"x1": x1, "y1": y1, "x2": x2, "y2": y2, "width": width, "color": color, "space": space, "order": order})
 
-    # ==================================================================
-    # Backend protocol — rect and text rendering
-    # ==================================================================
+    def draw_polygon(self, points, color, *, space: Space = "screen", order: int = 0) -> None:
+        self.polygons.append({"points": list(points), "color": color, "space": space, "order": order})
 
-    def set_ui_layer(self, layer: int) -> None:
-        """No-op in mock — layer ordering doesn't affect recorded output."""
-        pass
+    def draw_image(self, image_handle, x, y, width, height, *, opacity=1.0, space: Space = "screen", order: int = 0) -> None:
+        self.images.append({"image": image_handle, "x": x, "y": y, "width": width, "height": height, "opacity": opacity, "space": space, "order": order})
 
-    def draw_rect(
-        self,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        color: tuple[int, int, int, int],
-        *,
-        opacity: float = 1.0,
-    ) -> None:
-        """Record a rect draw call for the current frame."""
-        self.rects.append(
-            {
-                "x": x,
-                "y": y,
-                "width": width,
-                "height": height,
-                "color": color,
-                "opacity": opacity,
-            }
-        )
+    def draw_text(self, text, x, y, font_size, color, *, font=None, anchor_x="left", anchor_y="baseline", space: Space = "screen", order: int = 0) -> None:
+        self.texts.append({"text": text, "x": x, "y": y, "font_size": font_size, "color": color, "font": font, "anchor_x": anchor_x, "anchor_y": anchor_y, "space": space, "order": order})
 
-    def draw_circle(
-        self,
-        x: int,
-        y: int,
-        radius: int,
-        color: tuple[int, int, int, int],
-        *,
-        opacity: float = 1.0,
-        segments: int | None = None,
-    ) -> None:
-        """Record a circle draw call for the current frame."""
-        self.circles.append(
-            {
-                "x": x,
-                "y": y,
-                "radius": radius,
-                "color": color,
-                "opacity": opacity,
-                "segments": segments,
-            }
-        )
+    def measure_text(self, text: str, font_size: int, font=None) -> tuple[int, int]:
+        return (int(len(text) * font_size * 0.6), int(font_size * 1.2))
 
     def load_font(self, name: str, path: str | None = None) -> str:
-        """Register a font and return a handle like ``"font_name"``."""
         self.fonts[name] = path
-        return f"font_{name}"
+        return name
 
-    def draw_text(
-        self,
-        text: str,
-        x: int,
-        y: int,
-        font_size: int,
-        color: tuple[int, int, int, int],
-        *,
-        font: str | None = None,
-        anchor_x: str = "left",
-        anchor_y: str = "baseline",
-    ) -> None:
-        """Record a text draw call for the current frame."""
-        self.texts.append(
-            {
-                "text": text,
-                "x": x,
-                "y": y,
-                "font_size": font_size,
-                "color": color,
-                "font": font,
-                "anchor_x": anchor_x,
-                "anchor_y": anchor_y,
-            }
-        )
-
-    def draw_image(
-        self,
-        image_handle: str,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        *,
-        opacity: float = 1.0,
-    ) -> None:
-        """Record an image draw call for the current frame."""
-        self.images.append(
-            {
-                "image": image_handle,
-                "x": x,
-                "y": y,
-                "width": width,
-                "height": height,
-                "opacity": opacity,
-            }
-        )
-
-    # ==================================================================
-    # Backend protocol — audio
-    # ==================================================================
+    # -- Audio ---------------------------------------------------------------
 
     def load_sound(self, path: str) -> str:
-        """Return a cached string handle like ``"sound_2"``."""
         if path not in self._loaded_sounds:
             self._loaded_sounds[path] = self._make_id("sound")
         return self._loaded_sounds[path]
 
     def play_sound(self, handle: str, volume: float = 1.0) -> None:
-        """Record that a sound was played (handle and volume)."""
         self.sounds_played.append({"handle": handle, "volume": volume})
 
     def load_music(self, path: str) -> str:
-        """Return a cached string handle like ``"music_1"``."""
         if path not in self._loaded_music:
             self._loaded_music[path] = self._make_id("music")
         return self._loaded_music[path]
 
-    def play_music(
-        self,
-        handle: str,
-        *,
-        loop: bool = True,
-        volume: float = 1.0,
-    ) -> str:
-        """Create a mock music player and return its id."""
-        player_id = self._make_id("player")
-        self._music_players[player_id] = {
-            "handle": handle,
-            "volume": volume,
-            "loop": loop,
-            "playing": True,
-        }
-        # Update convenience fields
+    def play_music(self, handle: str, *, loop: bool = True, volume: float = 1.0) -> str:
+        pid = self._make_id("player")
+        self._music_players[pid] = {"handle": handle, "volume": volume, "loop": loop}
         self.music_playing = handle
         self.music_volume = volume
-        return player_id
+        return pid
 
     def set_player_volume(self, player_id: str, volume: float) -> None:
-        """Record a volume change on a music player."""
-        player = self._music_players[player_id]
-        player["volume"] = volume
-        # Keep the convenience field in sync with the *most recent* player
-        if player["playing"]:
-            self.music_volume = volume
+        self._music_players[player_id]["volume"] = volume
+        self.music_volume = volume
 
     def stop_player(self, player_id: str) -> None:
-        """Stop a music player and remove it from tracked players."""
         player = self._music_players.pop(player_id)
-        player["playing"] = False
-        # If we just stopped the player that was providing music_playing,
-        # see if any other player is still active.
         if self.music_playing == player["handle"]:
-            active = [p for p in self._music_players.values() if p["playing"]]
-            if active:
-                last = active[-1]
-                self.music_playing = last["handle"]
-                self.music_volume = last["volume"]
-            else:
-                self.music_playing = None
-                self.music_volume = 1.0
+            self.music_playing = None
+            self.music_volume = 1.0
 
-    # ==================================================================
-    # Test helpers — event injection
-    # ==================================================================
+    # -- Test helpers: event injection ---------------------------------------
 
-    def inject_key(
-        self,
-        key: str,
-        type: str = "key_press",
-        *,
-        shift: bool = False,
-        ctrl: bool = False,
-        alt: bool = False,
-        meta: bool = False,
-    ) -> None:
-        """Inject a keyboard event into the pending queue.
+    def inject_key(self, key: str, type: str = "key_press", *, shift=False, ctrl=False, alt=False, meta=False) -> None:
+        self._pending_events.append(KeyEvent(type=type, key=key, shift=shift, ctrl=ctrl, alt=alt, meta=meta))
 
-        >>> mock.inject_key("space")
-        >>> mock.inject_key("escape", type="key_release")
-        >>> mock.inject_key("r", shift=True)         # Shift+R
-        >>> mock.inject_key("z", meta=True, ctrl=True)  # Meta+Ctrl+Z
-        """
-        self._pending_events.append(
-            KeyEvent(
-                type=type,
-                key=key,
-                shift=shift,
-                ctrl=ctrl,
-                alt=alt,
-                meta=meta,
-            )
-        )
+    def inject_click(self, x: int, y: int, button: str = "left") -> None:
+        self._pending_events.append(MouseEvent(type="click", x=x, y=y, button=button))
 
-    def inject_click(
-        self,
-        x: int,
-        y: int,
-        button: str = "left",
-    ) -> None:
-        """Inject a mouse click at logical coordinates.
-
-        >>> mock.inject_click(400, 300)
-        >>> mock.inject_click(100, 200, button="right")
-        """
-        self._pending_events.append(
-            MouseEvent(type="click", x=x, y=y, button=button),
-        )
+    def inject_release(self, x: int, y: int, button: str = "left") -> None:
+        self._pending_events.append(MouseEvent(type="release", x=x, y=y, button=button))
 
     def inject_mouse_move(self, x: int, y: int) -> None:
-        """Inject a mouse move event at logical coordinates.
-
-        >>> mock.inject_mouse_move(960, 540)
-        """
-        self._pending_events.append(
-            MouseEvent(type="move", x=x, y=y, button=None),
-        )
+        self._pending_events.append(MouseEvent(type="move", x=x, y=y))
 
     def inject_scroll(self, x: int, y: int, dx: int, dy: int) -> None:
-        """Inject a mouse scroll event at logical coordinates.
+        self._pending_events.append(MouseEvent(type="scroll", x=x, y=y, dx=dx, dy=dy))
 
-        >>> mock.inject_scroll(960, 540, dx=0, dy=-3)
-        """
-        self._pending_events.append(
-            MouseEvent(type="scroll", x=x, y=y, button=None, dx=dx, dy=dy),
-        )
-
-    def inject_drag(
-        self,
-        x: int,
-        y: int,
-        dx: int,
-        dy: int,
-        button: str = "left",
-    ) -> None:
-        """Inject a mouse drag event at logical coordinates.
-
-        >>> mock.inject_drag(400, 300, dx=10, dy=0)
-        """
-        self._pending_events.append(
-            MouseEvent(type="drag", x=x, y=y, button=button, dx=dx, dy=dy),
-        )
+    def inject_drag(self, x: int, y: int, dx: int, dy: int, button: str = "left") -> None:
+        self._pending_events.append(MouseEvent(type="drag", x=x, y=y, button=button, dx=dx, dy=dy))
 
     def inject_window_event(self, type: str) -> None:
-        """Inject a window event (``"close"`` or ``"resize"``).
-
-        >>> mock.inject_window_event("close")
-        """
         self._pending_events.append(WindowEvent(type=type))
 
     def inject_event(self, event: Event) -> None:
-        """Inject an arbitrary pre-built event.
-
-        Useful when a test needs full control over event construction::
-
-            mock.inject_event(MouseEvent(type="click", x=10, y=20,
-                                         button="right"))
-        """
         self._pending_events.append(event)
-
-    def set_cursor(
-        self,
-        image_handle: str | None,
-        hotspot_x: int = 0,
-        hotspot_y: int = 0,
-    ) -> None:
-        """Record cursor state for test assertions."""
-        self.cursor_image = image_handle
-        self.cursor_hotspot = (hotspot_x, hotspot_y)
-
-    def set_cursor_visible(self, visible: bool) -> None:
-        """Record cursor visibility for test assertions."""
-        self.cursor_visible = visible
-
-    def set_image_size(
-        self,
-        image_handle: str,
-        width: int,
-        height: int,
-    ) -> None:
-        """Set the size returned by :meth:`get_image_size` for *image_handle*.
-
-        Use this to control image dimensions in tests that verify anchor
-        offset math::
-
-            img = mock.load_image("knight.png")
-            mock.set_image_size(img, 48, 96)
-            assert mock.get_image_size(img) == (48, 96)
-        """
-        self._image_sizes[image_handle] = (width, height)

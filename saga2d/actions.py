@@ -296,29 +296,9 @@ class MoveTo(Action):
             raise ValueError(f"speed must be a finite number > 0, got {speed}")
         if speed <= 0:
             raise ValueError(f"speed must be > 0, got {speed}")
-        # Validate position is an iterable of at least 2 numbers.
-        try:
-            it = iter(position)
-            raw_x = next(it)
-            raw_y = next(it)
-        except TypeError:
-            raise TypeError(
-                f"position must be a (x, y) tuple, got {type(position).__name__}"
-            ) from None
-        except StopIteration:
-            raise TypeError(
-                f"position must have at least 2 elements, got {len(position)!r}"
-            ) from None
-        try:
-            x, y = float(raw_x), float(raw_y)
-        except (TypeError, ValueError):
-            raise TypeError(
-                f"position elements must be numbers, got ({raw_x!r}, {raw_y!r})"
-            ) from None
+        x, y = float(position[0]), float(position[1])
         if not (math.isfinite(x) and math.isfinite(y)):
-            raise ValueError(
-                f"target position must be finite floats, got ({raw_x!r}, {raw_y!r})"
-            )
+            raise ValueError(f"target position must be finite, got {position!r}")
         self._target_x = x
         self._target_y = y
         self._speed = speed

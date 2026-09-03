@@ -1,19 +1,13 @@
-"""Camera — pure-math viewport into a scrolling world.
+"""Camera — a zoomable viewport into the world.  Pure math.
 
-The :class:`Camera` translates between world coordinates and screen (logical)
-coordinates.  It supports centering, following a sprite, edge-scroll, manual
-scroll, world-bounds clamping, and smooth ``pan_to()`` via the tween system.
+``(x, y)`` is the world position at the viewport's top-left corner::
 
-**No backend dependency.** The camera is pure math — it produces an offset
-that the rendering layer applies before sending positions to the backend.
+    screen = (world - (x, y)) * zoom
+    world  = screen / zoom + (x, y)
 
-Coordinate convention (y-down, top-left origin):
-
-    screen_to_world(sx, sy) = (sx + camera.x, sy + camera.y)
-    world_to_screen(wx, wy) = (wx - camera.x, wy - camera.y)
-
-where ``camera.x``, ``camera.y`` is the top-left corner of the viewport in
-world space.
+The game loop hands the camera to the backend every frame; sprites in
+world space are transformed on the GPU, so scrolling costs nothing per
+sprite.
 """
 
 from __future__ import annotations
@@ -28,14 +22,18 @@ if TYPE_CHECKING:
     from saga2d.input import InputEvent
     from saga2d.rendering.sprite import Sprite
 
+_DEFAULT_KEY_BINDINGS: dict[str, tuple[str, ...]] = {
+    "left": ("left",), "right": ("right",), "up": ("up",), "down": ("down",),
+}
+
 
 class Camera:
-    """A 2D camera that maps a viewport onto a larger world.
-
-    Parameters:
+    """Parameters:
         viewport_size: ``(width, height)`` of the logical screen.
-        world_bounds:  Optional ``(left, top, right, bottom)`` rectangle that
-                       the camera is clamped inside.  ``None`` means no limits.
+        world_bounds:  Optional ``(left, top, right, bottom)`` the view is
+                       clamped inside.
+        zoom:          Initial zoom (1 = one world unit per logical pixel).
+        min_zoom / max_zoom: Clamp range for :attr:`zoom`.
     """
 
     def __init__(
@@ -43,56 +41,53 @@ class Camera:
         viewport_size: tuple[int, int],
         *,
         world_bounds: tuple[float, float, float, float] | None = None,
+        zoom: float = 1.0,
+        min_zoom: float = 0.25,
+        max_zoom: float = 4.0,
     ) -> None:
-        self._vw: int = viewport_size[0]
-        self._vh: int = viewport_size[1]
-
-        # Top-left corner of the viewport in world space.
-        self._x: float = 0.0
-        self._y: float = 0.0
-
-        # Optional world-bounds clamping: (left, top, right, bottom).
+        self._vw, self._vh = int(viewport_size[0]), int(viewport_size[1])
+        self._x = 0.0
+        self._y = 0.0
+        self._zoom = 1.0
+        self._min_zoom = min_zoom
+        self._max_zoom = max_zoom
         self._world_bounds = world_bounds
-
-        # Follow mode.
         self._follow_target: Sprite | None = None
+        self._edge_margin = 0
+        self._edge_speed = 0.0
+        self._key_speed = 0.0
+        self._key_bindings: dict[str, tuple[str, ...]] = {}
+        self._held: set[str] = set()
+        self._pan_tweens: list[int] = []
+        self._tween_manager: Any = None
+        self._shake_intensity = 0.0
+        self._shake_duration = 0.0
+        self._shake_elapsed = 0.0
+        self._shake_decay = 1.0
+        self._shake_dx = 0.0
+        self._shake_dy = 0.0
+        self.zoom = zoom
 
-        # Edge scroll.
-        self._edge_scroll_enabled: bool = False
-        self._edge_margin: int = 0
-        self._edge_speed: float = 0.0
-
-        # Key scroll (arrow keys).
-        self._key_scroll_enabled: bool = False
-        self._key_scroll_speed: float = 0.0
-        self._held_dirs: set[str] = set()  # "left", "right", "up", "down"
-
-        # Pan-to tween ids (so we can cancel on follow / center_on / scroll).
-        self._pan_tween_x: int | None = None
-        self._pan_tween_y: int | None = None
-        self._tween_manager: Any = None  # set by pan_to() from Game's manager
-
-        # Shake effect.
-        self._shake_intensity: float = 0.0
-        self._shake_duration: float = 0.0
-        self._shake_elapsed: float = 0.0
-        self._shake_decay: float = 1.0
-        self._shake_offset_x: float = 0.0
-        self._shake_offset_y: float = 0.0
-
-    # ------------------------------------------------------------------
-    # Read-only properties
-    # ------------------------------------------------------------------
+    # -- Properties ------------------------------------------------------------
 
     @property
     def x(self) -> float:
-        """Top-left x of the viewport in world space (read-only)."""
         return self._x
 
     @property
     def y(self) -> float:
-        """Top-left y of the viewport in world space (read-only)."""
         return self._y
+
+    @property
+    def zoom(self) -> float:
+        return self._zoom
+
+    @zoom.setter
+    def zoom(self, value: float) -> None:
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"zoom must be a positive finite number, got {value!r}")
+        self._zoom = max(self._min_zoom, min(self._max_zoom, float(value)))
+        self._clamp()
 
     @property
     def viewport_width(self) -> int:
@@ -103,442 +98,199 @@ class Camera:
         return self._vh
 
     @property
-    def shake_offset_x(self) -> float:
-        """Current horizontal shake offset in pixels (read-only)."""
-        return self._shake_offset_x
-
-    @property
-    def shake_offset_y(self) -> float:
-        """Current vertical shake offset in pixels (read-only)."""
-        return self._shake_offset_y
-
-    @property
     def world_bounds(self) -> tuple[float, float, float, float] | None:
         return self._world_bounds
 
     @world_bounds.setter
-    def world_bounds(
-        self,
-        value: tuple[float, float, float, float] | None,
-    ) -> None:
+    def world_bounds(self, value: tuple[float, float, float, float] | None) -> None:
         if value is not None:
             left, top, right, bottom = value
-            for v, name in ((left, "left"), (top, "top"),
-                            (right, "right"), (bottom, "bottom")):
-                if not math.isfinite(v):
-                    raise ValueError(
-                        f"world_bounds values must be finite, "
-                        f"got {name}={v!r}"
-                    )
-            if left > right:
-                raise ValueError(
-                    f"world_bounds left ({left}) must be <= right ({right})"
-                )
-            if top > bottom:
-                raise ValueError(
-                    f"world_bounds top ({top}) must be <= bottom ({bottom})"
-                )
+            if left > right or top > bottom:
+                raise ValueError(f"world_bounds must satisfy left<=right and top<=bottom, got {value}")
         self._world_bounds = value
         self._clamp()
 
-    # ------------------------------------------------------------------
-    # Positioning
-    # ------------------------------------------------------------------
+    @property
+    def shake_offset(self) -> tuple[float, float]:
+        return (self._shake_dx, self._shake_dy)
+
+    @property
+    def center(self) -> tuple[float, float]:
+        return (self._x + self._vw / 2 / self._zoom, self._y + self._vh / 2 / self._zoom)
+
+    # -- Positioning -----------------------------------------------------------
 
     def center_on(self, x: float, y: float) -> None:
-        """Center the viewport on world position ``(x, y)``.
-
-        Cancels any active pan and disables follow.
-
-        Raises:
-            ValueError: If *x* or *y* is NaN or Inf.
-        """
-        if not math.isfinite(x) or not math.isfinite(y):
-            raise ValueError(
-                f"camera coordinates must be finite (not NaN or Inf), got ({x}, {y})"
-            )
+        """Centre the view on world ``(x, y)``.  Cancels pan and follow."""
         self._cancel_pan()
         self._follow_target = None
-        self._x = x - self._vw / 2
-        self._y = y - self._vh / 2
+        self._x = x - self._vw / 2 / self._zoom
+        self._y = y - self._vh / 2 / self._zoom
         self._clamp()
 
     def follow(self, sprite: Sprite | None) -> None:
-        """Follow *sprite* each frame (center on its position).
-
-        Cancels any active pan.  Pass ``None`` to stop following.
-        """
         self._cancel_pan()
         self._follow_target = sprite
 
     def scroll(self, dx: float, dy: float) -> None:
-        """Manually scroll the camera by ``(dx, dy)`` pixels.
-
-        Cancels any active pan and disables follow.
-
-        Raises:
-            ValueError: If *dx* or *dy* is NaN or Inf.
-        """
-        if not math.isfinite(dx) or not math.isfinite(dy):
-            raise ValueError(
-                f"scroll deltas must be finite (not NaN or Inf), got ({dx}, {dy})"
-            )
+        """Move the view by ``(dx, dy)`` world units."""
         self._cancel_pan()
         self._follow_target = None
         self._x += dx
         self._y += dy
         self._clamp()
 
-    # ------------------------------------------------------------------
-    # Edge scroll
-    # ------------------------------------------------------------------
+    def zoom_at(self, factor: float, sx: float, sy: float) -> None:
+        """Multiply zoom by *factor* keeping screen point ``(sx, sy)`` fixed."""
+        wx, wy = self.screen_to_world(sx, sy)
+        self._cancel_pan()
+        self.zoom = self._zoom * factor
+        self._x = wx - sx / self._zoom
+        self._y = wy - sy / self._zoom
+        self._clamp()
+
+    def pan_to(self, x: float, y: float, duration: float, ease: Ease = Ease.EASE_IN_OUT) -> None:
+        """Smoothly move the view centre to ``(x, y)`` over *duration* seconds."""
+        from saga2d.util import tween as tween_mod
+
+        self._tween_manager = tween_mod._tween_manager
+        self._cancel_pan()
+        self._follow_target = None
+        target_x = x - self._vw / 2 / self._zoom
+        target_y = y - self._vh / 2 / self._zoom
+        target_x, target_y = self._clamped(target_x, target_y)
+        self._pan_tweens = [
+            tween_mod.tween(self, "_x", self._x, target_x, duration, ease=ease),
+            tween_mod.tween(self, "_y", self._y, target_y, duration, ease=ease, on_complete=self._pan_done),
+        ]
+
+    # -- Scrolling modes -------------------------------------------------------
 
     def enable_edge_scroll(self, margin: int, speed: float) -> None:
-        """Enable edge scrolling.
-
-        When the mouse is within *margin* pixels of the viewport edge,
-        the camera scrolls at *speed* pixels per second toward that edge.
-
-        Raises:
-            ValueError: If *margin* or *speed* is NaN or Inf.
-        """
-        if not math.isfinite(margin) or not math.isfinite(speed):
-            raise ValueError(
-                f"edge scroll margin and speed must be finite, "
-                f"got margin={margin!r}, speed={speed!r}"
-            )
-        self._edge_scroll_enabled = True
         self._edge_margin = margin
         self._edge_speed = speed
 
     def disable_edge_scroll(self) -> None:
-        """Disable edge scrolling."""
-        self._edge_scroll_enabled = False
+        self._edge_speed = 0.0
 
-    # ------------------------------------------------------------------
-    # Key scroll
-    # ------------------------------------------------------------------
-
-    def enable_key_scroll(self, speed: float = 300) -> None:
-        """Enable arrow-key scrolling.
-
-        When arrow keys are held, the camera scrolls at *speed* pixels per
-        second.  Tracks key_press/key_release internally; call
-        :meth:`handle_input` from the game loop (the framework does this
-        automatically when the scene has a camera).
-
-        Raises:
-            ValueError: If *speed* is NaN or Inf.
-        """
-        if not math.isfinite(speed):
-            raise ValueError(
-                f"key scroll speed must be a finite number, got {speed!r}"
-            )
-        self._key_scroll_enabled = True
-        self._key_scroll_speed = speed
+    def enable_key_scroll(self, speed: float = 600, bindings: dict[str, tuple[str, ...]] | None = None) -> None:
+        """Scroll while direction keys are held.  *bindings* maps
+        ``"left"/"right"/"up"/"down"`` to key names (default: arrows)."""
+        self._key_speed = speed
+        self._key_bindings = dict(bindings or _DEFAULT_KEY_BINDINGS)
 
     def disable_key_scroll(self) -> None:
-        """Disable arrow-key scrolling."""
-        self._key_scroll_enabled = False
-        self._held_dirs.clear()
+        self._key_speed = 0.0
+        self._held.clear()
 
     def handle_input(self, event: InputEvent) -> bool:
-        """Process directional key events for key scroll.
-
-        Called by :meth:`Game.tick` before scene dispatch when the scene
-        has a camera.  Returns ``True`` if the event was consumed (a
-        directional key_press/key_release), ``False`` otherwise.
-        """
-        if not self._key_scroll_enabled:
+        """Track direction keys for key scroll.  Returns True if consumed."""
+        if not self._key_speed or event.key is None:
             return False
-        if event.type not in ("key_press", "key_release"):
-            return False
-        action = getattr(event, "action", None)
-        if action not in ("left", "right", "up", "down"):
-            return False
-        if event.type == "key_press":
-            self._held_dirs.add(action)
-        else:
-            self._held_dirs.discard(action)
-        return True
+        for direction, keys in self._key_bindings.items():
+            if event.key in keys:
+                if event.type == "key_press":
+                    self._held.add(direction)
+                elif event.type == "key_release":
+                    self._held.discard(direction)
+                return True
+        return False
 
-    # ------------------------------------------------------------------
-    # Shake
-    # ------------------------------------------------------------------
+    # -- Shake -----------------------------------------------------------------
 
-    def shake(self, intensity: float, duration: float, decay: float) -> None:
-        """Start a screen-shake effect.
-
-        The camera offsets are updated each frame in :meth:`update` with
-        random values whose magnitude decays over *duration* seconds.
-
-        Parameters:
-            intensity: Maximum pixel offset at the start of the shake.
-            duration:  How long (seconds) the shake lasts.  A duration of
-                       ``0`` is a no-op that immediately resets any active
-                       shake.
-            decay:     Exponent applied to the linear progress
-                       ``(1 - elapsed/duration)**decay`` — higher values
-                       make the shake die out faster.
-
-        Raises:
-            ValueError: If *intensity*, *duration*, or *decay* is NaN or Inf.
-        """
-        if not math.isfinite(intensity) or not math.isfinite(duration) or not math.isfinite(decay):
-            raise ValueError(
-                f"shake parameters must be finite (not NaN or Inf), "
-                f"got intensity={intensity}, duration={duration}, decay={decay}"
-            )
-        if duration <= 0:
-            # Treat zero/negative duration as a reset.
-            self._shake_intensity = 0.0
-            self._shake_duration = 0.0
-            self._shake_elapsed = 0.0
-            self._shake_decay = 1.0
-            self._shake_offset_x = 0.0
-            self._shake_offset_y = 0.0
-            return
-
+    def shake(self, intensity: float, duration: float, decay: float = 1.0) -> None:
         self._shake_intensity = intensity
         self._shake_duration = duration
         self._shake_elapsed = 0.0
         self._shake_decay = decay
-        self._shake_offset_x = 0.0
-        self._shake_offset_y = 0.0
+        self._shake_dx = self._shake_dy = 0.0
 
-    # ------------------------------------------------------------------
-    # Coordinate conversion
-    # ------------------------------------------------------------------
+    # -- Conversion ------------------------------------------------------------
 
-    def screen_to_world(
-        self,
-        sx: float,
-        sy: float,
-    ) -> tuple[float, float]:
-        """Convert screen (logical) coordinates to world coordinates.
+    @property
+    def offset(self) -> tuple[float, float]:
+        """Effective top-left world position including shake."""
+        return (self._x + self._shake_dx, self._y + self._shake_dy)
 
-        Includes any active camera-shake offset so that a screen pixel
-        maps to the world position currently rendered there.
-        """
-        return (
-            sx + self._x + self._shake_offset_x,
-            sy + self._y + self._shake_offset_y,
-        )
+    def screen_to_world(self, sx: float, sy: float) -> tuple[float, float]:
+        ox, oy = self.offset
+        return (sx / self._zoom + ox, sy / self._zoom + oy)
 
-    def world_to_screen(
-        self,
-        wx: float,
-        wy: float,
-    ) -> tuple[float, float]:
-        """Convert world coordinates to screen (logical) coordinates.
+    def world_to_screen(self, wx: float, wy: float) -> tuple[float, float]:
+        ox, oy = self.offset
+        return ((wx - ox) * self._zoom, (wy - oy) * self._zoom)
 
-        Includes any active camera-shake offset so that a world position
-        maps to where it is currently rendered on screen.
-        """
-        return (
-            wx - self._x - self._shake_offset_x,
-            wy - self._y - self._shake_offset_y,
-        )
+    def visible_world_rect(self) -> tuple[float, float, float, float]:
+        """``(left, top, right, bottom)`` of the world currently in view."""
+        ox, oy = self.offset
+        return (ox, oy, ox + self._vw / self._zoom, oy + self._vh / self._zoom)
 
-    # ------------------------------------------------------------------
-    # Smooth pan
-    # ------------------------------------------------------------------
+    # -- Per-frame update --------------------------------------------------------
 
-    def pan_to(
-        self,
-        x: float,
-        y: float,
-        duration: float,
-        ease: Ease | None = None,
-    ) -> None:
-        """Smoothly pan the viewport center to ``(x, y)`` over *duration* seconds.
-
-        Uses the existing tween system.  Disables follow.  If a pan is already
-        active it is cancelled first.
-
-        Parameters:
-            x:        Target world x to center on.
-            y:        Target world y to center on.
-            duration: Seconds for the pan animation.
-            ease:     An :class:`~saga2d.util.tween.Ease` value (default
-                      ``Ease.EASE_IN_OUT``).
-        """
-        if not math.isfinite(x) or not math.isfinite(y):
-            raise ValueError(f"pan_to requires finite x and y, got ({x}, {y})")
-        from saga2d.util import tween as tween_mod
-        from saga2d.util.tween import Ease, tween
-
-        # Capture the instance tween manager so _cancel_pan doesn't rely on
-        # the module-level global (which may point to a different Game).
-        self._tween_manager = tween_mod._tween_manager
-
-        self._cancel_pan()
-        self._follow_target = None
-
-        if ease is None:
-            ease = Ease.EASE_IN_OUT
-
-        # Target top-left so that (x, y) is centered.
-        target_x = x - self._vw / 2
-        target_y = y - self._vh / 2
-
-        # Clamp target the same way _clamp() would.
-        if self._world_bounds is not None:
-            left, top, right, bottom = self._world_bounds
-            target_x = max(left, min(target_x, right - self._vw))
-            target_y = max(top, min(target_y, bottom - self._vh))
-
-        self._pan_tween_x = tween(
-            self,
-            "_x",
-            self._x,
-            target_x,
-            duration,
-            ease=ease,
-        )
-        self._pan_tween_y = tween(
-            self,
-            "_y",
-            self._y,
-            target_y,
-            duration,
-            ease=ease,
-            on_complete=self._on_pan_complete,
-        )
-
-    # ------------------------------------------------------------------
-    # Per-frame update
-    # ------------------------------------------------------------------
-
-    def update(
-        self,
-        dt: float,
-        mouse_x: float | None = None,
-        mouse_y: float | None = None,
-    ) -> None:
-        """Advance per-frame camera logic.
-
-        Called once per frame by :meth:`Game.tick` before the render-sync pass.
-
-        Handles:
-        1. Follow tracking — center on the followed sprite.
-        2. Edge scroll — scroll when the mouse is near a viewport edge.
-        3. Key scroll — scroll when arrow keys are held.
-        4. Shake effect — apply decaying random offset from :meth:`shake`.
-
-        Parameters:
-            dt:      Delta time in seconds.
-            mouse_x: Current mouse x in logical screen coordinates (or ``None``).
-            mouse_y: Current mouse y in logical screen coordinates (or ``None``).
-        """
-        # Guard: non-finite dt would corrupt position via edge/key scroll and
-        # shake elapsed tracking.  Follow is dt-independent but we still skip
-        # the whole frame to stay consistent (matching TweenManager.update).
-        if not math.isfinite(dt):
-            return
-
-        # 1. Follow tracking.
-        if self._follow_target is not None:
-            target = self._follow_target
-            # Guard against removed sprites.
-            if hasattr(target, "is_removed") and target.is_removed:
+    def update(self, dt: float, mouse: tuple[float, float] | None = None) -> None:
+        target = self._follow_target
+        if target is not None:
+            if target.is_removed:
                 self._follow_target = None
             else:
-                tx, ty = target.x, target.y
-                # Guard against non-finite target position (e.g. physics NaN).
-                if math.isfinite(tx) and math.isfinite(ty):
-                    self._x = tx - self._vw / 2
-                    self._y = ty - self._vh / 2
-                    self._clamp()
-
-        # 2. Edge scroll.
-        if self._edge_scroll_enabled and mouse_x is not None and mouse_y is not None:
-            scroll_dx = 0.0
-            scroll_dy = 0.0
-            margin = self._edge_margin
-            speed = self._edge_speed
-
-            if mouse_x < margin:
-                scroll_dx = -speed * dt
-            elif mouse_x > self._vw - margin:
-                scroll_dx = speed * dt
-
-            if mouse_y < margin:
-                scroll_dy = -speed * dt
-            elif mouse_y > self._vh - margin:
-                scroll_dy = speed * dt
-
-            if scroll_dx != 0.0 or scroll_dy != 0.0:
-                self._x += scroll_dx
-                self._y += scroll_dy
+                tx, ty = target.position
+                self._x = tx - self._vw / 2 / self._zoom
+                self._y = ty - self._vh / 2 / self._zoom
                 self._clamp()
 
-        # 3. Key scroll.
-        if self._key_scroll_enabled and self._held_dirs:
-            speed = self._key_scroll_speed * dt
-            scroll_dx = (-speed if "left" in self._held_dirs else 0) + (
-                speed if "right" in self._held_dirs else 0
-            )
-            scroll_dy = (-speed if "up" in self._held_dirs else 0) + (
-                speed if "down" in self._held_dirs else 0
-            )
-            if scroll_dx != 0.0 or scroll_dy != 0.0:
-                self._x += scroll_dx
-                self._y += scroll_dy
+        if self._edge_speed and mouse is not None:
+            mx, my = mouse
+            m = self._edge_margin
+            step = self._edge_speed * dt / self._zoom
+            dx = -step if mx < m else step if mx > self._vw - m else 0.0
+            dy = -step if my < m else step if my > self._vh - m else 0.0
+            if dx or dy:
+                self._x += dx
+                self._y += dy
                 self._clamp()
 
-        # 4. Shake effect.
-        if self._shake_duration > 0.0 and self._shake_elapsed < self._shake_duration:
+        if self._key_speed and self._held:
+            step = self._key_speed * dt / self._zoom
+            dx = (-step if "left" in self._held else 0.0) + (step if "right" in self._held else 0.0)
+            dy = (-step if "up" in self._held else 0.0) + (step if "down" in self._held else 0.0)
+            if dx or dy:
+                self._x += dx
+                self._y += dy
+                self._clamp()
+
+        if self._shake_duration > 0:
             self._shake_elapsed += dt
             if self._shake_elapsed >= self._shake_duration:
-                # Shake finished.
-                self._shake_offset_x = 0.0
-                self._shake_offset_y = 0.0
                 self._shake_duration = 0.0
+                self._shake_dx = self._shake_dy = 0.0
             else:
                 progress = self._shake_elapsed / self._shake_duration
-                decayed_intensity = (
-                    self._shake_intensity * (1.0 - progress) ** self._shake_decay
-                )
-                self._shake_offset_x = random.uniform(
-                    -decayed_intensity, decayed_intensity
-                )
-                self._shake_offset_y = random.uniform(
-                    -decayed_intensity, decayed_intensity
-                )
+                amp = self._shake_intensity * (1.0 - progress) ** self._shake_decay
+                self._shake_dx = random.uniform(-amp, amp)
+                self._shake_dy = random.uniform(-amp, amp)
 
-    # ------------------------------------------------------------------
-    # Internals
-    # ------------------------------------------------------------------
+    # -- Internals -------------------------------------------------------------
+
+    def _clamped(self, x: float, y: float) -> tuple[float, float]:
+        if self._world_bounds is None:
+            return x, y
+        left, top, right, bottom = self._world_bounds
+        view_w = self._vw / self._zoom
+        view_h = self._vh / self._zoom
+        # When the world is smaller than the view, centre it.
+        x = (left + right - view_w) / 2 if right - left <= view_w else max(left, min(x, right - view_w))
+        y = (top + bottom - view_h) / 2 if bottom - top <= view_h else max(top, min(y, bottom - view_h))
+        return x, y
 
     def _clamp(self) -> None:
-        """Clamp ``(_x, _y)`` so the viewport stays inside world_bounds."""
-        if self._world_bounds is None:
-            return
-        left, top, right, bottom = self._world_bounds
-        # Maximum top-left so bottom-right of viewport doesn't exceed bounds.
-        max_x = right - self._vw
-        max_y = bottom - self._vh
-        self._x = max(left, min(self._x, max_x))
-        self._y = max(top, min(self._y, max_y))
+        self._x, self._y = self._clamped(self._x, self._y)
 
     def _cancel_pan(self) -> None:
-        """Cancel any active pan tweens."""
-        mgr = self._tween_manager
-        if mgr is not None:
-            if self._pan_tween_x is not None:
-                mgr.cancel(self._pan_tween_x)
-                self._pan_tween_x = None
-            if self._pan_tween_y is not None:
-                mgr.cancel(self._pan_tween_y)
-                self._pan_tween_y = None
-        else:
-            # No tween manager yet (during tests or before Game init) — just clear ids.
-            self._pan_tween_x = None
-            self._pan_tween_y = None
+        if self._tween_manager is not None:
+            for tid in self._pan_tweens:
+                self._tween_manager.cancel(tid)
+        self._pan_tweens = []
 
-    def _on_pan_complete(self) -> None:
-        """Called when a pan_to animation finishes."""
-        self._pan_tween_x = None
-        self._pan_tween_y = None
+    def _pan_done(self) -> None:
+        self._pan_tweens = []
         self._clamp()

@@ -1,32 +1,30 @@
-"""Render layer and sprite anchor enums.
-
-RenderLayer defines the fixed draw order for sprites (back to front).
-SpriteAnchor defines where the position point lies on the sprite image.
-"""
+"""Render layers and sprite anchors."""
 
 from enum import Enum, IntEnum
 
 
 class RenderLayer(IntEnum):
-    """Fixed rendering order, back to front.
+    """Fixed back-to-front draw order for world-space content."""
 
-    Use as the layer_order when creating sprites. Lower values draw behind
-    higher values. Within a layer, sprites are typically y-sorted.
-    """
+    BACKGROUND = 0
+    OBJECTS = 1
+    UNITS = 2
+    EFFECTS = 3
+    UI_WORLD = 4
 
-    BACKGROUND = 0  # background images, terrain
-    OBJECTS = 1  # trees, buildings, environmental objects
-    UNITS = 2  # living units, characters, NPCs
-    EFFECTS = 3  # spell effects, projectiles, explosions
-    UI_WORLD = 4  # health bars above units, selection circles, name labels
+
+#: Width of one layer's band in the integer draw order.  Sprites with
+#: ``y_sort=True`` add their bottom edge (in world units) inside the band.
+LAYER_BAND = 100_000
+
+
+def world_order(layer: RenderLayer, y: float = 0.0) -> int:
+    """Draw order for world-space content on *layer* at bottom-edge *y*."""
+    return int(layer) * LAYER_BAND + int(y)
 
 
 class SpriteAnchor(Enum):
-    """Where the position point lies on the sprite image.
-
-    BOTTOM_CENTER is the default for top-down games — the "feet" of the
-    sprite sit at its position.
-    """
+    """Where a sprite's position point lies on its image."""
 
     TOP_LEFT = "top_left"
     TOP_CENTER = "top_center"
@@ -35,5 +33,23 @@ class SpriteAnchor(Enum):
     CENTER = "center"
     CENTER_RIGHT = "center_right"
     BOTTOM_LEFT = "bottom_left"
-    BOTTOM_CENTER = "bottom_center"  # default — "feet" of the sprite
+    BOTTOM_CENTER = "bottom_center"
     BOTTOM_RIGHT = "bottom_right"
+
+
+def anchor_offset(anchor: SpriteAnchor, width: float, height: float) -> tuple[float, float]:
+    """``(dx, dy)`` from the top-left corner to the anchor point."""
+    name = anchor.value
+    if name.endswith("left"):
+        dx = 0.0
+    elif name.endswith("right"):
+        dx = width
+    else:
+        dx = width / 2
+    if name.startswith("top"):
+        dy = 0.0
+    elif name.startswith("bottom"):
+        dy = height
+    else:
+        dy = height / 2
+    return dx, dy

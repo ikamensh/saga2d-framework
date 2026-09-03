@@ -1,26 +1,15 @@
-"""ParticleEmitter — managed lightweight sprite particles.
+"""ParticleEmitter — short-lived sprites with velocity and fade.
 
-A :class:`ParticleEmitter` spawns short-lived :class:`Sprite` particles on
-the :attr:`~saga2d.rendering.layers.RenderLayer.EFFECTS` layer.  Each
-particle has randomised velocity, lifetime, and optional opacity fade-out.
+::
 
-Two spawning modes are supported:
+    burst = ParticleEmitter("spark", position=(500, 300))
+    burst.burst(30)                          # explosion
+    smoke = ParticleEmitter("puff", position=(100, 400))
+    smoke.continuous(rate=20)                # steady stream; call stop()
 
-* **Burst** — spawn a batch of particles at once (explosions, impacts)::
-
-      emitter = ParticleEmitter("sprites/spark", position=(500, 300))
-      emitter.burst(30)
-
-* **Continuous** — spawn at a steady rate per second (fire, smoke)::
-
-      emitter = ParticleEmitter("sprites/smoke", position=(100, 400))
-      emitter.continuous(rate=20)
-
-Call :meth:`stop` to halt spawning; existing particles live out their
-remaining lifetime.  Call :meth:`remove` to kill everything immediately.
-
-The emitter auto-registers in ``Game._particle_emitters`` on construction
-and is updated each frame by ``Game._update_particles(dt)``.
+Burst emitters clean themselves up once every particle has died.
+Continuous emitters run until :meth:`stop` or :meth:`remove`; registering
+one with :meth:`Scene.add_emitter` removes it when the scene exits.
 """
 
 from __future__ import annotations
@@ -33,347 +22,152 @@ from typing import TYPE_CHECKING, Any
 from saga2d.rendering.layers import RenderLayer, SpriteAnchor
 
 if TYPE_CHECKING:
+    from saga2d.backends.base import Space
     from saga2d.rendering.sprite import Sprite
-
-
-# ---------------------------------------------------------------------------
-# Internal particle state
-# ---------------------------------------------------------------------------
 
 
 @dataclass
 class _Particle:
-    """Lightweight bookkeeping for one living particle."""
-
     sprite: Sprite
-    vx: float  # pixels / sec
-    vy: float  # pixels / sec
-    remaining: float  # seconds until death
-    total_lifetime: float  # initial lifetime (for fade ratio)
-    fade_out: bool
-
-
-# ---------------------------------------------------------------------------
-# ParticleEmitter
-# ---------------------------------------------------------------------------
+    vx: float
+    vy: float
+    remaining: float
+    lifetime: float
 
 
 class ParticleEmitter:
-    """Managed particle spawner.
-
-    Supports two modes: **burst** (one-shot batch) and **continuous**
-    (steady rate per second).  Burst emitters are self-cleaning — the
-    emitter becomes inactive once all particles expire and is
-    automatically deregistered by the game loop.
-
-    **Continuous emitters must be explicitly stopped** by calling
-    :meth:`stop` (cease spawning, let particles die naturally) or
-    :meth:`remove` (kill everything immediately).  Typically this is
-    done in the owning scene's :meth:`~saga2d.scene.Scene.on_exit`
-    to prevent the emitter from firing in the background after the
-    scene is no longer active.
-
-    Parameters:
-        image:     Asset name (or list of names for variety — one chosen at
-                   random per particle).
-        position:  ``(x, y)`` spawn point in world coordinates.
-        count:     Default number of particles for :meth:`burst`.
-        speed:     ``(min, max)`` random speed range in pixels per second.
-        direction: ``(min_deg, max_deg)`` random angle range in degrees
-                   (0 = right, 90 = down in y-down coordinates).
-        lifetime:  ``(min_sec, max_sec)`` random lifetime range.
-        fade_out:  If ``True``, particle opacity lerps from 255 to 0 over
-                   its lifetime.
-        layer:     Render layer for particle sprites.
-        rng:       Optional :class:`random.Random` instance used for every
-                   random choice the emitter makes (image variant, speed,
-                   direction, lifetime). ``None`` (default) falls back to
-                   the module-level ``random``, which is appropriate for
-                   gameplay. Pass a seeded ``Random()`` when you need
-                   reproducible particle output — e.g. for PNG snapshot
-                   tests (iter-45 added the parameter after the dodge
-                   PNG snapshot went non-deterministic on CI).
+    """Parameters:
+        image:     Asset name, or a list of names (random pick per particle).
+        position:  Spawn point.
+        count:     Default particle count for :meth:`burst`.
+        speed:     ``(min, max)`` pixels per second.
+        direction: ``(min_deg, max_deg)``; 0 = right, 90 = down.
+        lifetime:  ``(min_s, max_s)``.
+        size:      Drawn particle size, or ``None`` for image pixel size.
+        fade_out:  Fade opacity to zero over each particle's life.
+        shrink:    Scale size to zero over each particle's life.
+        tint:      Sprite tint for every particle.
+        rng:       Seeded :class:`random.Random` for deterministic output.
     """
 
     def __init__(
         self,
         image: str | list[str],
         position: tuple[float, float],
+        *,
         count: int = 10,
         speed: tuple[float, float] = (50, 200),
         direction: tuple[float, float] = (0, 360),
         lifetime: tuple[float, float] = (0.3, 0.8),
+        size: tuple[float, float] | None = None,
         fade_out: bool = True,
+        shrink: bool = False,
+        tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
         layer: RenderLayer = RenderLayer.EFFECTS,
+        space: Space = "world",
         rng: random.Random | None = None,
     ) -> None:
-        from saga2d.rendering.sprite import _current_game
+        from saga2d.rendering.sprite import _require_game
 
-        if _current_game is None:
-            raise RuntimeError(
-                "No active Game. Create a Game instance before creating "
-                "a ParticleEmitter."
-            )
-
-        self._game: Any = _current_game
-        self._images: list[str] = image if isinstance(image, list) else [image]
-        self._x = float(position[0])
-        self._y = float(position[1])
+        self._game = _require_game()
+        self._images = list(image) if isinstance(image, (list, tuple)) else [image]
+        self._x, self._y = float(position[0]), float(position[1])
         self._count = count
-        # Validate speed range — non-finite values produce NaN velocities
-        # when random.uniform() is called during particle spawning.
-        sp_min, sp_max = speed
-        if not math.isfinite(sp_min) or not math.isfinite(sp_max):
-            raise ValueError(
-                f"speed values must be finite numbers, got ({sp_min}, {sp_max})"
-            )
+        for name, (lo, hi) in (("speed", speed), ("direction", direction), ("lifetime", lifetime)):
+            if not (math.isfinite(lo) and math.isfinite(hi)):
+                raise ValueError(f"{name} range must be finite, got ({lo}, {hi})")
+        if lifetime[0] < 0 or lifetime[1] < 0:
+            raise ValueError(f"lifetime must be >= 0, got {lifetime}")
         self._speed = speed
-
-        # Validate direction range — non-finite angles produce NaN via
-        # math.radians() → math.cos()/sin().
-        dir_min, dir_max = direction
-        if not math.isfinite(dir_min) or not math.isfinite(dir_max):
-            raise ValueError(
-                f"direction values must be finite numbers, got ({dir_min}, {dir_max})"
-            )
         self._direction = direction
-
-        # Validate lifetime range — non-finite values (NaN, Inf, -Inf) cause
-        # particles to never expire because random.uniform returns NaN and
-        # ``NaN <= 0`` is always False (IEEE 754).
-        lt_min, lt_max = lifetime
-        if not math.isfinite(lt_min) or not math.isfinite(lt_max):
-            raise ValueError(
-                f"lifetime values must be finite numbers, got ({lt_min}, {lt_max})"
-            )
-        if lt_min < 0 or lt_max < 0:
-            raise ValueError(
-                f"lifetime values must be >= 0, got ({lt_min}, {lt_max})"
-            )
         self._lifetime = lifetime
+        self._size = size
         self._fade_out = fade_out
+        self._shrink = shrink
+        self._tint = tint
         self._layer = layer
-        # iter-45: caller-supplied RNG for deterministic particle output.
-        # Falls back to the random module for backwards compatibility —
-        # existing call sites don't need to change. The module's free
-        # functions (``random.uniform``, ``random.choice``) have the
-        # same signatures as :class:`random.Random` methods, so the
-        # single attribute works either way.
+        self._space: Space = space
         self._rng: Any = rng if rng is not None else random
-
-        # Living particles.
         self._particles: list[_Particle] = []
-
-        # Continuous spawning state.
-        self._continuous_rate: float = 0.0  # particles per second (0 = off)
-        self._spawn_accum: float = 0.0  # fractional particle accumulator
-
-        # iter-46: optional parent-tracking. When ``_follow_target`` is
-        # set, ``update(dt)`` moves the emitter position to the target
-        # sprite's position each tick before spawning new particles.
-        # Auto-detaches when the target is removed.
-        self._follow_target: Any = None
-        self._follow_offset: tuple[float, float] = (0.0, 0.0)
-
-        # Register for automatic updates.
+        self._rate = 0.0
+        self._accum = 0.0
         self._game._particle_emitters.add(self)
-
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
 
     @property
     def position(self) -> tuple[float, float]:
-        """The spawn point for new particles."""
         return (self._x, self._y)
 
     @position.setter
     def position(self, value: tuple[float, float]) -> None:
-        x, y = float(value[0]), float(value[1])
-        if not math.isfinite(x) or not math.isfinite(y):
-            raise ValueError(
-                f"ParticleEmitter position must be finite, got ({x}, {y})"
-            )
-        self._x = x
-        self._y = y
+        self._x, self._y = float(value[0]), float(value[1])
 
     @property
     def is_active(self) -> bool:
-        """``True`` if the emitter is still spawning or any particles live."""
-        return self._continuous_rate > 0 or len(self._particles) > 0
+        return self._rate > 0 or bool(self._particles)
 
-    # ------------------------------------------------------------------
-    # Spawning modes
-    # ------------------------------------------------------------------
+    @property
+    def particle_count(self) -> int:
+        return len(self._particles)
 
     def burst(self, count: int | None = None) -> None:
-        """Spawn *count* particles at once.
-
-        Uses the constructor's *count* if the argument is ``None``.
-        """
         n = self._count if count is None else count
-        if n <= 0:
-            return
-        # Ensure the emitter is registered (may have been auto-removed).
         self._game._particle_emitters.add(self)
         for _ in range(n):
-            self._spawn_particle()
+            self._spawn()
 
     def continuous(self, rate: float) -> None:
-        """Start spawning at *rate* particles per second.
-
-        Call ``stop()`` to cease continuous spawning.
-
-        Raises:
-            ValueError: If *rate* is not a finite number >= 0.  An infinite
-                rate would cause an infinite loop in :meth:`update`; a NaN
-                rate would silently disable spawning.
-        """
-        if not math.isfinite(rate):
-            raise ValueError(
-                f"rate must be a finite number >= 0, got {rate}"
-            )
-        if rate < 0:
-            raise ValueError(
-                f"rate must be >= 0, got {rate}"
-            )
-        self._continuous_rate = rate
-        self._spawn_accum = 0.0
-        # Ensure the emitter is registered (may have been auto-removed).
+        if not math.isfinite(rate) or rate < 0:
+            raise ValueError(f"rate must be a finite number >= 0, got {rate}")
+        self._rate = rate
+        self._accum = 0.0
         self._game._particle_emitters.add(self)
 
     def stop(self) -> None:
-        """Stop spawning.  Existing particles continue until death."""
-        self._continuous_rate = 0.0
-        self._spawn_accum = 0.0
-
-    # ------------------------------------------------------------------
-    # Per-frame update
-    # ------------------------------------------------------------------
-
-    def follow(
-        self,
-        target: Any,
-        offset: tuple[float, float] = (0.0, 0.0),
-    ) -> None:
-        """Attach the emitter to *target* so its position tracks.
-
-        After calling ``follow(sprite, offset=(0, 4))``, the emitter's
-        position is set to ``(sprite.x + 0, sprite.y + 4)`` at the
-        start of every :meth:`update` call — no scene-level bookkeeping
-        needed. When the target sprite is removed (``target.is_removed``
-        becomes ``True``), the follow is silently detached so no stale
-        reference is retained.
-
-        Example::
-
-            thruster = ParticleEmitter(image="dust", ...)
-            thruster.follow(player_sprite, offset=(0, 4))
-            thruster.continuous(rate=40)
-
-        Pass ``target=None`` to clear an existing follow attachment.
-        """
-        self._follow_target = target
-        ox, oy = float(offset[0]), float(offset[1])
-        if not (math.isfinite(ox) and math.isfinite(oy)):
-            raise ValueError(
-                f"ParticleEmitter.follow offset must be finite, got ({ox}, {oy})"
-            )
-        self._follow_offset = (ox, oy)
-        # Snap position immediately so particles spawned in the
-        # same frame as follow() is called are already correct.
-        if target is not None and not getattr(target, "is_removed", False):
-            self._x = float(target.x) + ox
-            self._y = float(target.y) + oy
-
-    def update(self, dt: float) -> None:
-        """Advance all particles: move, age, fade, remove dead ones.
-
-        Also spawns new particles if in continuous mode.
-        """
-        # --- iter-46 follow — sync position to target sprite first. ---
-        # If the target has been removed, drop the reference so we
-        # don't silently keep a dead Sprite alive via this link.
-        if self._follow_target is not None:
-            if getattr(self._follow_target, "is_removed", False):
-                self._follow_target = None
-            else:
-                ox, oy = self._follow_offset
-                self._x = float(self._follow_target.x) + ox
-                self._y = float(self._follow_target.y) + oy
-
-        # --- Continuous spawning ---
-        if self._continuous_rate > 0:
-            self._spawn_accum += self._continuous_rate * dt
-            while self._spawn_accum >= 1.0:
-                self._spawn_particle()
-                self._spawn_accum -= 1.0
-
-        # --- Update existing particles ---
-        alive: list[_Particle] = []
-        for p in self._particles:
-            p.remaining -= dt
-            if p.remaining <= 0:
-                p.sprite.remove()
-                continue
-
-            # Move.
-            p.sprite.x = p.sprite._x + p.vx * dt
-            p.sprite.y = p.sprite._y + p.vy * dt
-
-            # Fade.
-            if p.fade_out and p.total_lifetime > 0:
-                ratio = p.remaining / p.total_lifetime
-                p.sprite.opacity = int(255 * max(0.0, ratio))
-
-            alive.append(p)
-
-        self._particles = alive
-
-    # ------------------------------------------------------------------
-    # Immediate removal
-    # ------------------------------------------------------------------
+        self._rate = 0.0
+        self._accum = 0.0
 
     def remove(self) -> None:
-        """Stop spawning and remove all living particles immediately."""
         self.stop()
         for p in self._particles:
             p.sprite.remove()
         self._particles.clear()
         self._game._particle_emitters.discard(self)
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    def update(self, dt: float) -> None:
+        if self._rate > 0:
+            self._accum += self._rate * dt
+            while self._accum >= 1.0:
+                self._spawn()
+                self._accum -= 1.0
+        alive: list[_Particle] = []
+        for p in self._particles:
+            p.remaining -= dt
+            if p.remaining <= 0:
+                p.sprite.remove()
+                continue
+            p.sprite.position = (p.sprite.x + p.vx * dt, p.sprite.y + p.vy * dt)
+            ratio = p.remaining / p.lifetime if p.lifetime > 0 else 0.0
+            if self._fade_out:
+                p.sprite.opacity = int(255 * ratio)
+            if self._shrink:
+                w, h = self._base_size(p.sprite)
+                p.sprite.size = (w * ratio, h * ratio)
+            alive.append(p)
+        self._particles = alive
 
-    def _spawn_particle(self) -> None:
-        """Create one particle sprite with randomised velocity and lifetime."""
+    def _base_size(self, sprite: Sprite) -> tuple[float, float]:
+        if self._size is not None:
+            return self._size
+        return (float(sprite._img_w), float(sprite._img_h))
+
+    def _spawn(self) -> None:
         from saga2d.rendering.sprite import Sprite
 
-        image_name = self._rng.choice(self._images)
-
         sprite = Sprite(
-            image_name,
-            position=(self._x, self._y),
-            anchor=SpriteAnchor.CENTER,
-            layer=self._layer,
+            self._rng.choice(self._images), position=(self._x, self._y), size=self._size,
+            anchor=SpriteAnchor.CENTER, layer=self._layer, space=self._space, tint=self._tint,
         )
-
-        speed = self._rng.uniform(self._speed[0], self._speed[1])
-        angle_deg = self._rng.uniform(self._direction[0], self._direction[1])
-        angle_rad = math.radians(angle_deg)
-        vx = speed * math.cos(angle_rad)
-        vy = speed * math.sin(angle_rad)
-
-        lt = self._rng.uniform(self._lifetime[0], self._lifetime[1])
-
-        self._particles.append(
-            _Particle(
-                sprite=sprite,
-                vx=vx,
-                vy=vy,
-                remaining=lt,
-                total_lifetime=lt,
-                fade_out=self._fade_out,
-            )
-        )
+        speed = self._rng.uniform(*self._speed)
+        angle = math.radians(self._rng.uniform(*self._direction))
+        life = self._rng.uniform(*self._lifetime)
+        self._particles.append(_Particle(sprite, speed * math.cos(angle), speed * math.sin(angle), life, life))

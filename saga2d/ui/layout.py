@@ -1,18 +1,9 @@
-"""Layout enums and pure-math helpers for UI positioning and flow."""
+"""Anchor / Layout enums and the pure layout math behind them."""
 
 from enum import Enum
 
 
 class Anchor(Enum):
-    """Where a component is positioned relative to its parent.
-
-    ``TOP_CENTER`` / ``BOTTOM_CENTER`` / ``LEFT_CENTER`` / ``RIGHT_CENTER``
-    are aliases for ``TOP`` / ``BOTTOM`` / ``LEFT`` / ``RIGHT`` — those
-    anchors already centre on the perpendicular axis, but the explicit
-    name reads more clearly at call sites where the author wants to
-    signal "centered at top" rather than just "top."
-    """
-
     CENTER = "center"
     TOP = "top"
     BOTTOM = "bottom"
@@ -22,8 +13,6 @@ class Anchor(Enum):
     TOP_RIGHT = "top_right"
     BOTTOM_LEFT = "bottom_left"
     BOTTOM_RIGHT = "bottom_right"
-    # Aliases — duplicate values become aliases in Python enums, so
-    # ``Anchor.TOP_CENTER is Anchor.TOP`` == True.
     TOP_CENTER = "top"
     BOTTOM_CENTER = "bottom"
     LEFT_CENTER = "left"
@@ -31,124 +20,54 @@ class Anchor(Enum):
 
 
 class Layout(Enum):
-    """How children are arranged inside a container."""
-
     NONE = "none"
     VERTICAL = "vertical"
     HORIZONTAL = "horizontal"
 
 
 def compute_anchor_position(
-    anchor: Anchor,
-    parent_x: int,
-    parent_y: int,
-    parent_w: int,
-    parent_h: int,
-    child_w: int,
-    child_h: int,
-    margin: int = 0,
+    anchor: Anchor, px: int, py: int, pw: int, ph: int, cw: int, ch: int, margin: int = 0,
 ) -> tuple[int, int]:
-    """Compute top-left (x, y) of a child given its anchor within a parent rect."""
-    if anchor == Anchor.CENTER:
-        x = parent_x + (parent_w - child_w) // 2
-        y = parent_y + (parent_h - child_h) // 2
-    elif anchor == Anchor.TOP:
-        x = parent_x + (parent_w - child_w) // 2
-        y = parent_y + margin
-    elif anchor == Anchor.BOTTOM:
-        x = parent_x + (parent_w - child_w) // 2
-        y = parent_y + parent_h - child_h - margin
-    elif anchor == Anchor.LEFT:
-        x = parent_x + margin
-        y = parent_y + (parent_h - child_h) // 2
-    elif anchor == Anchor.RIGHT:
-        x = parent_x + parent_w - child_w - margin
-        y = parent_y + (parent_h - child_h) // 2
-    elif anchor == Anchor.TOP_LEFT:
-        x = parent_x + margin
-        y = parent_y + margin
-    elif anchor == Anchor.TOP_RIGHT:
-        x = parent_x + parent_w - child_w - margin
-        y = parent_y + margin
-    elif anchor == Anchor.BOTTOM_LEFT:
-        x = parent_x + margin
-        y = parent_y + parent_h - child_h - margin
-    elif anchor == Anchor.BOTTOM_RIGHT:
-        x = parent_x + parent_w - child_w - margin
-        y = parent_y + parent_h - child_h - margin
+    """Top-left of a ``cw × ch`` child anchored inside parent rect ``(px, py, pw, ph)``."""
+    name = anchor.value
+    if name in ("center", "top", "bottom"):
+        x = px + (pw - cw) // 2
+    elif name.endswith("right"):
+        x = px + pw - cw - margin
     else:
-        valid = ", ".join(a.name for a in Anchor)
-        raise ValueError(f"Unknown anchor: {anchor}; valid values: {valid}")
+        x = px + margin
+    if name in ("center", "left", "right"):
+        y = py + (ph - ch) // 2
+    elif name.startswith("bottom"):
+        y = py + ph - ch - margin
+    else:
+        y = py + margin
     return (x, y)
 
 
 def compute_flow_layout(
-    layout: Layout,
-    parent_x: int,
-    parent_y: int,
-    parent_w: int,
-    parent_h: int,
-    children_sizes: list[tuple[int, int]],
-    spacing: int = 0,
-    padding: int = 0,
+    layout: Layout, px: int, py: int, pw: int, ph: int,
+    sizes: list[tuple[int, int]], spacing: int = 0, padding: int = 0,
 ) -> list[tuple[int, int]]:
-    """Compute positions for children in a flow layout.
-
-    Returns a list of (x, y) top-left positions for each child.
-    Children are centered on the cross-axis.
-    """
-    if layout == Layout.NONE or not children_sizes:
-        return []
-
+    """Top-left positions of children laid out in a row or column, centred on the cross axis."""
+    result: list[tuple[int, int]] = []
     if layout == Layout.VERTICAL:
-        result = []
-        y = parent_y + padding
-        for cw, ch in children_sizes:
-            x = parent_x + (parent_w - cw) // 2
-            result.append((x, y))
+        y = py + padding
+        for cw, ch in sizes:
+            result.append((px + (pw - cw) // 2, y))
             y += ch + spacing
-        return result
-
-    if layout == Layout.HORIZONTAL:
-        result = []
-        x = parent_x + padding
-        for cw, ch in children_sizes:
-            y = parent_y + (parent_h - ch) // 2
-            result.append((x, y))
+    elif layout == Layout.HORIZONTAL:
+        x = px + padding
+        for cw, ch in sizes:
+            result.append((x, py + (ph - ch) // 2))
             x += cw + spacing
-        return result
-
-    valid = ", ".join(lay.name for lay in Layout)
-    raise ValueError(f"Unknown layout: {layout}; valid values: {valid}")
+    return result
 
 
-def compute_content_size(
-    layout: Layout,
-    children_sizes: list[tuple[int, int]],
-    spacing: int = 0,
-    padding: int = 0,
-) -> tuple[int, int]:
-    """Compute the minimum size needed to contain all children."""
-    if layout == Layout.NONE or not children_sizes:
+def compute_content_size(layout: Layout, sizes: list[tuple[int, int]], spacing: int = 0, padding: int = 0) -> tuple[int, int]:
+    if layout == Layout.NONE or not sizes:
         return (2 * padding, 2 * padding)
-
+    gaps = (len(sizes) - 1) * spacing
     if layout == Layout.VERTICAL:
-        width = max(cw for cw, _ in children_sizes) + 2 * padding
-        height = (
-            sum(ch for _, ch in children_sizes)
-            + (len(children_sizes) - 1) * spacing
-            + 2 * padding
-        )
-        return (width, height)
-
-    if layout == Layout.HORIZONTAL:
-        height = max(ch for _, ch in children_sizes) + 2 * padding
-        width = (
-            sum(cw for cw, _ in children_sizes)
-            + (len(children_sizes) - 1) * spacing
-            + 2 * padding
-        )
-        return (width, height)
-
-    valid = ", ".join(lay.name for lay in Layout)
-    raise ValueError(f"Unknown layout: {layout}; valid values: {valid}")
+        return (max(w for w, _ in sizes) + 2 * padding, sum(h for _, h in sizes) + gaps + 2 * padding)
+    return (sum(w for w, _ in sizes) + gaps + 2 * padding, max(h for _, h in sizes) + 2 * padding)
