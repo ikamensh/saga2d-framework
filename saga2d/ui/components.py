@@ -38,15 +38,14 @@ def keycap_size(backend: Backend, theme: Theme, key: str) -> tuple[int, int]:
     return (max(tw + 2 * KEYCAP_PAD, h), h + KEYCAP_LIFT)
 
 
-def draw_keycap(backend: Backend, theme: Theme, key: str, x: float, y: float, order: int) -> int:
-    """Draw *key* as a keycap with its top-left at ``(x, y)``; returns its width."""
+def draw_keycap(backend: Backend, theme: Theme, key: str, x: float, y: float, order: int) -> None:
+    """Draw *key* as a keycap (a lifted cap over a dark slab) with its top-left at ``(x, y)``."""
     w, h = keycap_size(backend, theme, key)
     cap_h = h - KEYCAP_LIFT
     backend.draw_polygon(rounded_rect(x, y + KEYCAP_LIFT, w, cap_h, KEYCAP_RADIUS), (0, 0, 0, 110), order=order)
     backend.draw_polygon(rounded_rect(x, y, w, cap_h, KEYCAP_RADIUS), theme.keycap_color, order=order)
     backend.draw_text(key, x + w / 2, y + cap_h / 2, theme.keycap_font_size, theme.keycap_text_color,
                       font=theme.keycap_font or theme.font, anchor_x="center", anchor_y="center", order=order)
-    return w
 
 
 class Label(Component):
@@ -158,10 +157,6 @@ class Button(Component):
     @property
     def state(self) -> str:
         return self._state
-
-    @property
-    def hotkey(self) -> str | None:
-        return self._hotkey
 
     def _resolve(self, state: str = "normal") -> ResolvedStyle:
         theme = self._game.theme if self._game is not None else Theme()
