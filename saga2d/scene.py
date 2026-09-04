@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from saga2d.input import normalize_combo
 from saga2d.rendering.layers import RenderLayer, world_order
+from saga2d.rendering.shapes import draw_box
 
 if TYPE_CHECKING:
     from saga2d.backends.base import Color, Space
@@ -205,17 +206,14 @@ class Scene:
     def draw_rect(
         self, x: float, y: float, width: float, height: float, color: Color, *,
         space: Space = "screen", layer: RenderLayer = RenderLayer.UI_WORLD,
-        border_color: Color | None = None, border_width: float = 0,
+        border_color: Color | None = None, border_width: float = 0, radius: float = 0,
     ) -> None:
-        """Filled rectangle from top-left ``(x, y)``.  *layer* orders world-space draws."""
+        """Filled rectangle from top-left ``(x, y)``, optionally with rounded
+        corners and a border drawn just inside its edge.  *layer* orders
+        world-space draws."""
         order = self._order(space, layer, y + height)
-        backend = self.game.backend
-        if border_color is not None and border_width > 0:
-            backend.draw_rect(x, y, width, height, border_color, space=space, order=order)
-            bw = border_width
-            backend.draw_rect(x + bw, y + bw, max(0.0, width - 2 * bw), max(0.0, height - 2 * bw), color, space=space, order=order)
-        else:
-            backend.draw_rect(x, y, width, height, color, space=space, order=order)
+        draw_box(self.game.backend, x, y, width, height, color, border_color=border_color, border_width=border_width,
+                 radius=radius, space=space, order=order)
 
     def draw_circle(
         self, x: float, y: float, radius: float, color: Color, *,

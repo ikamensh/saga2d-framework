@@ -40,7 +40,10 @@ are two spaces:
 The pyglet backend applies the camera as a view matrix on a render group,
 so scrolling and zooming cost nothing per sprite.  Text is rasterised at
 physical pixel size and positioned in physical pixels, so it stays sharp
-on HiDPI displays at every zoom.
+on HiDPI displays at every zoom.  `Camera.zoom_toward` eases towards a
+target about a fixed screen point; scroll events carry fractional wheel
+lines (trackpads send many small ones), so a scene scales the target by
+a per-line factor instead of stepping per event.
 
 Every draw call carries an integer `order`; lower draws first.  World
 content draws before screen content.  Inside the world, `RenderLayer`
@@ -108,7 +111,11 @@ inside its parent or by a `Panel`'s flow layout, hit-tests its rectangle,
 and draws itself before its children.  `Label` and `ProgressBar` accept
 callables and re-evaluate them every frame, which removes the usual
 "update the label after every state change" plumbing.  `Theme` holds the
-colours, paddings and named `TextStyle`s.
+colours, paddings, corner radii and named `TextStyle`s; a `TextStyle`
+names a font family, and a weight is simply another family (a bundled
+"Nunito SemiBold" file), which is the one mechanism every backend has.
+Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
+`draw_keycap`, so the game's hint strip and its buttons agree.
 
 ## Testing
 

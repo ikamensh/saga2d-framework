@@ -14,10 +14,13 @@ speakers (`SAGA2D_HEADLESS=1` implies it and also hides windows).
 
 ## Tribes in one screen
 
-A 2.5D map of software-rendered low-poly blocks, procedural sound, a title
-screen with map size and tribe count, and animated combat. Capture
-villages, harvest resources inside your borders to level cities up,
-research techs, train units, take every enemy city. Everything has a hotkey:
+A 2.5D map of software-rendered low-poly blocks, units as game pieces on
+a disc so their tile is never in doubt, procedural sound, a title screen
+with map size and tribe count, and animated combat. Capture villages,
+harvest resources inside your borders to level cities up, research techs,
+train units, take every enemy city. Everything has a hotkey, and the UI
+shows them as keycaps (text is Nunito, SIL OFL, bundled in
+`tribes/assets/fonts`):
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
@@ -83,9 +86,10 @@ What you get:
   keys.  Mouse events carry `world_x`/`world_y`.
 * **A scene stack** with transparent overlays, deferred push/pop, and
   per-scene ownership of sprites, timers and particle emitters.
-* **UI**: `Label` (reactive: pass a lambda), `Button`, `Panel`, `Row`,
-  `Column`, `ProgressBar`, anchors, flow layout, and a `Theme` with named
-  text styles.  Text is measured by the backend, so layout fits.
+* **UI**: `Label` (reactive: pass a lambda), `Button` (its `hotkey` is
+  drawn as a keycap), `KeyHints`, `Panel`, `Row`, `Column`, `ProgressBar`,
+  anchors, flow layout, and a `Theme` with named text styles, corner radii
+  and keycap colours.  Text is measured by the backend, so layout fits.
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.

@@ -26,22 +26,24 @@ class Layout(Enum):
 
 
 def compute_anchor_position(
-    anchor: Anchor, px: int, py: int, pw: int, ph: int, cw: int, ch: int, margin: int = 0,
+    anchor: Anchor, px: int, py: int, pw: int, ph: int, cw: int, ch: int, margin: int | tuple[int, int] = 0,
 ) -> tuple[int, int]:
-    """Top-left of a ``cw × ch`` child anchored inside parent rect ``(px, py, pw, ph)``."""
+    """Top-left of a ``cw × ch`` child anchored inside parent rect ``(px, py, pw, ph)``;
+    *margin* insets from the anchored edges, as one value or ``(x, y)``."""
+    mx, my = (margin, margin) if isinstance(margin, int) else margin
     name = anchor.value
     if name in ("center", "top", "bottom"):
         x = px + (pw - cw) // 2
     elif name.endswith("right"):
-        x = px + pw - cw - margin
+        x = px + pw - cw - mx
     else:
-        x = px + margin
+        x = px + mx
     if name in ("center", "left", "right"):
         y = py + (ph - ch) // 2
     elif name.startswith("bottom"):
-        y = py + ph - ch - margin
+        y = py + ph - ch - my
     else:
-        y = py + margin
+        y = py + my
     return (x, y)
 
 

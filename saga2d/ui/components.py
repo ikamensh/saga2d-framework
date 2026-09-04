@@ -1,26 +1,52 @@
-"""Label, Button, Panel, Row, Column, ProgressBar."""
+"""Label, Button, KeyHints, Panel, Row, Column, ProgressBar.
+
+Hotkeys are drawn as *keycaps*: small rounded key labels after a button's
+text and in front of each hint in :class:`KeyHints`, styled by the theme's
+``keycap_*`` settings.
+"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
+from saga2d.rendering.shapes import draw_box, rounded_rect
 from saga2d.ui.base import Component
 from saga2d.ui.layout import Layout, compute_anchor_position, compute_content_size, compute_flow_layout
 from saga2d.ui.theme import Color, ResolvedStyle, Style, TextStyle, Theme, merge_styles
 from saga2d.util.reactive import ReactiveValue
 
 if TYPE_CHECKING:
+    from saga2d.backends.base import Backend
     from saga2d.input import InputEvent
 
+KEYCAP_PAD = 5
+KEYCAP_RADIUS = 4
+KEYCAP_GAP = 8  # between a button's text and its keycap
+KEYCAP_LIFT = 2  # the darker slab showing under a keycap
 
-def _draw_border(component: Component, color: Color, width: int) -> None:
+
+def _draw_component_box(component: Component, resolved: ResolvedStyle) -> None:
     x, y, w, h = component.bounds
-    backend = component._game.backend
-    order = component._order
-    backend.draw_rect(x, y, w, width, color, order=order)
-    backend.draw_rect(x, y + h - width, w, width, color, order=order)
-    backend.draw_rect(x, y, width, h, color, order=order)
-    backend.draw_rect(x + w - width, y, width, h, color, order=order)
+    draw_box(component._game.backend, x, y, w, h, resolved.background_color, border_color=resolved.border_color,
+             border_width=resolved.border_width, radius=resolved.radius, order=component._order)
+
+
+def keycap_size(backend: Backend, theme: Theme, key: str) -> tuple[int, int]:
+    """``(width, height)`` of the keycap drawn for *key*."""
+    tw, th = backend.measure_text(key, theme.keycap_font_size, theme.keycap_font or theme.font)
+    h = th + 4
+    return (max(tw + 2 * KEYCAP_PAD, h), h + KEYCAP_LIFT)
+
+
+def draw_keycap(backend: Backend, theme: Theme, key: str, x: float, y: float, order: int) -> int:
+    """Draw *key* as a keycap with its top-left at ``(x, y)``; returns its width."""
+    w, h = keycap_size(backend, theme, key)
+    cap_h = h - KEYCAP_LIFT
+    backend.draw_polygon(rounded_rect(x, y + KEYCAP_LIFT, w, cap_h, KEYCAP_RADIUS), (0, 0, 0, 110), order=order)
+    backend.draw_polygon(rounded_rect(x, y, w, cap_h, KEYCAP_RADIUS), theme.keycap_color, order=order)
+    backend.draw_text(key, x + w / 2, y + cap_h / 2, theme.keycap_font_size, theme.keycap_text_color,
+                      font=theme.keycap_font or theme.font, anchor_x="center", anchor_y="center", order=order)
+    return w
 
 
 class Label(Component):
@@ -103,7 +129,8 @@ class Label(Component):
 
 class Button(Component):
     """Clickable rectangle with hover/press states.  *text* may be reactive
-    like :class:`Label`; *hotkey* is shown after the text (e.g. ``"[E]"``)."""
+    like :class:`Label`; *hotkey* (``"E"``, ``"Enter"``…) is drawn as a
+    keycap after the text."""
 
     def __init__(
         self,
@@ -132,25 +159,31 @@ class Button(Component):
     def state(self) -> str:
         return self._state
 
-    def _label(self) -> str:
-        self._text_rv.refresh()
-        return f"{self.text}  {self._hotkey}" if self._hotkey else self.text
+    @property
+    def hotkey(self) -> str | None:
+        return self._hotkey
 
     def _resolve(self, state: str = "normal") -> ResolvedStyle:
         theme = self._game.theme if self._game is not None else Theme()
         return theme.resolve_button_style(self.style, state)  # type: ignore[arg-type]
 
+    def _content_size(self, resolved: ResolvedStyle) -> tuple[int, int, int]:
+        """``(text width, keycap width, height)`` of the label and its keycap."""
+        self._text_rv.refresh()
+        if self._game is None:
+            return int(len(self.text) * resolved.font_size * 0.6), 0, int(resolved.font_size * 1.2)
+        backend, theme = self._game.backend, self._game.theme
+        tw, th = backend.measure_text(self.text, resolved.font_size, resolved.font)
+        kw, kh = keycap_size(backend, theme, self._hotkey) if self._hotkey else (0, 0)
+        return tw, kw, max(th, kh)
+
     def get_preferred_size(self) -> tuple[int, int]:
         resolved = self._resolve()
-        label = self._label()
-        if self._game is not None:
-            tw, th = self._game.backend.measure_text(label, resolved.font_size, resolved.font)
-            min_width = self._game.theme.button_min_width
-        else:
-            tw, th, min_width = int(len(label) * resolved.font_size * 0.6), int(resolved.font_size * 1.2), 120
-        w = max(tw + 2 * resolved.padding, min_width) if self._width is None else self._width
-        h = th + 2 * resolved.padding if self._height is None else self._height
-        return (w, h)
+        tw, kw, h = self._content_size(resolved)
+        min_width = self._game.theme.button_min_width if self._game is not None else 120
+        content = tw + (kw + KEYCAP_GAP if kw else 0)
+        w = max(content + 2 * resolved.padding, min_width) if self._width is None else self._width
+        return (w, h + 2 * resolved.padding if self._height is None else self._height)
 
     def on_event(self, event: InputEvent) -> bool:
         if event.type == "move":
@@ -175,14 +208,16 @@ class Button(Component):
             return
         resolved = self._resolve("disabled" if not self.enabled else self._state)
         x, y, w, h = self.bounds
-        backend = self._game.backend
-        backend.draw_rect(x, y, w, h, resolved.background_color, order=self._order)
-        if resolved.border_width > 0 and resolved.border_color is not None:
-            _draw_border(self, resolved.border_color, resolved.border_width)
-        backend.draw_text(
-            self._label(), x + w // 2, y + h // 2, resolved.font_size, resolved.text_color,
-            font=resolved.font, anchor_x="center", anchor_y="center", order=self._order,
-        )
+        backend, theme = self._game.backend, self._game.theme
+        _draw_component_box(self, resolved)
+        tw, kw, _ = self._content_size(resolved)
+        content = tw + (kw + KEYCAP_GAP if kw else 0)
+        left = x + (w - content) / 2
+        backend.draw_text(self.text, left, y + h / 2, resolved.font_size, resolved.text_color,
+                          font=resolved.font, anchor_x="left", anchor_y="center", order=self._order)
+        if self._hotkey:
+            _, kh = keycap_size(backend, theme, self._hotkey)
+            draw_keycap(backend, theme, self._hotkey, left + tw + KEYCAP_GAP, y + (h - kh) / 2, self._order)
 
 
 class Panel(Component):
@@ -261,15 +296,66 @@ class Panel(Component):
     def on_draw(self) -> None:
         if self._game is None:
             return
-        resolved = self._resolve()
-        x, y, w, h = self.bounds
-        if resolved.background_color[3] > 0:
-            self._game.backend.draw_rect(x, y, w, h, resolved.background_color, order=self._order)
-        if resolved.border_width > 0 and resolved.border_color is not None:
-            _draw_border(self, resolved.border_color, resolved.border_width)
+        _draw_component_box(self, self._resolve())
 
 
 _TRANSPARENT = Style(background_color=(0, 0, 0, 0), border_width=0, padding=0)
+
+
+HintItems = list[tuple[str, str]]
+
+
+class KeyHints(Component):
+    """A row of “keycap action” pairs, e.g. ``KeyHints([("E", "end turn"), ("T", "tech")])``.
+    *items* may be a zero-argument callable re-evaluated every frame."""
+
+    def __init__(self, items: HintItems | Callable[[], HintItems], *, text_style: str | TextStyle = "caption",
+                 gap: int = 6, spacing: int = 18, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._items_rv: ReactiveValue[HintItems] = ReactiveValue(items, default=[], on_change=lambda _o, _n: self.invalidate_layout())
+        self._text_style = text_style
+        self._gap = gap
+        self._spacing = spacing
+
+    @property
+    def items(self) -> HintItems:
+        self._items_rv.refresh()
+        return self._items_rv.value
+
+    def _style(self) -> TextStyle:
+        ts = self._text_style
+        return self._game.theme.get_text_style(ts) if isinstance(ts, str) else ts
+
+    def _measure(self) -> list[tuple[str, str, tuple[int, int], int]]:
+        """Per item: key, text, keycap size, text width."""
+        backend, theme = self._game.backend, self._game.theme
+        style = self._style()
+        return [
+            (key, text, keycap_size(backend, theme, key), backend.measure_text(text, style.font_size, style.font or theme.font)[0])
+            for key, text in self.items
+        ]
+
+    def get_preferred_size(self) -> tuple[int, int]:
+        if self._game is None:
+            return (self._width or 0, self._height or 0)
+        measured = self._measure()
+        w = sum(kw + self._gap + tw for _, _, (kw, _), tw in measured) + self._spacing * max(0, len(measured) - 1)
+        h = max((kh for _, _, (_, kh), _ in measured), default=0)
+        return (w if self._width is None else self._width, h if self._height is None else self._height)
+
+    def on_draw(self) -> None:
+        if self._game is None:
+            return
+        backend, theme = self._game.backend, self._game.theme
+        style = self._style()
+        x, y, _w, h = self.bounds
+        order = self._order
+        for key, text, (kw, kh), tw in self._measure():
+            draw_keycap(backend, theme, key, x, y + (h - kh) / 2, order)
+            x += kw + self._gap
+            backend.draw_text(text, x, y + h / 2, style.font_size, style.color, font=style.font or theme.font,
+                              anchor_x="left", anchor_y="center", order=order)
+            x += tw + self._spacing
 
 
 class Row(Panel):

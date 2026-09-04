@@ -21,6 +21,7 @@ class Style:
     border_width: int | None = None
     hover_color: Color | None = None
     press_color: Color | None = None
+    radius: int | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class ResolvedStyle:
     border_width: int
     hover_color: Color
     press_color: Color
+    radius: int
 
 
 _DEFAULT_TEXT_STYLES: dict[str, TextStyle] = {
@@ -70,6 +72,7 @@ class Theme:
         panel_padding: int = 16,
         panel_border_color: Color | None = (71, 85, 105, 255),
         panel_border_width: int = 2,
+        panel_radius: int = 0,
         button_background_color: Color = (51, 65, 85, 255),
         button_hover_color: Color = (71, 85, 105, 255),
         button_press_color: Color = (56, 189, 248, 255),
@@ -79,10 +82,17 @@ class Theme:
         button_padding: int = 10,
         button_font_size: int = 18,
         button_min_width: int = 120,
+        button_radius: int = 0,
+        keycap_color: Color = (255, 255, 255, 36),
+        keycap_text_color: Color = (236, 240, 250, 255),
+        keycap_font: str | None = None,
+        keycap_font_size: int = 12,
         progressbar_color: Color = (56, 189, 248, 255),
         progressbar_bg_color: Color = (15, 23, 42, 220),
         text_styles: dict[str, TextStyle] | None = None,
     ) -> None:
+        """Keycaps are the small rounded key labels buttons and :class:`KeyHints`
+        draw for hotkeys; ``keycap_font`` defaults to the theme font."""
         self.font = font
         self.font_size = font_size
         self.text_color = text_color
@@ -90,6 +100,7 @@ class Theme:
         self.panel_padding = panel_padding
         self.panel_border_color = panel_border_color
         self.panel_border_width = panel_border_width
+        self.panel_radius = panel_radius
         self.button_background_color = button_background_color
         self.button_hover_color = button_hover_color
         self.button_press_color = button_press_color
@@ -99,6 +110,11 @@ class Theme:
         self.button_padding = button_padding
         self.button_font_size = button_font_size
         self.button_min_width = button_min_width
+        self.button_radius = button_radius
+        self.keycap_color = keycap_color
+        self.keycap_text_color = keycap_text_color
+        self.keycap_font = keycap_font
+        self.keycap_font_size = keycap_font_size
         self.progressbar_color = progressbar_color
         self.progressbar_bg_color = progressbar_bg_color
         self._text_styles = dict(_DEFAULT_TEXT_STYLES)
@@ -121,6 +137,7 @@ class Theme:
             text_color=_pick(e.text_color, self.text_color), background_color=_pick(e.background_color, (0, 0, 0, 0)),
             padding=_pick(e.padding, 0), border_color=e.border_color, border_width=_pick(e.border_width, 0),
             hover_color=_pick(e.hover_color, self.button_hover_color), press_color=_pick(e.press_color, self.button_press_color),
+            radius=_pick(e.radius, 0),
         )
 
     def resolve_button_style(self, explicit: Style | None, state: Literal["normal", "hovered", "pressed", "disabled"] = "normal") -> ResolvedStyle:
@@ -138,6 +155,7 @@ class Theme:
             background_color=bg, padding=_pick(e.padding, self.button_padding),
             border_color=_pick(e.border_color, self.panel_border_color), border_width=_pick(e.border_width, self.panel_border_width),
             hover_color=_pick(e.hover_color, self.button_hover_color), press_color=_pick(e.press_color, self.button_press_color),
+            radius=_pick(e.radius, self.button_radius),
         )
 
     def resolve_panel_style(self, explicit: Style | None) -> ResolvedStyle:
@@ -147,6 +165,7 @@ class Theme:
             background_color=_pick(e.background_color, self.panel_background_color), padding=_pick(e.padding, self.panel_padding),
             border_color=_pick(e.border_color, self.panel_border_color), border_width=_pick(e.border_width, self.panel_border_width),
             hover_color=_pick(e.hover_color, self.button_hover_color), press_color=_pick(e.press_color, self.button_press_color),
+            radius=_pick(e.radius, self.panel_radius),
         )
 
 

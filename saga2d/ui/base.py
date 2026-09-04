@@ -23,7 +23,7 @@ class Component:
         width / height: Explicit size, or ``None`` to fit content.
         anchor:  Placement inside the parent rect; ``None`` lets the
                  parent's flow layout decide.
-        margin:  Inset from the anchored edge(s).
+        margin:  Inset from the anchored edge(s); an int or ``(x, y)``.
         visible: Hidden components neither draw nor receive input.
         enabled: Disabled components draw greyed and ignore input.
         style:   :class:`Style` overrides.
@@ -35,17 +35,18 @@ class Component:
         width: int | None = None,
         height: int | None = None,
         anchor: Anchor | None = None,
-        margin: int = 0,
+        margin: int | tuple[int, int] = 0,
         visible: bool = True,
         enabled: bool = True,
         style: Style | None = None,
     ) -> None:
-        if (width is not None and width < 0) or (height is not None and height < 0) or margin < 0:
+        mx, my = (margin, margin) if isinstance(margin, int) else margin
+        if (width is not None and width < 0) or (height is not None and height < 0) or mx < 0 or my < 0:
             raise ValueError(f"width, height and margin must be >= 0, got {width}, {height}, {margin}")
         self._width = width
         self._height = height
         self._anchor = anchor
-        self._margin = margin
+        self._margin = (mx, my)
         self._visible = visible
         self.enabled = enabled
         self.style = style
