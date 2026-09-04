@@ -106,7 +106,7 @@ class Game:
         self._all_sprites: WeakSet[Any] = WeakSet()
         self._animated_sprites: WeakSet[Any] = WeakSet()
         self._action_sprites: WeakSet[Any] = WeakSet()
-        self._particle_emitters: WeakSet[Any] = WeakSet()
+        self._particle_emitters: set[Any] = set()  # strong: a fire-and-forget burst must live until its particles die
         self._mouse: tuple[float, float] | None = None
 
         self._backend.create_window(self._resolution[0], self._resolution[1], title, fullscreen, visible)

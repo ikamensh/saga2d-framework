@@ -252,6 +252,12 @@ class Panel(Component):
         for (child, (cw, ch)), (cx, cy) in zip(visible, positions):
             child.compute_layout(cx, cy, cw, ch)
 
+    def on_event(self, event: InputEvent) -> bool:
+        """Clicks inside an opaque panel stop there instead of reaching the scene."""
+        if event.type in ("click", "release") and self.hit_test(event.x, event.y):
+            return self._resolve().background_color[3] > 0
+        return False
+
     def on_draw(self) -> None:
         if self._game is None:
             return

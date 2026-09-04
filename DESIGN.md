@@ -133,5 +133,8 @@ selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
 rule (movement with terrain and zone of control, the Polytopia combat
 formula, capture, harvest and city growth, research, turn order, healing,
 elimination, score, JSON serialisation).  It has no saga2d imports, so
-the AI and the tests use it directly.  `tribes/scene.py` only turns input
-into model calls and reconciles sprites with the model after each one.
+the AI and the tests use it directly.  `tribes/view.py` lays the grid out
+isometrically and reconciles sprites with the model; `tribes/render3d.py`
+pre-renders the low-poly blocks and props with Pillow; `tribes/effects.py`
+holds transient animations; `tribes/sound.py` synthesises audio;
+`tribes/scene.py` and `tribes/title.py` turn input into model calls.

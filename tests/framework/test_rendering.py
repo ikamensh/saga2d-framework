@@ -206,3 +206,13 @@ def test_save_and_load_round_trip_through_the_top_scene(tmp_path) -> None:
         assert game.load(2) is None
     finally:
         game._teardown()
+
+
+def test_fire_and_forget_burst_finishes_even_when_nothing_references_the_emitter(world: Game, backend) -> None:
+    ParticleEmitter("dot", position=(10, 10), lifetime=(0.1, 0.1)).burst(4)
+    import gc
+
+    gc.collect()
+    assert len(backend.sprites) == 4
+    world.tick(0.2)
+    assert backend.sprites == {}

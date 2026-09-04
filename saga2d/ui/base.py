@@ -46,7 +46,7 @@ class Component:
         self._height = height
         self._anchor = anchor
         self._margin = margin
-        self.visible = visible
+        self._visible = visible
         self.enabled = enabled
         self.style = style
         self._parent: Component | None = None
@@ -57,6 +57,17 @@ class Component:
         self._computed_h = 0
         self._game: Game | None = None
         self._layout_dirty = True
+
+    @property
+    def visible(self) -> bool:
+        return self._visible
+
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        value = bool(value)
+        if value != self._visible:
+            self._visible = value
+            self.invalidate_layout()
 
     # -- Tree ------------------------------------------------------------------
 

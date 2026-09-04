@@ -131,3 +131,41 @@ def test_row_lays_children_left_to_right_in_insertion_order(game: Game) -> None:
     xs = [scene.a.bounds[0], scene.b.bounds[0], scene.c.bounds[0]]
     assert xs == sorted(xs)
     assert scene.b.bounds[0] == scene.a.bounds[0] + scene.a.bounds[2] + 6
+
+
+def test_hiding_a_child_reflows_its_siblings(game: Game) -> None:
+    class S(Scene):
+        def on_enter(self) -> None:
+            self.a, self.b = Label("a"), Label("b")
+            self.ui.add(Column(self.a, self.b, spacing=0, anchor=Anchor.TOP_LEFT))
+
+    scene = S()
+    game.push(scene)
+    game.tick(0.016)
+    y_before = scene.b.bounds[1]
+    scene.a.visible = False
+    game.tick(0.016)
+    assert scene.b.bounds[1] < y_before
+
+
+def test_clicks_inside_an_opaque_panel_do_not_reach_the_scene(game: Game, backend) -> None:
+    clicks: list[str] = []
+
+    class S(Scene):
+        def on_enter(self) -> None:
+            self.panel = Panel(anchor=Anchor.CENTER, width=200, height=100)
+            self.ui.add(self.panel)
+            self.ui.add(Row(Label("ghost"), anchor=Anchor.TOP_LEFT))
+
+        def handle_input(self, event) -> bool:
+            clicks.append(event.type)
+            return True
+
+    scene = S()
+    game.push(scene)
+    game.tick(0.016)
+    x, y, w, h = scene.panel.bounds
+    backend.inject_click(x + w // 2, y + h // 2)  # opaque panel: swallowed
+    backend.inject_click(5, 5)  # transparent Row: passes through
+    game.tick(0.016)
+    assert clicks == ["click"]
