@@ -122,6 +122,10 @@ Mock tests prove logic, not pixels.  `saga2d.testing.render_scene`
 renders through the real pyglet backend into a hidden window and returns
 a PIL image — look at it before shipping a visual change.  Real event
 dispatch can be exercised the same way with `window.dispatch_event`.
+Sound never reaches the speakers from tests or verification scripts:
+the mock backend only records `play_sound` calls, and the pyglet backend
+selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
+`SAGA2D_HEADLESS=1`) is set, still running the real load/play/stop path.
 
 ## Tribes as the reference game
 
