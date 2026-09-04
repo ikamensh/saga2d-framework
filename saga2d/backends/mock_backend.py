@@ -211,10 +211,10 @@ class MockBackend:
     def inject_mouse_move(self, x: int, y: int) -> None:
         self._pending_events.append(MouseEvent(type="move", x=x, y=y))
 
-    def inject_scroll(self, x: int, y: int, dx: int, dy: int) -> None:
+    def inject_scroll(self, x: int, y: int, dx: float, dy: float) -> None:
         self._pending_events.append(MouseEvent(type="scroll", x=x, y=y, dx=dx, dy=dy))
 
-    def inject_drag(self, x: int, y: int, dx: int, dy: int, button: str = "left") -> None:
+    def inject_drag(self, x: int, y: int, dx: float, dy: float, button: str = "left") -> None:
         self._pending_events.append(MouseEvent(type="drag", x=x, y=y, button=button, dx=dx, dy=dy))
 
     def inject_window_event(self, type: str) -> None:

@@ -63,8 +63,8 @@ class MouseEvent:
     x: int
     y: int
     button: str | None = None
-    dx: int = 0
-    dy: int = 0
+    dx: float = 0.0  # drag: pointer movement; scroll: wheel lines, fractional on trackpads
+    dy: float = 0.0
 
 
 @dataclass(frozen=True)

@@ -26,7 +26,10 @@ class InputEvent:
     Mouse: ``type`` is ``"click"``/``"release"``/``"move"``/``"drag"``/
     ``"scroll"``; ``x``/``y`` are logical screen coordinates and
     ``world_x``/``world_y`` the camera-transformed position (equal to
-    ``x``/``y`` when the scene has no camera).
+    ``x``/``y`` when the scene has no camera).  ``dx``/``dy`` carry the
+    pointer movement of a drag or the wheel lines of a scroll; trackpads
+    report fractions of a line, so scroll handling must scale with
+    ``dy`` rather than count events.
     """
 
     type: str
@@ -34,8 +37,8 @@ class InputEvent:
     x: int = 0
     y: int = 0
     button: str | None = None
-    dx: int = 0
-    dy: int = 0
+    dx: float = 0.0
+    dy: float = 0.0
     world_x: float | None = None
     world_y: float | None = None
     shift: bool = False

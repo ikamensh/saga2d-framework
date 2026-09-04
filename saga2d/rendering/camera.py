@@ -26,6 +26,11 @@ _DEFAULT_KEY_BINDINGS: dict[str, tuple[str, ...]] = {
     "left": ("left",), "right": ("right",), "up": ("up",), "down": ("down",),
 }
 
+#: Per-second rate of the eased zoom: the remaining distance to the target
+#: (in log-zoom) shrinks by ``e`` every ``1 / ZOOM_EASE_RATE`` seconds, so a
+#: step is 90% done after about 0.16 s.
+ZOOM_EASE_RATE = 14.0
+
 
 class Camera:
     """Parameters:
@@ -49,6 +54,8 @@ class Camera:
         self._x = 0.0
         self._y = 0.0
         self._zoom = 1.0
+        self._zoom_target = 1.0
+        self._zoom_anchor = (0.0, 0.0)
         self._min_zoom = min_zoom
         self._max_zoom = max_zoom
         self._world_bounds = world_bounds
@@ -86,8 +93,13 @@ class Camera:
     def zoom(self, value: float) -> None:
         if not math.isfinite(value) or value <= 0:
             raise ValueError(f"zoom must be a positive finite number, got {value!r}")
-        self._zoom = max(self._min_zoom, min(self._max_zoom, float(value)))
+        self._zoom = self._zoom_target = max(self._min_zoom, min(self._max_zoom, float(value)))
         self._clamp()
+
+    @property
+    def zoom_target(self) -> float:
+        """Where an eased zoom (:meth:`zoom_toward`) is heading; equals :attr:`zoom` when idle."""
+        return self._zoom_target
 
     @property
     def viewport_width(self) -> int:
@@ -141,10 +153,24 @@ class Camera:
         self._clamp()
 
     def zoom_at(self, factor: float, sx: float, sy: float) -> None:
-        """Multiply zoom by *factor* keeping screen point ``(sx, sy)`` fixed."""
-        wx, wy = self.screen_to_world(sx, sy)
+        """Multiply zoom by *factor* at once, keeping screen point ``(sx, sy)`` fixed."""
         self._cancel_pan()
-        self.zoom = self._zoom * factor
+        self._apply_zoom(self._zoom * factor, sx, sy)
+        self._zoom_target = self._zoom
+
+    def zoom_toward(self, target: float, sx: float, sy: float) -> None:
+        """Ease the zoom to *target* over the next frames, keeping screen point
+        ``(sx, sy)`` fixed.  Repeated calls (a wheel or trackpad stream) move the
+        target; the view follows smoothly instead of jumping per event."""
+        if not math.isfinite(target) or target <= 0:
+            raise ValueError(f"zoom target must be a positive finite number, got {target!r}")
+        self._cancel_pan()
+        self._zoom_target = max(self._min_zoom, min(self._max_zoom, float(target)))
+        self._zoom_anchor = (float(sx), float(sy))
+
+    def _apply_zoom(self, zoom: float, sx: float, sy: float) -> None:
+        wx, wy = self.screen_to_world(sx, sy)
+        self._zoom = max(self._min_zoom, min(self._max_zoom, zoom))
         self._x = wx - sx / self._zoom
         self._y = wy - sy / self._zoom
         self._clamp()
@@ -228,6 +254,11 @@ class Camera:
     # -- Per-frame update --------------------------------------------------------
 
     def update(self, dt: float, mouse: tuple[float, float] | None = None) -> None:
+        if self._zoom_target != self._zoom:
+            remaining = math.log(self._zoom_target / self._zoom) * math.exp(-dt * ZOOM_EASE_RATE)
+            zoom = self._zoom_target if abs(remaining) < 0.001 else self._zoom_target / math.exp(remaining)
+            self._apply_zoom(zoom, *self._zoom_anchor)
+
         target = self._follow_target
         if target is not None:
             if target.is_removed:

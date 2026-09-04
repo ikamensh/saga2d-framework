@@ -129,3 +129,19 @@ def test_window_close_stops_the_game(game: Game, backend) -> None:
     backend.inject_window_event("close")
     game.tick(0.016)
     assert game.running is False
+
+
+def test_scroll_and_drag_deltas_keep_their_fractions(game: Game, backend) -> None:
+    events: list[InputEvent] = []
+
+    class Catch(Scene):
+        def handle_input(self, event: InputEvent) -> bool:
+            events.append(event)
+            return True
+
+    game.push(Catch())
+    backend.inject_scroll(10, 10, 0.0, 0.3)
+    backend.inject_drag(12, 14, 1.5, -0.25, button="right")
+    game.tick(0.016)
+    assert (events[0].type, events[0].dy) == ("scroll", 0.3)
+    assert (events[1].type, events[1].dx, events[1].dy) == ("drag", 1.5, -0.25)

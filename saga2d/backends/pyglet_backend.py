@@ -243,13 +243,14 @@ class PygletBackend:
         def on_mouse_drag(x: int, y: int, dx: int, dy: int, buttons: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
             s = self.scale_factor
-            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=int(dx / s), dy=int(-dy / s)))
+            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=dx / s, dy=-dy / s))
             return True
 
         @window.event
         def on_mouse_scroll(x: int, y: int, scroll_x: float, scroll_y: float) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("scroll", lx, ly, dx=int(scroll_x), dy=int(scroll_y)))
+            # Trackpads report fractions of a line per event; keep them.
+            queue.append(MouseEvent("scroll", lx, ly, dx=float(scroll_x), dy=float(scroll_y)))
             return True
 
         @window.event
