@@ -19,6 +19,8 @@ and images are immediate-mode (re-issued every frame between
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
@@ -31,6 +33,13 @@ FontHandle = Any
 MusicPlayerId = Any
 Space = Literal["screen", "world"]
 Color = tuple[int, int, int, int]
+
+
+def silent_audio(environ: Mapping[str, str] = os.environ) -> bool:
+    """``SAGA2D_SILENT=1`` — or ``SAGA2D_HEADLESS=1``, since headless implies
+    silent — asks backends to keep every sound off the speakers while still
+    running the load/play/stop code paths."""
+    return any(environ.get(name, "").strip() not in ("", "0") for name in ("SAGA2D_SILENT", "SAGA2D_HEADLESS"))
 
 
 @dataclass(frozen=True)
@@ -179,14 +188,23 @@ class Backend(Protocol):
 
     # -- Audio ---------------------------------------------------------------
 
-    def load_sound(self, path: str) -> SoundHandle: ...
+    def load_sound(self, path: str) -> SoundHandle:
+        """Decode a short effect fully into memory; one handle plays any number of times."""
+        ...
 
-    def play_sound(self, handle: SoundHandle, volume: float = 1.0) -> None: ...
+    def play_sound(self, handle: SoundHandle, volume: float = 1.0, pitch: float = 1.0) -> None:
+        """Fire-and-forget playback.  *pitch* 1.0 is nominal; 2.0 plays an
+        octave higher (and twice as fast), 0.5 an octave lower."""
+        ...
 
-    def load_music(self, path: str) -> SoundHandle: ...
+    def load_music(self, path: str) -> SoundHandle:
+        """A streaming source; every call returns a fresh one (streams cannot be shared)."""
+        ...
 
     def play_music(self, handle: SoundHandle, *, loop: bool = True, volume: float = 1.0) -> MusicPlayerId: ...
 
     def set_player_volume(self, player_id: MusicPlayerId, volume: float) -> None: ...
 
-    def stop_player(self, player_id: MusicPlayerId) -> None: ...
+    def stop_player(self, player_id: MusicPlayerId) -> None:
+        """Stop and release a music player; safe on one whose track already ended."""
+        ...

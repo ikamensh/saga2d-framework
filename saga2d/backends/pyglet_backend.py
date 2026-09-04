@@ -19,6 +19,15 @@ World content draws before screen content.  Within a space, the integer
 ``order`` sorts groups; text at an order draws above shapes and sprites
 at the same order.  Immediate shapes at one order are one triangle list
 in insertion order, so overlapping rects draw in call order.
+
+Audio
+-----
+Effects and music go through ``pyglet.media``.  With ``SAGA2D_SILENT=1``
+(or ``SAGA2D_HEADLESS=1`` — headless implies silent) pyglet's silent audio
+driver is selected, so tests and verification scripts exercise the whole
+load/play/stop/teardown path without a sound reaching the speakers.  The
+driver is chosen when ``pyglet.media`` is first imported, which is why the
+option is set at the top of this module.
 """
 
 from __future__ import annotations
@@ -26,11 +35,15 @@ from __future__ import annotations
 from typing import Any
 
 import pyglet
-import pyglet.graphics
-import pyglet.window  # must precede pyglet.gl: it initialises the display
-from pyglet.gl import GL_BLEND, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, glBlendFunc, glDisable, glEnable
 
-from saga2d.backends.base import Color, Event, KeyEvent, MouseEvent, Space, WindowEvent
+from saga2d.backends.base import Color, Event, KeyEvent, MouseEvent, Space, WindowEvent, silent_audio
+
+if silent_audio():
+    pyglet.options["audio"] = ("silent",)  # must precede the first import of pyglet.media
+
+import pyglet.graphics  # noqa: E402
+import pyglet.window  # noqa: E402  must precede pyglet.gl: it initialises the display
+from pyglet.gl import GL_BLEND, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, glBlendFunc, glDisable, glEnable  # noqa: E402
 
 _SCREEN_ORDER_BASE = 1_000_000_000
 
@@ -115,6 +128,7 @@ class PygletBackend:
         self._identity: Any = None
         self._screen_view: Any = None
         self._world_view: Any = None
+        self._sound_players: list[Any] = []  # effects in flight; a pyglet Player stops when garbage collected
 
     # ------------------------------------------------------------------
     # Coordinate helpers
@@ -282,6 +296,11 @@ class PygletBackend:
 
     def poll_events(self) -> list[Event]:
         self.window.dispatch_events()
+        # Media events (a Player's ``on_eos``, which loops music and ends an
+        # effect) are posted from pyglet's audio thread and delivered only by
+        # the platform event loop, which this frame loop replaces.
+        pyglet.app.platform_event_loop.dispatch_posted_events()
+        self._sound_players = [p for p in self._sound_players if p.source is not None]
         events = self._event_queue.copy()
         self._event_queue.clear()
         return events
@@ -511,9 +530,13 @@ class PygletBackend:
     def load_sound(self, path: str) -> Any:
         return pyglet.media.load(path, streaming=False)
 
-    def play_sound(self, handle: Any, volume: float = 1.0) -> None:
-        player = handle.play()
+    def play_sound(self, handle: Any, volume: float = 1.0, pitch: float = 1.0) -> None:
+        player = pyglet.media.Player()
         player.volume = volume
+        player.pitch = pitch
+        player.queue(handle)
+        player.play()
+        self._sound_players.append(player)  # dropped in poll_events once its source ran out
 
     def load_music(self, path: str) -> Any:
         return pyglet.media.load(path, streaming=True)
@@ -530,6 +553,13 @@ class PygletBackend:
         player_id.volume = volume
 
     def stop_player(self, player_id: Any) -> None:
+        # A player whose track ran out was already paused and released by
+        # pyglet (Player.next_source).  Once pyglet's atexit hook has deleted
+        # the audio driver, the OpenAL source under a still-playing player is
+        # gone and pause() would call alSourcePause(None) — so pause only a
+        # playing player on a live driver.  delete() is idempotent in pyglet.
+        if player_id.playing and pyglet.media.get_audio_driver() is not None:
+            player_id.pause()
         player_id.delete()
 
 

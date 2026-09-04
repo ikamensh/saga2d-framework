@@ -172,8 +172,8 @@ class MockBackend:
             self._loaded_sounds[path] = self._make_id("sound")
         return self._loaded_sounds[path]
 
-    def play_sound(self, handle: str, volume: float = 1.0) -> None:
-        self.sounds_played.append({"handle": handle, "volume": volume})
+    def play_sound(self, handle: str, volume: float = 1.0, pitch: float = 1.0) -> None:
+        self.sounds_played.append({"handle": handle, "volume": volume, "pitch": pitch})
 
     def load_music(self, path: str) -> str:
         if path not in self._loaded_music:
