@@ -76,34 +76,44 @@ model calls.
 
 ## Warband in one screen
 
-A top-down map of meadows, woods and lakes under a soft fog of war; a base
-in each corner with a gold mine and a wood beside it.  Peasants mine gold
-and fell trees, build farms for supply, a barracks for footmen, archers and
-knights, and guard towers; the AI does the same and attacks in growing
-waves.  Raze every enemy building and hunt down what is left.  Selection
-by click or drag box, right-click does the sensible thing (move, harvest,
-attack, resume building), a context command card with keycaps, control
-groups, a minimap that pans and orders, alerts, save/load, and a march
-under it all.
+A top-down map of meadows, woods and lakes under a soft fog of war, in
+summer, winter or wasteland; a base for each of two to four players with a
+gold mine and a wood beside it.  Peasants mine gold and fell trees; farms
+feed the army; a barracks, lumber mill, blacksmith, stables, workshop and
+church open seven units and nine upgrades; guard towers hold the line.
+Three AI difficulties expand, upgrade, raid and attack in growing waves.
+Raze every enemy building and hunt down what is left.  Selection by click
+or drag box, right-click does the sensible thing (move, harvest, attack,
+resume building), a context command card with keycaps, control groups,
+patrol, camera bookmarks, a minimap that pans and orders, alerts, three
+save slots with an autosave, persisted settings, a tutorial strip, a
+codex, and two marches under it all.
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
 | Drag / click | select | Right click | move · harvest · attack · rally point |
-| Shift | add to selection / queue orders | A | attack-move |
-| S / H | stop / hold | B then F B H T | build farm · barracks · town hall · tower |
-| P / F / A / K | train peasant · footman · archer · knight | Ctrl+1-9 / 1-9 | assign / recall a group |
+| Shift | add to selection / queue orders | A / P | attack-move / patrol |
+| S / H | stop / hold | B then F B H T M K S W C | build farm · barracks · hall · tower · mill · smith · stables · workshop · church |
+| Letters on the card | train and research in the selected building | Ctrl+1-9 / 1-9 | assign / recall a group |
 | Tab / . | next idle peasant / soldier | Space | jump to the last alert |
 | Arrows, edges, middle-drag | scroll | Wheel, + / − | zoom |
-| F3 / F5 / F9 | pause / save / load | Esc, F1, F10 | cancel · help · menu |
+| F3 / F5 / F9 | pause / quicksave / quickload | Esc, F1, F2, F10 | cancel · help · codex · menu |
 
 The game is `warband/`: `model.py` is a 20 Hz fixed-step simulation with
-orders, harvesting, construction, supply, towers, fog and elimination;
-`path.py` is A*; `mapgen.py` lays out and connects the bases; `ai.py` runs
-each computer player; `textures.py` paints the ground and renders every
-prop and unit through `saga2d.render3d`'s front camera; `view.py` keeps
-sprites in step with the model and draws the fog and minimap as dynamic
-images; `sound.py` synthesises the effects and the march; `scene.py` and
-`title.py` are the saga2d scenes.
+orders, harvesting, construction, supply, upgrades, towers, fog and
+elimination; `path.py` is A*; `mapgen.py` lays out and connects the bases
+and audits fairness; `ai.py` runs each computer player from a profile per
+difficulty; `textures.py` paints the ground and renders every prop and unit
+through `saga2d.render3d`'s front camera; `view.py` keeps sprites in step
+with the model and draws the fog, the minimap and the moving water;
+`sound.py` synthesises the effects and the marches; `scene.py`, `title.py`
+and `tutorial.py` are the saga2d scenes.  The tools: `fuzz_warband.py`
+(AI matches with invariants, monkey input), `verify_warband.py` (real
+pyglet events with frames to look at), `ai_report.py` (difficulties against
+a scripted opening and against each other), `map_report.py` (fairness over
+seeds), `perf_warband.py` (frame times of a 150-unit battle),
+`soak_warband.py` (whole matches on the real backend) and
+`build_warband.py` (a self-tested standalone build).
 
 ## The framework
 
