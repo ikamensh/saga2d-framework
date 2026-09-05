@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from saga2d.audio import AudioManager
     from saga2d.backends.base import Backend
     from saga2d.save import SaveManager
+    from saga2d.settings import Settings
     from saga2d.ui.theme import Theme
 
 _logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ class Game:
         self._assets: AssetManager | None = None
         self._audio: AudioManager | None = None
         self._save_manager: SaveManager | None = None
+        self._settings: Settings | None = None
 
         self.running = True
         self._scene_stack = SceneStack(self)
@@ -172,16 +174,28 @@ class Game:
         return self._input
 
     @property
+    def data_dir(self) -> Path:
+        """Where this game keeps its files: the parent of the save directory (``~/.<title>`` by default)."""
+        if self._save_dir is not None:
+            return self._save_dir.parent
+        slug = "".join(c if c.isalnum() else "_" for c in self._title.lower()).strip("_")
+        return Path.home() / f".{slug}"
+
+    @property
     def save_manager(self) -> SaveManager:
         if self._save_manager is None:
             from saga2d.save import SaveManager
 
-            save_dir = self._save_dir
-            if save_dir is None:
-                slug = "".join(c if c.isalnum() else "_" for c in self._title.lower()).strip("_")
-                save_dir = Path.home() / f".{slug}" / "saves"
-            self._save_manager = SaveManager(save_dir)
+            self._save_manager = SaveManager(self._save_dir if self._save_dir is not None else self.data_dir / "saves")
         return self._save_manager
+
+    def settings(self, defaults: dict[str, Any]) -> Settings:
+        """The game's persisted preferences (``<data_dir>/settings.json``), created on first use."""
+        if self._settings is None:
+            from saga2d.settings import Settings
+
+            self._settings = Settings(self.data_dir / "settings.json", defaults)
+        return self._settings
 
     @property
     def scene(self) -> Scene | None:
@@ -214,17 +228,18 @@ class Game:
 
     # -- Save / load -----------------------------------------------------------
 
-    def save(self, slot: int, scene: Scene | None = None) -> None:
-        """Write *scene*'s :meth:`Scene.get_save_state` to *slot* (default: the top scene).
+    def save(self, slot: int | str, scene: Scene | None = None) -> None:
+        """Write *scene*'s :meth:`Scene.get_save_state` to *slot* (default: the top scene),
+        with :meth:`Scene.get_save_summary` for save browsers.
 
         An overlay that offers "Save" passes the scene it covers: its own pop is
         deferred, so it is still the top scene while the handler runs.
         """
         target = scene if scene is not None else self.scene
         if target is not None:
-            self.save_manager.save(slot, target.get_save_state(), type(target).__name__)
+            self.save_manager.save(slot, target.get_save_state(), type(target).__name__, summary=target.get_save_summary())
 
-    def load(self, slot: int, scene: Scene | None = None) -> dict[str, Any] | None:
+    def load(self, slot: int | str, scene: Scene | None = None) -> dict[str, Any] | None:
         """Read *slot* into *scene* (default: the top scene).  Returns the raw save,
         or ``None`` when the slot is empty.  A slot written by another scene class
         is refused: feeding it to the wrong scene would fail half-way through."""
