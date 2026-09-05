@@ -147,6 +147,15 @@ independent `tools/demo_settings.py` example.
 
 ## Audio ownership
 
+`saga2d.synth` provides pure sample composition and WAV export. Tribes and
+Warband had the same tone/noise/envelope/mix code; Shardbound needs original
+assets generated before packaging. Tribes now imports those helpers while
+retaining its compositions and cache. Shardbound will use the same functions
+at build time and ordinary `game.audio` playback at runtime. These functions
+need no Game or resource lifetime. The framework does not choose cue names,
+music transitions or caching policy. See the independent
+[synthesis example](docs/framework-synth.md).
+
 `AudioManager` keeps independent master/music/SFX levels. Changing a level or
 muting updates sounds already playing as well as future sounds, preserving
 each effect's local gain. The backend owns native effect and music players;
