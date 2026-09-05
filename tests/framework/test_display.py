@@ -93,3 +93,19 @@ def test_headless_mode_cannot_open_fullscreen(game, monkeypatch):
     assert not game.fullscreen
     game.set_window_size((900, 600))
     assert game.window_size == (900, 600)
+
+
+def test_fullscreen_preview_cancel_restores_the_actual_windowed_size(game):
+    """A settings dialog can snapshot fullscreen, preview a size, then cancel faithfully."""
+    game.backend.inject_resize(940, 720)
+    game.tick(1 / 60)
+    assert game.windowed_size == game.window_size == (940, 720)
+    game.set_fullscreen(True)
+    entry_size, entry_fullscreen = game.windowed_size, game.fullscreen
+    game.set_window_size((1280, 800))
+    assert game.windowed_size == game.window_size == (1280, 800)
+    game.set_window_size(entry_size)
+    game.set_fullscreen(entry_fullscreen)
+    assert game.fullscreen and game.windowed_size == (940, 720)
+    game.set_fullscreen(False)
+    assert game.windowed_size == game.window_size == (940, 720)

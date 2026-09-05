@@ -153,6 +153,14 @@ class Game:
         return self._backend.window_size
 
     @property
+    def windowed_size(self) -> tuple[int, int]:
+        """Actual windowed size, or the size restored when leaving fullscreen.
+
+        Snapshot this with ``fullscreen`` before previewing display changes.
+        """
+        return self._backend.windowed_size
+
+    @property
     def assets(self) -> AssetManager:
         if self._assets is None:
             from saga2d.assets import AssetManager

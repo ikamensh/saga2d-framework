@@ -357,6 +357,10 @@ class PygletBackend:
             return round(width / self.window.scale), round(height / self.window.scale)
         return width, height
 
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        return self._windowed_size if self.fullscreen else self.window_size
+
     def set_fullscreen(self, fullscreen: bool) -> None:
         if fullscreen == self.fullscreen:
             return
