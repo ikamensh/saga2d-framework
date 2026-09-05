@@ -1,11 +1,13 @@
 # Saga2D
 
-A small Python framework for 2D games, and **Tribes**, a Polytopia-style
-strategy game built on it.
+A small Python framework for 2D games, and two games built on it:
+**Tribes**, a Polytopia-style turn-based strategy game, and **Warband**, a
+Warcraft 2-style real-time strategy game.
 
 ```bash
 uv sync --extra dev
 uv run python -m tribes            # title screen; --seed 7 jumps straight into a map
+uv run python -m warband           # title screen; --seed 3 starts a match directly
 uv run python -m pytest tests -q   # headless suite, a few seconds
 ```
 
@@ -45,6 +47,37 @@ tribes, `textures.py` pre-renders the isometric blocks and props with
 effect and the ambient loop with numpy (cached under `~/.tribes`), and
 `scene.py` plus `title.py` are the saga2d scenes that turn input into
 model calls.
+
+## Warband in one screen
+
+A top-down map of meadows, woods and lakes under a soft fog of war; a base
+in each corner with a gold mine and a wood beside it.  Peasants mine gold
+and fell trees, build farms for supply, a barracks for footmen, archers and
+knights, and guard towers; the AI does the same and attacks in growing
+waves.  Raze every enemy building and hunt down what is left.  Selection
+by click or drag box, right-click does the sensible thing (move, harvest,
+attack, resume building), a context command card with keycaps, control
+groups, a minimap that pans and orders, alerts, save/load, and a march
+under it all.
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| Drag / click | select | Right click | move · harvest · attack · rally point |
+| Shift | add to selection / queue orders | A | attack-move |
+| S / H | stop / hold | B then F B H T | build farm · barracks · town hall · tower |
+| P / F / A / K | train peasant · footman · archer · knight | Ctrl+1-9 / 1-9 | assign / recall a group |
+| Tab / . | next idle peasant / soldier | Space | jump to the last alert |
+| Arrows, edges, middle-drag | scroll | Wheel, + / − | zoom |
+| F3 / F5 / F9 | pause / save / load | Esc, F1, F10 | cancel · help · menu |
+
+The game is `warband/`: `model.py` is a 20 Hz fixed-step simulation with
+orders, harvesting, construction, supply, towers, fog and elimination;
+`path.py` is A*; `mapgen.py` lays out and connects the bases; `ai.py` runs
+each computer player; `textures.py` paints the ground and renders every
+prop and unit through `saga2d.render3d`'s front camera; `view.py` keeps
+sprites in step with the model and draws the fog and minimap as dynamic
+images; `sound.py` synthesises the effects and the march; `scene.py` and
+`title.py` are the saga2d scenes.
 
 ## The framework
 
@@ -87,7 +120,7 @@ What you get:
   display's pixel density stay crisp on HiDPI screens.
 * **Declarative input.**  `controls` maps keys and chords to methods;
   `bind_key` does the same at runtime; `game.input.is_pressed` polls held
-  keys.  Mouse events carry `world_x`/`world_y`.
+  keys.  Mouse events carry `world_x`/`world_y` and the modifier keys.
 * **A scene stack** with transparent overlays, deferred push/pop, and
   per-scene ownership of sprites, timers and particle emitters.
 * **UI**: `Label` (reactive: pass a lambda), `Button` (its `hotkey` is
@@ -97,6 +130,12 @@ What you get:
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.
+* **Shared by both games**: `saga2d.render3d` (a Pillow low-poly renderer
+  with a configurable camera), `saga2d.effects` (floating text, pulses,
+  bursts, hit reactions, banners, toasts), `saga2d.synth` (procedural sound
+  with a WAV cache and a bank), `saga2d.fonts` (bundled Nunito), dynamic
+  images (`assets.update_image` for fog of war and minimaps), and a
+  `Minimap` component.
 * **A mock backend** that records every draw call for headless tests, and
   `saga2d.testing.render_scene` for offscreen screenshots you can look at.
 * **Audio** with `master`/`music`/`sfx` channels, pitch variation, mute,
