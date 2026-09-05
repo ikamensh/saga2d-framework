@@ -38,8 +38,8 @@ keycaps (text is Nunito, SIL OFL, bundled in `tribes/assets/fonts`):
 
 The game is `tribes/`: `model.py` holds every rule (pure Python, no
 rendering), `mapgen.py` builds connected maps, `ai.py` plays the other
-tribes, `render3d.py` is a tiny Pillow software renderer that
-`textures.py` uses to pre-render the isometric blocks and props,
+tribes, `textures.py` pre-renders the isometric blocks and props with
+`saga2d.render3d` (a tiny Pillow software renderer with a configurable camera),
 `view.py` lays the map out and keeps sprites in step with the model,
 `effects.py` holds the transient animations, `sound.py` synthesises every
 effect and the ambient loop with numpy (cached under `~/.tribes`), and
