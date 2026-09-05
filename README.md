@@ -27,8 +27,10 @@ autosaves and explicit backup recovery preserve battles and pending choices.
 
 The [player guide](eador/README.md) includes a tested opening and controls.
 The [reference research](docs/eador-research.md) records the source material,
-scope and deliberate simplifications. This is one complete shard with
-original art, not the commercial game's content catalogue or astral campaign.
+scope and deliberate simplifications. The game now offers a three-shard
+linked campaign with challenge choices, a traveling retinue and one recovery
+expedition, alongside quick standalone shards. Its original content and
+bounded progression are described in the [linked journey](docs/eador-linked-ui.md).
 The [Early Access criteria](docs/early-access-criteria.md) define the larger
 release goal; [progress and remaining gaps](docs/early-access-progress.md)
 are tracked explicitly. The current build is a development milestone.
