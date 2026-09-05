@@ -128,6 +128,7 @@ class PygletBackend:
         self._identity: Any = None
         self._screen_view: Any = None
         self._world_view: Any = None
+        self._applied_view: Any = None
         self._sound_players: list[Any] = []  # effects in flight; a pyglet Player stops when garbage collected
 
     # ------------------------------------------------------------------
@@ -159,6 +160,7 @@ class PygletBackend:
             @ Mat4.from_translation(Vec3(-cx * zoom, self.logical_height + cy * zoom, 0))
             @ Mat4.from_scale(Vec3(zoom, zoom, 1))
         )
+        self._applied_view = None
 
     def _to_physical(self, x: float, y: float, space: Space) -> tuple[float, float]:
         """Framework coords in *space* → physical pixels (y-up)."""
@@ -356,9 +358,15 @@ class PygletBackend:
         key = (space, order)
         group = self._text_groups.get(key)
         if group is None:
-            group = pyglet.graphics.Group(order=_group_order(space, order) + 1)
+            group = _TextGroup(self, _group_order(space, order) + 1)
             self._text_groups[key] = group
         return group
+
+    def _apply_view(self, view: Any) -> None:
+        """Upload the view matrix only when it changes: hundreds of groups share two matrices."""
+        if self._applied_view is not view:
+            self.window.view = view
+            self._applied_view = view
 
     # ------------------------------------------------------------------
     # Images and sprites
@@ -591,19 +599,35 @@ class _ViewGroup(pyglet.graphics.Group):
 
     def set_state(self) -> None:
         backend = self._backend
-        backend.window.view = backend._world_view if self._space == "world" else backend._screen_view
+        backend._apply_view(backend._world_view if self._space == "world" else backend._screen_view)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     def unset_state(self) -> None:
         glDisable(GL_BLEND)
-        self._backend.window.view = self._backend._identity
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _ViewGroup) and other._order == self._order and other._space == self._space
 
     def __hash__(self) -> int:
         return hash((_ViewGroup, self._order, self._space))
+
+
+class _TextGroup(pyglet.graphics.Group):
+    """Labels are positioned in physical pixels: they draw under the identity view."""
+
+    def __init__(self, backend: PygletBackend, order: int) -> None:
+        super().__init__(order=order)
+        self._backend = backend
+
+    def set_state(self) -> None:
+        self._backend._apply_view(self._backend._identity)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _TextGroup) and other._order == self._order
+
+    def __hash__(self) -> int:
+        return hash((_TextGroup, self._order))
 
 
 class _ShaderChild(pyglet.graphics.ShaderGroup):

@@ -51,7 +51,12 @@ a per-line factor instead of stepping per event.
 Every draw call carries an integer `order`; lower draws first.  World
 content draws before screen content.  Inside the world, `RenderLayer`
 bands (`BACKGROUND < OBJECTS < UNITS < EFFECTS < UI_WORLD`) set the
-order; sprites with `y_sort=True` add their bottom edge inside the band.
+order; sprites with `y_sort=True` add their bottom edge inside the band,
+in steps of `Y_SORT_STEP` (eight units).  Every distinct order is a batch
+group in pyglet and a moving sprite migrates between groups as its order
+changes, so a step of one pixel made a 150-unit battle spend most of its
+frame re-sorting groups; eight is invisible on 32-unit tiles and cheap.  The backend also
+uploads a view matrix only when consecutive groups need different ones.
 Screen-space UI is ordered by the scene's position in the stack (with a
 stride of four orders per level), so an overlay always draws above the
 scene beneath it.  Text at an order draws above shapes and images at the
@@ -167,6 +172,13 @@ selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
   A-minor bank are each a page of generators.
 * `fonts` — Nunito in three weights, one family per weight because pyglet
   cannot pick a weight out of a variable font.
+* `settings` — a JSON preferences file with defaults that keeps working
+  when the file is corrupt; `Game.settings(defaults)` puts it in the game's
+  `data_dir` next to the saves.  Save slots may be names as well as numbers
+  (`"autosave"`, `"quick"`), carry a `summary` from `Scene.get_save_summary`
+  for save browsers, and `list_slots` reports a corrupt file instead of
+  raising, so a browser can say so.  `Game.set_fullscreen` toggles the
+  window; `Toast(top=)` keeps notices clear of a game's own strips.
 
 ## Warband as the second reference game
 

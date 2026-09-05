@@ -14,13 +14,18 @@ class RenderLayer(IntEnum):
 
 
 #: Width of one layer's band in the integer draw order.  Sprites with
-#: ``y_sort=True`` add their bottom edge (in world units) inside the band.
+#: ``y_sort=True`` add their bottom edge (in world units, in steps of
+#: ``Y_SORT_STEP``) inside the band.
 LAYER_BAND = 100_000
+#: Y-sorted sprites within this many world units of each other share a draw
+#: order: every distinct order is a batch group, and a moving sprite changes
+#: group each time its order changes, so finer steps cost more per frame.
+Y_SORT_STEP = 8
 
 
 def world_order(layer: RenderLayer, y: float = 0.0) -> int:
     """Draw order for world-space content on *layer* at bottom-edge *y*."""
-    return int(layer) * LAYER_BAND + int(y)
+    return int(layer) * LAYER_BAND + int(y) // Y_SORT_STEP
 
 
 class SpriteAnchor(Enum):
