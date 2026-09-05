@@ -1,16 +1,37 @@
 # Saga2D
 
-A small Python framework for 2D games, and **Tribes**, a Polytopia-style
-strategy game built on it.
+A small Python framework for 2D games, exercised by **Tribes**, a
+Polytopia-style strategy game, and **Shardbound**, a compact Eador-inspired
+campaign with a province map and separate tactical battles.
 
 ```bash
 uv sync --extra dev
 uv run python -m tribes            # title screen; --seed 7 jumps straight into a map
+uv run python -m eador             # Shardbound; --seed 7 --hero Wizard skips the title
 uv run python -m pytest tests -q   # headless suite, a few seconds
 ```
 
 Set `SAGA2D_SILENT=1` to keep any pyglet-backed script or test off the
 speakers (`SAGA2D_HEADLESS=1` implies it and also hides windows).
+
+## Shardbound
+
+Choose one of four heroes, develop a stronghold, explore guarded ruins,
+recruit an army, and take Duskspire before the rival reaches Westwatch.
+The 19-province campaign carries wounds, casualties and experience between
+hex battles. Movement highlights, exact attack previews, two spells,
+optional automatic rounds and saves during battle keep the tactics usable.
+An explored, provisioned campaign takes roughly 8–14 strategic turns.
+
+The [player guide](eador/README.md) includes a tested opening and controls.
+The [reference research](docs/eador-research.md) records the source material,
+scope and deliberate simplifications. This is one complete shard with
+original art, not the commercial game's content catalogue or astral campaign.
+
+```bash
+uv run python tools/fuzz_eador.py       # seeded rule and scene-input checks
+uv run python tools/verify_eador.py     # real input + PNGs in /tmp/shardbound
+```
 
 ## Tribes in one screen
 
@@ -82,6 +103,12 @@ What you get:
   `Camera` (pan, zoom, shake) on the GPU; `"screen"` is for UI.  Sprites
   default to world space; `draw_rect`, `draw_circle`, `draw_line`,
   `draw_polygon`, `draw_text` and `draw_image` take `space=`.
+* **Measured paragraphs.** `Scene.draw_paragraph(text, x, y, width)` wraps
+  against the actual font and returns the height for subsequent layout.
+* **Hex boards.** `HexGrid(cells, size=..., origin=...)` supplies centers,
+  corners, picking, neighbors, weighted movement ranges and shortest paths.
+  The game supplies terrain costs and occupied cells. See the
+  [small runnable cookbook](docs/framework-hexgrid.md).
 * **Sprites with a logical size.**  `Sprite("name", size=(64, 64))` draws
   any texture at that size, so procedural textures rendered at the
   display's pixel density stay crisp on HiDPI screens.
