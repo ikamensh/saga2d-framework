@@ -21,12 +21,17 @@ recruit an army, and take Duskspire before the rival reaches Westwatch.
 The 19-province campaign carries wounds, casualties and experience between
 hex battles. Movement highlights, exact attack previews, two spells,
 optional automatic rounds and saves during battle keep the tactics usable.
-An explored, provisioned campaign takes roughly 8–14 strategic turns.
+Heroes choose between two class disciplines as they level; six adventure
+types award relics with combat and economy effects. Manual slots, rolling
+autosaves and explicit backup recovery preserve battles and pending choices.
 
 The [player guide](eador/README.md) includes a tested opening and controls.
 The [reference research](docs/eador-research.md) records the source material,
 scope and deliberate simplifications. This is one complete shard with
 original art, not the commercial game's content catalogue or astral campaign.
+The [Early Access criteria](docs/early-access-criteria.md) define the larger
+release goal; [progress and remaining gaps](docs/early-access-progress.md)
+are tracked explicitly. The current build is a development milestone.
 
 ```bash
 uv run python tools/fuzz_eador.py       # seeded rule and scene-input checks

@@ -171,6 +171,24 @@ and save slots. Results are transparent scenes, so they cover underlying
 text and route input correctly without custom render orders. Campaign saves
 include a pending battle; applying its result clears it exactly once.
 
+Early Access work keeps a second persistence boundary explicit:
+`SaveManager` validates the generic file envelope, stages durable atomic
+writes and retains one previous file. `load_backup(slot)` opens that
+previous file only when requested; it never silently replaces current data.
+Both games benefit from safe file I/O without sharing a campaign schema.
+`eador.persistence.CampaignSaves` owns three manual slots, three rolling
+autosaves, schema compatibility and the saved-state descriptions shown in
+Shardbound's browser. Sites, skills, relics and unresolved choices stay in
+`eador.content` and its model. These are game rules rather than generic
+framework quest, equipment or progression systems.
+
+Scene reliability is likewise shared: an input batch stops applying old
+events after a scene transition is requested, and failed scene startup
+releases acquired resources without calling an exit hook on a partially
+initialized scene. Game startup and teardown preserve the original failure
+while releasing the window and singleton. Independent integration tests
+exercise these guarantees without either game's models.
+
 The framework owns geometry and presentation mechanics. It has no province,
 economy, hero, army, spell, turn, combat, faction or victory abstraction.
 Both rule modules run without a window, and only import Saga2D's pure
