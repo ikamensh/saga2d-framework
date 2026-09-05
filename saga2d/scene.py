@@ -25,8 +25,12 @@ if TYPE_CHECKING:
     from saga2d.ui.theme import TextStyle
 
 #: Screen-space immediate draws of scene-stack level ``k`` use order
-#: ``UI_ORDER_BASE + k`` so overlays always draw above the scene below.
+#: ``UI_ORDER_BASE + k * UI_ORDER_STRIDE`` so overlays always draw above the
+#: scene below.  Within a level, images draw above shapes and text above
+#: both; the orders in between the levels let a component put a shape over
+#: an image it drew (a minimap's viewport frame) with ``order + 1``.
 UI_ORDER_BASE = 1_000_000
+UI_ORDER_STRIDE = 4
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
@@ -201,7 +205,7 @@ class Scene:
     def _order(self, space: Space, layer: RenderLayer, y: float) -> int:
         if space == "world":
             return world_order(layer, y)
-        return UI_ORDER_BASE + self._level
+        return UI_ORDER_BASE + self._level * UI_ORDER_STRIDE
 
     def draw_rect(
         self, x: float, y: float, width: float, height: float, color: Color, *,

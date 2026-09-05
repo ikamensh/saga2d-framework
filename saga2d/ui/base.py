@@ -189,13 +189,13 @@ class Component:
     @property
     def _order(self) -> int:
         """Screen-space draw order: the owning scene's level in the stack."""
-        from saga2d.scene import UI_ORDER_BASE
+        from saga2d.scene import UI_ORDER_BASE, UI_ORDER_STRIDE
 
         root = self
         while root._parent is not None:
             root = root._parent
         scene = getattr(root, "_scene", None)
-        return UI_ORDER_BASE + (scene._level if scene is not None else 0)
+        return UI_ORDER_BASE + (scene._level if scene is not None else 0) * UI_ORDER_STRIDE
 
     @staticmethod
     def _propagate_game(component: Component, game: Game | None) -> None:
