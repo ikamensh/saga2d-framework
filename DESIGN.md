@@ -77,6 +77,31 @@ same order, images above shapes; shapes at one order draw in call order.
 The spare orders inside a level let a component put a shape over an image
 it drew (the minimap's viewport frame).
 
+## Window display
+
+`Game.set_fullscreen(bool)` adopts the committed Warband interface. Together
+with `set_window_size((width, height))` and the read-only `fullscreen` and
+`window_size` properties, it gives Warband, Shardbound and Tribes one small
+display seam. Games choose their presets, shortcuts and persistence policy.
+There is no second window manager or framework settings screen.
+
+Window size changes and OS border dragging retain the logical resolution,
+camera coordinates and UI layout. Selecting a size leaves fullscreen;
+toggling fullscreen restores the last actual windowed size. The native window
+is now resizable. Getters report actual backend state, including OS size
+constraints, rather than the last request. The mock exposes the same behavior
+and `inject_resize` for OS-resize journeys.
+
+The Pyglet adapter contains the native details: desktop fullscreen, Cocoa
+content-point/backing-pixel normalization, projection refresh after context
+recreation, and clipping all drawing to the letterboxed canvas. A native
+reproduction showed the unnormalized toggle doubling a Retina window's size;
+image assertions caught stale fullscreen projection and drawing in the bars.
+The independent [display example](docs/framework-display.md) checks native
+UI and world picking, retained sprites, screenshots and actual size restoration.
+This is physical presentation of one canvas, not logical resizing or a text
+scaling implementation.
+
 ## Retained sprites, immediate shapes
 
 `Sprite` is retained: the backend keeps a GPU sprite and is only told

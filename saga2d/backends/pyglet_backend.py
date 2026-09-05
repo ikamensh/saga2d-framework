@@ -32,6 +32,7 @@ option is set at the top of this module.
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import pyglet
@@ -109,6 +110,7 @@ class PygletBackend:
         self.scale_factor = 1.0
         self.offset_x = 0.0
         self.offset_y = 0.0
+        self._clip_rect = (0, 0, 0, 0)
         self.camera: tuple[float, float, float] = (0.0, 0.0, 1.0)
         self._event_queue: list[Event] = []
         self._sprites: dict[int, Any] = {}
@@ -133,14 +135,22 @@ class PygletBackend:
         self._players: dict[int, Any] = {}
         self._sound_players: set[int] = set()
         self._next_player_id = 0
+        self._windowed_size = (0, 0)
 
     # ------------------------------------------------------------------
     # Coordinate helpers
     # ------------------------------------------------------------------
 
     def _compute_viewport(self, physical_w: int, physical_h: int) -> None:
+        from pyglet import gl
         from pyglet.math import Mat4, Vec3
 
+        if physical_w <= 0 or physical_h <= 0:  # Minimized surfaces have no usable viewport.
+            return
+        self.window.switch_to()
+        framebuffer_w, framebuffer_h = self.window.get_framebuffer_size()
+        gl.glViewport(0, 0, framebuffer_w, framebuffer_h)
+        self.window.projection = Mat4.orthogonal_projection(0, physical_w, 0, physical_h, -8192, 8192)
         lw, lh = self.logical_width, self.logical_height
         if physical_w / physical_h > lw / lh:
             self.scale_factor = physical_h / lh
@@ -151,6 +161,9 @@ class PygletBackend:
             self.offset_x = 0.0
             self.offset_y = (physical_h - lh * self.scale_factor) / 2
         s = self.scale_factor
+        pixel_x, pixel_y = framebuffer_w / physical_w, framebuffer_h / physical_h
+        self._clip_rect = (round(self.offset_x * pixel_x), round(self.offset_y * pixel_y),
+                           round(lw * s * pixel_x), round(lh * s * pixel_y))
         self._screen_view = Mat4.from_translation(Vec3(self.offset_x, self.offset_y, 0)) @ Mat4.from_scale(Vec3(s, s, 1))
         self._update_world_view()
 
@@ -196,12 +209,12 @@ class PygletBackend:
         try:
             config = pyglet.gl.Config(sample_buffers=1, samples=4, double_buffer=True)
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, fullscreen=fullscreen,
-                vsync=True, visible=visible, config=config,
+                width=width, height=height, caption=title, resizable=True,
+                vsync=True, visible=visible and not fullscreen, config=config,
             )
         except pyglet.window.NoSuchConfigException:
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, fullscreen=fullscreen, vsync=True, visible=visible,
+                width=width, height=height, caption=title, resizable=True, vsync=True, visible=visible and not fullscreen,
             )
         self.batch = pyglet.graphics.Batch()
         self._identity = Mat4()
@@ -211,6 +224,10 @@ class PygletBackend:
         )
         self._compute_viewport(self.window.width, self.window.height)
         self._register_handlers()
+        self._windowed_size = self.window_size
+        if fullscreen:
+            self.set_fullscreen(True)
+            self.window.set_visible(visible)
 
     def _register_handlers(self) -> None:
         window = self.window
@@ -285,6 +302,7 @@ class PygletBackend:
         self._label_uses.clear()
 
     def end_frame(self) -> None:
+        from pyglet import gl
         from pyglet.gl import GL_TRIANGLES
 
         self._frame += 1
@@ -297,7 +315,12 @@ class PygletBackend:
             if last_used != self._frame:
                 label.delete()
                 del self._labels[key]
-        self.batch.draw()
+        gl.glEnable(gl.GL_SCISSOR_TEST)
+        gl.glScissor(*self._clip_rect)
+        try:
+            self.batch.draw()
+        finally:
+            gl.glDisable(gl.GL_SCISSOR_TEST)
         self.window.flip()
 
     def poll_events(self) -> list[Event]:
@@ -323,10 +346,37 @@ class PygletBackend:
             self.window.close()
             self.window = None
 
+    @property
+    def fullscreen(self) -> bool:
+        return self.window.fullscreen
+
+    @property
+    def window_size(self) -> tuple[int, int]:
+        width, height = self.window.get_size()
+        # Pyglet's Cocoa platform/scaled modes return backing pixels here but
+        # accept content points in set_size/fullscreen recreation. Keep that
+        # mismatch inside this adapter; do not change rendering/input units.
+        if sys.platform == "darwin" and pyglet.options.dpi_scaling in ("platform", "scaled"):
+            return round(width / self.window.scale), round(height / self.window.scale)
+        return width, height
+
     def set_fullscreen(self, fullscreen: bool) -> None:
-        if self.window is not None and self.window.fullscreen != fullscreen:
-            self.window.set_fullscreen(fullscreen)
-            self._compute_viewport(self.window.width, self.window.height)
+        if fullscreen == self.fullscreen:
+            return
+        if fullscreen:
+            self._windowed_size = self.window_size
+            self.window.set_fullscreen(True)
+        else:
+            self.window.set_fullscreen(False, width=self._windowed_size[0], height=self._windowed_size[1])
+        self._compute_viewport(self.window.width, self.window.height)
+
+    def set_window_size(self, width: int, height: int) -> None:
+        if self.fullscreen:
+            self.window.set_fullscreen(False, width=width, height=height)
+        else:
+            self.window.set_size(width, height)
+        self._windowed_size = self.window_size
+        self._compute_viewport(self.window.width, self.window.height)
 
     def capture_frame(self) -> Any:
         """PIL image of the frame most recently presented by :meth:`end_frame`."""
