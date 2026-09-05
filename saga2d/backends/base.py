@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 ImageHandle = Any
 SoundHandle = Any
 FontHandle = Any
-MusicPlayerId = Any
+PlayerId = Any
 Space = Literal["screen", "world"]
 Color = tuple[int, int, int, int]
 
@@ -207,19 +207,32 @@ class Backend(Protocol):
         """Decode a short effect fully into memory; one handle plays any number of times."""
         ...
 
-    def play_sound(self, handle: SoundHandle, volume: float = 1.0, pitch: float = 1.0) -> None:
-        """Fire-and-forget playback.  *pitch* 1.0 is nominal; 2.0 plays an
-        octave higher (and twice as fast), 0.5 an octave lower."""
+    def play_sound(self, handle: SoundHandle, volume: float = 1.0, pitch: float = 1.0) -> PlayerId:
+        """Start an effect and return its opaque playback ID.
+
+        The backend retains it until it ends or is stopped. *pitch* 1.0 is
+        nominal; 2.0 plays an octave higher (and twice as fast), 0.5 lower.
+        """
         ...
 
     def load_music(self, path: str) -> SoundHandle:
         """A streaming source; every call returns a fresh one (streams cannot be shared)."""
         ...
 
-    def play_music(self, handle: SoundHandle, *, loop: bool = True, volume: float = 1.0) -> MusicPlayerId: ...
+    def play_music(self, handle: SoundHandle, *, loop: bool = True, volume: float = 1.0) -> PlayerId: ...
 
-    def set_player_volume(self, player_id: MusicPlayerId, volume: float) -> None: ...
+    def set_player_volume(self, player_id: PlayerId, volume: float) -> None:
+        """Set current gain; a player that has already ended stays ended."""
+        ...
 
-    def stop_player(self, player_id: MusicPlayerId) -> None:
-        """Stop and release a music player; safe on one whose track already ended."""
+    def is_player_playing(self, player_id: PlayerId) -> bool:
+        """Whether an effect or music player still has a source to play."""
+        ...
+
+    def stop_player(self, player_id: PlayerId) -> None:
+        """Stop and release a player; safe on one whose source already ended."""
+        ...
+
+    def stop_sounds(self) -> None:
+        """Stop and release every active sound effect, leaving music alone."""
         ...

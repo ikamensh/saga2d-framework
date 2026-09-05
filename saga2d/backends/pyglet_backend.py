@@ -130,7 +130,9 @@ class PygletBackend:
         self._screen_view: Any = None
         self._world_view: Any = None
         self._applied_view: Any = None
-        self._sound_players: list[Any] = []  # effects in flight; a pyglet Player stops when garbage collected
+        self._players: dict[int, Any] = {}
+        self._sound_players: set[int] = set()
+        self._next_player_id = 0
 
     # ------------------------------------------------------------------
     # Coordinate helpers
@@ -304,7 +306,9 @@ class PygletBackend:
         # effect) are posted from pyglet's audio thread and delivered only by
         # the platform event loop, which this frame loop replaces.
         pyglet.app.platform_event_loop.dispatch_posted_events()
-        self._sound_players = [p for p in self._sound_players if p.source is not None]
+        for player_id, player in list(self._players.items()):
+            if player.source is None:
+                self.stop_player(player_id)
         events = self._event_queue.copy()
         self._event_queue.clear()
         return events
@@ -313,6 +317,8 @@ class PygletBackend:
         return pyglet.clock.tick()
 
     def quit(self) -> None:
+        for player_id in list(self._players):
+            self.stop_player(player_id)
         if self.window is not None:
             self.window.close()
             self.window = None
@@ -564,37 +570,59 @@ class PygletBackend:
     def load_sound(self, path: str) -> Any:
         return pyglet.media.load(path, streaming=False)
 
-    def play_sound(self, handle: Any, volume: float = 1.0, pitch: float = 1.0) -> None:
+    def play_sound(self, handle: Any, volume: float = 1.0, pitch: float = 1.0) -> int:
         player = pyglet.media.Player()
         player.volume = volume
         player.pitch = pitch
         player.queue(handle)
         player.play()
-        self._sound_players.append(player)  # dropped in poll_events once its source ran out
+        player_id = self._track_player(player)
+        self._sound_players.add(player_id)
+        return player_id
 
     def load_music(self, path: str) -> Any:
         return pyglet.media.load(path, streaming=True)
 
-    def play_music(self, handle: Any, *, loop: bool = True, volume: float = 1.0) -> Any:
+    def play_music(self, handle: Any, *, loop: bool = True, volume: float = 1.0) -> int:
         player = pyglet.media.Player()
         player.queue(handle)
         player.loop = loop
         player.volume = volume
         player.play()
-        return player
+        return self._track_player(player)
 
-    def set_player_volume(self, player_id: Any, volume: float) -> None:
-        player_id.volume = volume
+    def _track_player(self, player: Any) -> int:
+        player_id = self._next_player_id
+        self._next_player_id += 1
+        self._players[player_id] = player
+        return player_id
 
-    def stop_player(self, player_id: Any) -> None:
+    def set_player_volume(self, player_id: int, volume: float) -> None:
+        player = self._players.get(player_id)
+        if player is not None:
+            player.volume = volume
+
+    def is_player_playing(self, player_id: int) -> bool:
+        player = self._players.get(player_id)
+        return player is not None and player.source is not None
+
+    def stop_sounds(self) -> None:
+        for player_id in list(self._sound_players):
+            self.stop_player(player_id)
+
+    def stop_player(self, player_id: int) -> None:
+        player = self._players.pop(player_id, None)
+        self._sound_players.discard(player_id)
+        if player is None:
+            return
         # A player whose track ran out was already paused and released by
         # pyglet (Player.next_source).  Once pyglet's atexit hook has deleted
         # the audio driver, the OpenAL source under a still-playing player is
         # gone and pause() would call alSourcePause(None) — so pause only a
         # playing player on a live driver.  delete() is idempotent in pyglet.
-        if player_id.playing and pyglet.media.get_audio_driver() is not None:
-            player_id.pause()
-        player_id.delete()
+        if player.playing and pyglet.media.get_audio_driver() is not None:
+            player.pause()
+        player.delete()
 
 
 def _image_data(pil_image: Any) -> Any:

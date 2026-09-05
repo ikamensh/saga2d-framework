@@ -3,7 +3,7 @@
 Tests inspect ``mock.sprites``, ``mock.rects``, ``mock.circles``,
 ``mock.lines``, ``mock.polygons``, ``mock.texts``, ``mock.images``,
 ``mock.image_updates``, ``mock.camera``, ``mock.sounds_played``,
-``mock.frame_count`` and feed
+``mock.sounds_playing``, ``mock.frame_count`` and feed
 input with ``inject_key`` / ``inject_click`` / ``inject_mouse_move`` /
 ``inject_scroll`` / ``inject_drag``.  Coordinates are recorded as given
 (logical space, no flip, no scaling).
@@ -40,6 +40,7 @@ class MockBackend:
         self.fullscreen: bool = False
 
         self.sounds_played: list[dict[str, Any]] = []
+        self.sounds_playing: dict[str, dict[str, Any]] = {}
         self.music_playing: str | None = None
         self.music_volume: float = 1.0
         self._music_players: dict[str, dict[str, Any]] = {}
@@ -87,6 +88,9 @@ class MockBackend:
         return 1.0 / 60.0
 
     def quit(self) -> None:
+        self.stop_sounds()
+        for player_id in list(self._music_players):
+            self.stop_player(player_id)
         self.is_running = False
 
     def set_fullscreen(self, fullscreen: bool) -> None:
@@ -183,8 +187,12 @@ class MockBackend:
             self._loaded_sounds[path] = self._make_id("sound")
         return self._loaded_sounds[path]
 
-    def play_sound(self, handle: str, volume: float = 1.0, pitch: float = 1.0) -> None:
-        self.sounds_played.append({"handle": handle, "volume": volume, "pitch": pitch})
+    def play_sound(self, handle: str, volume: float = 1.0, pitch: float = 1.0) -> str:
+        player = {"handle": handle, "volume": volume, "pitch": pitch}
+        self.sounds_played.append(player.copy())
+        pid = self._make_id("player")
+        self.sounds_playing[pid] = player
+        return pid
 
     def load_music(self, path: str) -> str:
         if path not in self._loaded_music:
@@ -199,14 +207,24 @@ class MockBackend:
         return pid
 
     def set_player_volume(self, player_id: str, volume: float) -> None:
-        self._music_players[player_id]["volume"] = volume
-        self.music_volume = volume
+        if player_id in self.sounds_playing:
+            self.sounds_playing[player_id]["volume"] = volume
+        elif player_id in self._music_players:
+            self._music_players[player_id]["volume"] = volume
+            self.music_volume = volume
+
+    def is_player_playing(self, player_id: str) -> bool:
+        return player_id in self.sounds_playing or player_id in self._music_players
 
     def stop_player(self, player_id: str) -> None:
-        player = self._music_players.pop(player_id)
-        if self.music_playing == player["handle"]:
+        self.sounds_playing.pop(player_id, None)
+        player = self._music_players.pop(player_id, None)
+        if player is not None and self.music_playing == player["handle"]:
             self.music_playing = None
             self.music_volume = 1.0
+
+    def stop_sounds(self) -> None:
+        self.sounds_playing.clear()
 
     # -- Test helpers: event injection ---------------------------------------
 

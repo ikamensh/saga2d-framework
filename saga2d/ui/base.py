@@ -217,6 +217,39 @@ class _UIRoot(Component):
     def get_preferred_size(self) -> tuple[int, int]:
         return (self._computed_w, self._computed_h)
 
+    def handle_event(self, event: InputEvent) -> bool:
+        """Let normal UI consume first, then resolve live button shortcuts."""
+        if super().handle_event(event):
+            return True
+        if event.type != "key_press":
+            return False
+        from saga2d.ui.components import Button
+
+        matches = []
+        for component in self.walk():
+            if not isinstance(component, Button) or event.combo not in component._shortcuts:
+                continue
+            ancestor: Component | None = component
+            enabled = True
+            while ancestor is not None:
+                if not ancestor.visible:
+                    break
+                enabled = enabled and ancestor.enabled
+                ancestor = ancestor.parent
+            else:
+                # A visible disabled control reserves its key, so a scene's
+                # fallback cannot bypass the disabled state.
+                matches.append((component, enabled))
+        if len(matches) > 1:
+            names = ", ".join(repr(button.text) for button, _ in matches)
+            raise ValueError(f"duplicate button shortcut {event.combo!r}: {names}")
+        if matches:
+            button, enabled = matches[0]
+            if enabled:
+                button._activate()
+            return True
+        return False
+
     def _update_tree(self, dt: float) -> None:
         for component in list(self.walk(include_self=True)):
             if component.visible:

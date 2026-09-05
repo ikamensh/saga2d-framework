@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from saga2d import AssetManager, AssetNotFoundError, AudioManager, Game
+from saga2d import AssetManager, AssetNotFoundError, AudioManager, Game, Scene
 from saga2d.backends.base import silent_audio
 
 
@@ -66,6 +66,87 @@ def test_mute_silences_running_music_and_unmute_restores_its_volume(audio: Audio
     assert backend.music_volume == 0.0
     audio.muted = False
     assert backend.music_volume == pytest.approx(0.3)
+
+
+def test_live_effects_follow_volume_and_mute_without_losing_relative_gain(audio: AudioManager, backend) -> None:
+    """A sustained effect responds to settings immediately, preserving its own gain."""
+    audio.play_sound("ping", volume=.8)
+    audio.play_sound("ping", volume=.2)
+    audio.set_volume("master", .5)
+    audio.set_volume("sfx", .5)
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == pytest.approx([.2, .05])
+    audio.muted = True
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == [0, 0]
+    audio.set_volume("sfx", .4)
+    audio.muted = False
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == pytest.approx([.16, .04])
+    assert [sound["volume"] for sound in backend.sounds_played] == [.8, .2]
+
+
+def test_effect_settings_are_local_to_their_manager_and_channel(audio: AudioManager, backend, tmp_path: Path) -> None:
+    other = AudioManager(backend, AssetManager(backend, base_path=tmp_path))
+    audio.play_sound("ping", volume=.8)
+    other.play_sound("ping", volume=.2)
+    audio.play_music("theme")
+    audio.set_volume("music", .3)
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == [.8, .2]
+    audio.set_volume("sfx", .5)
+    assert backend.music_volume == .3
+    audio.muted = True
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == [0, .2]
+    other.set_volume("master", .5)
+    audio.muted = False
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == pytest.approx([.4, .1])
+    assert backend.music_volume == .3
+
+
+def test_stopped_effects_stay_stopped_when_settings_change(audio: AudioManager, backend) -> None:
+    audio.play_sound("ping")
+    audio.play_music("theme")
+    player = next(iter(backend.sounds_playing))
+    backend.stop_sounds()
+    assert backend.music_playing is not None
+    backend.stop_player(player)
+    audio.muted = True
+    audio.set_volume("master", .5)
+    audio.muted = False
+    assert not backend.is_player_playing(player)
+    assert backend.sounds_playing == {}
+    audio.play_sound("ping")
+    assert [sound["volume"] for sound in backend.sounds_playing.values()] == [.5]
+
+
+@pytest.mark.parametrize("fail_on_exit", [False, True])
+def test_game_run_releases_effects_and_music_on_exit(tmp_path: Path, monkeypatch, fail_on_exit: bool) -> None:
+    monkeypatch.delenv("SAGA2D_HEADLESS", raising=False)
+    write_wav(tmp_path / "sounds" / "ping.wav", seconds=10)
+    write_wav(tmp_path / "music" / "theme.wav", seconds=10)
+    game = Game("audio cleanup", backend="mock", asset_path=tmp_path)
+
+    class Playing(Scene):
+        def on_enter(self) -> None:
+            game.audio.play_sound("ping")
+            game.audio.play_music("theme")
+            # A game's sound bank can own another manager on the same backend.
+            other = AudioManager(game.backend, AssetManager(game.backend, base_path=tmp_path))
+            other.play_sound("ping")
+            other.play_music("theme")
+            assert len(game.backend.sounds_playing) == 2
+            game.quit()
+
+        def on_exit(self) -> None:
+            if fail_on_exit:
+                raise RuntimeError("scene cleanup failed")
+
+    if fail_on_exit:
+        with pytest.raises(RuntimeError, match="scene cleanup failed"):
+            game.run(Playing())
+    else:
+        game.run(Playing())
+    assert game.backend.sounds_playing == {}
+    assert game.backend.music_playing is None
+    assert game.audio.music_name is None
+    assert not game.backend.is_running
 
 
 def test_music_starts_stops_and_stop_is_idempotent(audio: AudioManager, backend) -> None:
