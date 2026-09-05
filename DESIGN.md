@@ -158,7 +158,34 @@ and Warband's command-card routing exposed the same duplicated binding and
 disabled-state checks. The [shortcut example](docs/framework-button-shortcuts.md)
 demonstrates the primitive independently of those games.
 
+## Persistent preferences
+
+`Settings` persists a game's preferences independently of campaign saves.
+Warband's committed mapping/defaults interface is shared through
+`game.settings(defaults, validator=...)` and `game.data_dir`. Tribes' volume
+options, Warband's display/audio preferences and Shardbound's accessibility
+settings need the same file lifecycle, while their ranges, enums and runtime
+effects remain game code. Known keys retain their JSON kind; a game validator
+can reject its own invalid values without declaring an options schema.
+
+Loading errors are explicit on `settings.error`; defaults remain usable in
+memory so the game can present recovery. Ordinary save refuses damaged data.
+Reset stays in memory until save, which retains the displaced file's exact
+bytes under a unique recovery name. Save slots and settings share only private
+durable file staging/replacement in `_fileio.py`; each owns its validation and
+backup policy. See [the settings guide](docs/framework-settings.md) and the
+independent `tools/demo_settings.py` example.
+
 ## Audio ownership
+
+`saga2d.synth` provides pure sample composition and WAV export. Tribes and
+Warband had the same tone/noise/envelope/mix code; Shardbound needs original
+assets generated before packaging. Tribes now imports those helpers while
+retaining its compositions and cache. Shardbound will use the same functions
+at build time and ordinary `game.audio` playback at runtime. These functions
+need no Game or resource lifetime. The framework does not choose cue names,
+music transitions or caching policy. See the independent
+[synthesis example](docs/framework-synth.md).
 
 `AudioManager` keeps independent master/music/SFX levels. Changing a level or
 muting updates sounds already playing as well as future sounds, preserving
@@ -208,10 +235,12 @@ selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
   wants: floating text, pulses, particle bursts, hit flashes with knockback,
   dissolves, a turn banner and a toast.  They draw through the scene's
   helpers and the theme's text styles, so they look like the game they run in.
-* `synth` — `tone`, `noise`, `thump`, `mix`, `level`, `pan` and a
-  `SynthBank` that renders a game's generators to WAV once (versioned) and
-  plays them through an `AudioManager`.  Tribes' D-major bank and Warband's
-  A-minor bank are each a page of generators.
+* `synth` — `tone`, `noise`, `thump`, `mix`, `level`, `pan` and
+  `write_wav`: pure synthesis shared by every game.  Each game owns its bank
+  (which names it renders to WAV, the version marker, playback through its
+  `AudioManager`): Tribes' D-major bank in `tribes/sound.py`, Warband's
+  A-minor `SynthBank` in `warband/sound.py`.  The two banks are alike; if a
+  third game wants one, that is the moment to lift it back into saga2d.
 * `fonts` — Nunito in three weights, one family per weight because pyglet
   cannot pick a weight out of a variable font.
 * `settings` — a JSON preferences file with defaults that keeps working

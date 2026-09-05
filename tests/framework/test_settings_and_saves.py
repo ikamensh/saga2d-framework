@@ -1,31 +1,10 @@
-"""saga2d.settings and the save slots: defaults, corrupt files, named slots, summaries."""
+"""The game's data directory, named save slots, summaries and corrupt files in the browser (settings semantics: test_settings.py)."""
 
-import json
 from pathlib import Path
 
 import pytest
 
 from saga2d import Game, SaveError, Scene
-from saga2d.settings import Settings
-
-
-def test_settings_fill_defaults_persist_and_survive_a_bad_file(tmp_path: Path) -> None:
-    path = tmp_path / "settings.json"
-    s = Settings(path, {"music": 0.6, "edge_scroll": True, "name": "x"})
-    assert s["music"] == 0.6 and dict(s) == {"music": 0.6, "edge_scroll": True, "name": "x"} and s.error is None
-    s["music"] = 0.2
-    s["extra"] = [1, 2]
-    s.save()
-    again = Settings(path, {"music": 0.6, "edge_scroll": True, "name": "x", "new": 5})
-    assert again["music"] == 0.2 and again["extra"] == [1, 2] and again["new"] == 5
-    path.write_text('{"music": "loud", "edge_scroll": false}')
-    typed = Settings(path, {"music": 0.6, "edge_scroll": True})
-    assert typed["music"] == 0.6 and typed["edge_scroll"] is False  # a wrong kind of value keeps the default
-    path.write_text("{not json")
-    broken = Settings(path, {"music": 0.6})
-    assert broken["music"] == 0.6 and broken.error is not None
-    broken.save()
-    assert json.loads(path.read_text()) == {"music": 0.6}
 
 
 def test_game_owns_a_data_dir_with_saves_and_settings(tmp_path: Path) -> None:

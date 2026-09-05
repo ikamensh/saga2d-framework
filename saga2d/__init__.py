@@ -25,6 +25,7 @@ from saga2d.input import InputEvent, InputManager
 from saga2d.rendering import Camera, ParticleEmitter, RenderLayer, Sprite, SpriteAnchor
 from saga2d.save import SaveError, SaveManager
 from saga2d.scene import Scene
+from saga2d.settings import Settings, SettingsError
 from saga2d.ui import Anchor, Button, Column, Component, KeyHints, Label, Layout, Minimap, Panel, ProgressBar, Row, Style, TextStyle, Theme
 from saga2d.util.collision import Rect, aabb_overlap
 from saga2d.util.reactive import ReactiveValue
@@ -35,5 +36,5 @@ __all__ = [
     "Column", "Component", "Delay", "Do", "Ease", "Event", "FadeIn", "FadeOut", "Game", "HexGrid", "InputEvent", "InputManager",
     "KeyEvent", "KeyHints", "Label", "Layout", "Minimap", "MouseEvent", "MoveTo", "Panel", "Parallel", "ParticleEmitter", "PlayAnim",
     "ProgressBar", "ReactiveValue", "Rect", "Remove", "RenderLayer", "Repeat", "Row", "SaveError", "SaveManager",
-    "Scene", "Sequence", "Sprite", "SpriteAnchor", "Style", "TextStyle", "Theme", "WindowEvent", "aabb_overlap", "tween",
+    "Scene", "Sequence", "Settings", "SettingsError", "Sprite", "SpriteAnchor", "Style", "TextStyle", "Theme", "WindowEvent", "aabb_overlap", "tween",
 ]

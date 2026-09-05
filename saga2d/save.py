@@ -40,13 +40,11 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import tempfile
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from saga2d._fileio import durable_write
 
 
 class SaveError(Exception):
@@ -120,15 +118,10 @@ class SaveManager:
             self._validate_payload(payload)
             text = json.dumps(payload, indent=2, allow_nan=False)
             previous = self.load(slot)
-            self._save_dir.mkdir(parents=True, exist_ok=True)
-            with self._staged_file(path, text) as staged:
-                if previous is not None:
-                    backup = self._backup_path(slot)
-                    with self._staged_file(backup, json.dumps(previous, indent=2, allow_nan=False)) as staged_backup:
-                        staged_backup.replace(backup)
-                        self._sync_directory()
-                staged.replace(path)
-                self._sync_directory()
+            backup = None if previous is None else (
+                self._backup_path(slot), json.dumps(previous, indent=2, allow_nan=False).encode("utf-8")
+            )
+            durable_write(path, text.encode("utf-8"), backup=backup)
         except (OSError, TypeError, ValueError, RecursionError) as exc:
             raise SaveError(
                 f"Cannot write save file for slot {slot}: {path}: {exc}"
@@ -209,27 +202,6 @@ class SaveManager:
             return None
         except (ValueError, TypeError, OSError, RecursionError) as exc:
             raise SaveError(f"Cannot load save file {path}: {exc}") from exc
-
-    @contextmanager
-    def _staged_file(self, path: Path, text: str) -> Iterator[Path]:
-        descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-        staged = Path(name)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-                stream.write(text)
-                stream.flush()
-                os.fsync(stream.fileno())
-            yield staged
-        finally:
-            staged.unlink(missing_ok=True)
-
-    def _sync_directory(self) -> None:
-        if os.name == "posix":
-            descriptor = os.open(self._save_dir, os.O_RDONLY)
-            try:
-                os.fsync(descriptor)
-            finally:
-                os.close(descriptor)
 
     @staticmethod
     def _validate_payload(data: Any) -> dict[str, Any]:

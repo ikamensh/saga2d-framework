@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 from weakref import WeakSet
@@ -175,11 +176,24 @@ class Game:
 
     @property
     def data_dir(self) -> Path:
-        """Where this game keeps its files: the parent of the save directory (``~/.<title>`` by default)."""
+        """The parent of the save directory, or ``~/.<title>`` by default."""
         if self._save_dir is not None:
             return self._save_dir.parent
         slug = "".join(c if c.isalnum() else "_" for c in self._title.lower()).strip("_")
         return Path.home() / f".{slug}"
+
+    def settings(self, defaults: Mapping[str, Any], *,
+                 validator: Callable[[Mapping[str, Any]], None] | None = None) -> Settings:
+        """Shared preferences in ``<data_dir>/settings.json``.
+
+        Defaults and the optional game validator are configured on first use;
+        later calls return that same object. Check its ``error`` after loading.
+        """
+        if self._settings is None:
+            from saga2d.settings import Settings
+
+            self._settings = Settings(self.data_dir / "settings.json", defaults, validator=validator)
+        return self._settings
 
     @property
     def save_manager(self) -> SaveManager:
@@ -188,14 +202,6 @@ class Game:
 
             self._save_manager = SaveManager(self._save_dir if self._save_dir is not None else self.data_dir / "saves")
         return self._save_manager
-
-    def settings(self, defaults: dict[str, Any]) -> Settings:
-        """The game's persisted preferences (``<data_dir>/settings.json``), created on first use."""
-        if self._settings is None:
-            from saga2d.settings import Settings
-
-            self._settings = Settings(self.data_dir / "settings.json", defaults)
-        return self._settings
 
     @property
     def scene(self) -> Scene | None:
