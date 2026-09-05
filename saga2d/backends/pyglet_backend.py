@@ -314,6 +314,11 @@ class PygletBackend:
             self.window.close()
             self.window = None
 
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        if self.window is not None and self.window.fullscreen != fullscreen:
+            self.window.set_fullscreen(fullscreen)
+            self._compute_viewport(self.window.width, self.window.height)
+
     def capture_frame(self) -> Any:
         """PIL image of the frame most recently presented by :meth:`end_frame`."""
         import ctypes

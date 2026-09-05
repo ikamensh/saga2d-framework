@@ -37,6 +37,7 @@ class MockBackend:
         self.clear_color: Color | None = None
         self.frame_count: int = 0
         self.is_running: bool = True
+        self.fullscreen: bool = False
 
         self.sounds_played: list[dict[str, Any]] = []
         self.music_playing: str | None = None
@@ -87,6 +88,9 @@ class MockBackend:
 
     def quit(self) -> None:
         self.is_running = False
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        self.fullscreen = fullscreen
 
     def capture_frame(self) -> Image.Image:
         return Image.new("RGBA", (self.logical_width, self.logical_height), (0, 0, 0, 255))

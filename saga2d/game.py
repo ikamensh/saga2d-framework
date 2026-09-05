@@ -270,6 +270,9 @@ class Game:
     def quit(self) -> None:
         self.running = False
 
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        self._backend.set_fullscreen(fullscreen)
+
     def tick(self, dt: float | None = None) -> None:
         """Run one frame: input → update → systems → draw."""
         if dt is None:

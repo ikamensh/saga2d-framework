@@ -105,6 +105,10 @@ class Backend(Protocol):
 
     def quit(self) -> None: ...
 
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        """Switch the window between fullscreen and windowed; the logical resolution stays."""
+        ...
+
     def capture_frame(self) -> "PILImage.Image": ...
 
     # -- Camera --------------------------------------------------------------

@@ -360,12 +360,13 @@ class Toast(Effect):
     TOP = 56
     PAD = 12
 
-    def __init__(self, title: str, lines: list[str], *, accent: Color = (255, 120, 90, 255), hold: float = 6.0) -> None:
+    def __init__(self, title: str, lines: list[str], *, accent: Color = (255, 120, 90, 255), hold: float = 6.0, top: int | None = None) -> None:
         super().__init__(hold + 2 * self.SLIDE)
         self.title = title
         self.lines = lines
         self.accent = accent
         self.hold = hold
+        self.top = self.TOP if top is None else top
 
     def _offset(self, box_w: float) -> float:
         e = self.elapsed
@@ -386,7 +387,7 @@ class Toast(Effect):
         box_h = 2 * self.PAD + heading.font_size + 10 + line_h * len(self.lines)
         w, _ = scene.game.resolution
         x = w - self.MARGIN - box_w + self._offset(box_w)
-        y = self.TOP
+        y = self.top
         scene.draw_rect(x, y, box_w, box_h, (16, 20, 32, 240), border_color=(255, 255, 255, 30), border_width=1, radius=10)
         scene.draw_rect(x + 8, y + 10, 3, box_h - 20, self.accent, radius=1.5)
         tx = x + self.PAD + 8
