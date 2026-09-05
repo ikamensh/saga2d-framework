@@ -109,18 +109,22 @@ class ParticleEmitter:
     def particle_count(self) -> int:
         return len(self._particles)
 
-    def burst(self, count: int | None = None) -> None:
+    def burst(self, count: int | None = None) -> ParticleEmitter:
+        """Spawn *count* particles now (the emitter's own count by default); returns the emitter."""
         n = self._count if count is None else count
         self._game._particle_emitters.add(self)
         for _ in range(n):
             self._spawn()
+        return self
 
-    def continuous(self, rate: float) -> None:
+    def continuous(self, rate: float) -> ParticleEmitter:
+        """Spawn *rate* particles per second from now on; returns the emitter so a view can build and start one in a single expression."""
         if not math.isfinite(rate) or rate < 0:
             raise ValueError(f"rate must be a finite number >= 0, got {rate}")
         self._rate = rate
         self._accum = 0.0
         self._game._particle_emitters.add(self)
+        return self
 
     def stop(self) -> None:
         self._rate = 0.0
