@@ -33,6 +33,11 @@ class SceneStack:
     def top(self) -> Scene | None:
         return self._stack[-1] if self._stack else None
 
+    @property
+    def transition_pending(self) -> bool:
+        """Whether a callback has requested a scene change for the current phase."""
+        return bool(self._pending)
+
     def base_index(self) -> int:
         """Index of the lowest scene that must be drawn."""
         i = len(self._stack) - 1
@@ -84,7 +89,7 @@ class SceneStack:
             if self._pending:
                 _logger.warning("SceneStack: %d queued operations discarded after %d iterations", len(self._pending), iterations)
                 self._pending.clear()
-        except Exception:
+        except BaseException:
             self._pending.clear()
             raise
         finally:
@@ -98,8 +103,12 @@ class SceneStack:
         self._stack.append(scene)
         try:
             scene.on_enter()
-        except Exception:
+        except BaseException as enter_error:
             self._stack.pop()
+            try:
+                scene._release_resources()
+            except BaseException as cleanup_error:
+                raise enter_error from cleanup_error
             raise
 
     def _leave(self, scene: Scene) -> None:
@@ -107,8 +116,6 @@ class SceneStack:
             scene.on_exit()
         finally:
             scene._release_resources()
-            scene._ui = None
-            scene.game = None  # type: ignore[assignment]
 
     def _apply_push(self, scene: Scene) -> None:
         if self._stack:
@@ -131,20 +138,19 @@ class SceneStack:
         self._enter(scene)
 
     def _apply_clear_and_push(self, scene: Scene) -> None:
-        first_error: Exception | None = None
-        while self._stack:
-            try:
-                self._leave(self._stack.pop())
-            except Exception as exc:
-                first_error = first_error or exc
-        if first_error is not None:
-            raise first_error
+        self.clear()
         self._enter(scene)
 
     def clear(self) -> None:
-        """Remove every scene (used by teardown)."""
+        """Remove every scene, even if an exit hook fails (used by teardown)."""
+        first_error: BaseException | None = None
         while self._stack:
-            self._leave(self._stack.pop())
+            try:
+                self._leave(self._stack.pop())
+            except BaseException as exc:
+                first_error = first_error or exc
+        if first_error is not None:
+            raise first_error
 
     # -- Per-frame -------------------------------------------------------------
 

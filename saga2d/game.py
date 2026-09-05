@@ -274,7 +274,12 @@ class Game:
         self._backend.set_fullscreen(fullscreen)
 
     def tick(self, dt: float | None = None) -> None:
-        """Run one frame: input → update → systems → draw."""
+        """Run one frame: input → update → systems → draw.
+
+        A scene transition ends dispatch of the current input batch, so queued
+        double clicks cannot repeat a completed action or hit the next scene.
+        Held-key state still accounts for every press and release in the batch.
+        """
         if dt is None:
             dt = self._backend.get_dt()
         if not math.isfinite(dt) or dt < 0:
@@ -299,6 +304,8 @@ class Game:
                 if top is None:
                     break
                 self._dispatch(top, event)
+                if stack.transition_pending:
+                    break
         finally:
             stack.end_phase()
 
@@ -357,35 +364,50 @@ class Game:
         """Push *start_scene* and loop until :meth:`quit` or window close."""
         if _headless():
             raise RuntimeError("game.run() is disabled while SAGA2D_HEADLESS is set; use game.tick(dt) or saga2d.testing.render_scene().")
-        self.push(start_scene)
+        run_error: BaseException | None = None
         try:
+            self.push(start_scene)
             while self.running:
                 self.tick()
+        except BaseException as exc:
+            run_error = exc
+            raise
         finally:
-            self._teardown()
-            self._backend.quit()
+            try:
+                try:
+                    self._teardown()
+                finally:
+                    self._backend.quit()
+            except BaseException as cleanup_error:
+                if run_error is not None:
+                    raise run_error from cleanup_error
+                raise
 
     def _teardown(self) -> None:
         """Release scenes, sprites, timers and the module-level game reference."""
         if not hasattr(self, "_scene_stack"):
             return
-        self._timer_manager.cancel_all()
-        self._tween_manager.cancel_all()
-        self._scene_stack.clear()
-        for sprite in list(self._all_sprites):
-            sprite.remove()
-        self._particle_emitters.clear()
-        if self._audio is not None:
-            self._audio.stop_music()
-        if sys.meta_path is None:
-            return
-        import saga2d.rendering.sprite as sprite_mod
-        import saga2d.util.tween as tween_mod
+        self.running = False
+        try:
+            self._scene_stack.clear()
+        finally:
+            try:
+                self._timer_manager.cancel_all()
+                self._tween_manager.cancel_all()
+                for sprite in list(self._all_sprites):
+                    sprite.remove()
+                self._particle_emitters.clear()
+                if self._audio is not None:
+                    self._audio.stop_music()
+            finally:
+                if sys.meta_path is not None:
+                    import saga2d.rendering.sprite as sprite_mod
+                    import saga2d.util.tween as tween_mod
 
-        if sprite_mod._current_game is self:
-            sprite_mod._current_game = None
-        if tween_mod._tween_manager is self._tween_manager:
-            tween_mod._tween_manager = None
+                    if sprite_mod._current_game is self:
+                        sprite_mod._current_game = None
+                    if tween_mod._tween_manager is self._tween_manager:
+                        tween_mod._tween_manager = None
 
     def __del__(self) -> None:
         try:

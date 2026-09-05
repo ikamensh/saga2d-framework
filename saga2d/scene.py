@@ -63,6 +63,9 @@ class Scene:
     * ``draw()`` — every frame while visible; use the ``draw_*`` helpers.
     * ``handle_input(event)`` — return ``True`` to consume.
 
+    If ``on_enter`` fails, owned resources are released and the scene is
+    detached without calling ``on_exit`` on the partially initialized scene.
+
     Class attributes:
         transparent:      Draw the scene below this one too.
         pause_below:      Stop updating the scene below.
@@ -161,18 +164,22 @@ class Scene:
         self.game.cancel(timer_id)
 
     def _release_resources(self) -> None:
-        """Remove owned sprites/emitters and cancel owned timers (scene left the stack)."""
-        for sprite in list(self._owned_sprites):
-            sprite.remove()
-        self._owned_sprites.clear()
-        for emitter in list(self._owned_emitters):
-            emitter.remove()
-        self._owned_emitters.clear()
-        for timer_id in self._owned_timers:
-            self.game.cancel(timer_id)
-        self._owned_timers.clear()
-        if self.camera is not None:
-            self.camera._cancel_pan()
+        """Release ownership after removal or failed entry, then detach the scene."""
+        try:
+            for sprite in list(self._owned_sprites):
+                sprite.remove()
+            self._owned_sprites.clear()
+            for emitter in list(self._owned_emitters):
+                emitter.remove()
+            self._owned_emitters.clear()
+            for timer_id in self._owned_timers:
+                self.game.cancel(timer_id)
+            self._owned_timers.clear()
+            if self.camera is not None:
+                self.camera._cancel_pan()
+        finally:
+            self._ui = None
+            self.game = None  # type: ignore[assignment]
 
     # -- Input -----------------------------------------------------------------
 
