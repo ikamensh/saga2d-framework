@@ -216,3 +216,31 @@ def test_fire_and_forget_burst_finishes_even_when_nothing_references_the_emitter
     assert len(backend.sprites) == 4
     world.tick(0.2)
     assert backend.sprites == {}
+
+
+def test_loading_a_slot_saved_by_another_scene_class_is_refused(tmp_path) -> None:
+    import pytest
+
+    from saga2d import SaveError
+
+    game = Game("Saves", backend="mock", save_dir=tmp_path)
+    try:
+        class Menu(Scene):
+            pass
+
+        class Play(Scene):
+            def get_save_state(self) -> dict:
+                return {"score": 3}
+
+        play = Play()
+        game.push(play)
+        game.tick(0.016)
+        game.push(Menu())
+        game.tick(0.016)
+        game.save(1, scene=play)  # the overlay is on top, the game state is below it
+        assert game.save_manager.load(1)["scene_class"] == "Play"
+        with pytest.raises(SaveError):
+            game.load(1)  # into the Menu on top
+        assert game.load(1, scene=play)["state"] == {"score": 3}
+    finally:
+        game._teardown()

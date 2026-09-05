@@ -214,18 +214,29 @@ class Game:
 
     # -- Save / load -----------------------------------------------------------
 
-    def save(self, slot: int) -> None:
-        """Write the top scene's :meth:`Scene.get_save_state` to *slot*."""
-        top = self.scene
-        if top is not None:
-            self.save_manager.save(slot, top.get_save_state(), type(top).__name__)
+    def save(self, slot: int, scene: Scene | None = None) -> None:
+        """Write *scene*'s :meth:`Scene.get_save_state` to *slot* (default: the top scene).
 
-    def load(self, slot: int) -> dict[str, Any] | None:
-        """Read *slot* and feed its state to the top scene.  Returns the raw save."""
+        An overlay that offers "Save" passes the scene it covers: its own pop is
+        deferred, so it is still the top scene while the handler runs.
+        """
+        target = scene if scene is not None else self.scene
+        if target is not None:
+            self.save_manager.save(slot, target.get_save_state(), type(target).__name__)
+
+    def load(self, slot: int, scene: Scene | None = None) -> dict[str, Any] | None:
+        """Read *slot* into *scene* (default: the top scene).  Returns the raw save,
+        or ``None`` when the slot is empty.  A slot written by another scene class
+        is refused: feeding it to the wrong scene would fail half-way through."""
+        from saga2d.save import SaveError
+
         data = self.save_manager.load(slot)
-        top = self.scene
-        if data is not None and top is not None:
-            top.load_save_state(data["state"])
+        target = scene if scene is not None else self.scene
+        if data is None or target is None:
+            return data
+        if data["scene_class"] != type(target).__name__:
+            raise SaveError(f"Slot {slot} holds a {data['scene_class']} save; cannot load it into {type(target).__name__}")
+        target.load_save_state(data["state"])
         return data
 
     # -- Timers ----------------------------------------------------------------
