@@ -119,7 +119,8 @@ class PygletBackend:
         self._shape_program: Any = None
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
         self._soup_lists: list[Any] = []
-        self._frame_images: list[Any] = []
+        self._frame_images: list[Any] = []  # pooled pyglet sprites for draw_image, reused in call order frame to frame
+        self._frame_images_used = 0
         self._labels: dict[tuple[Any, ...], tuple[Any, int]] = {}
         self._label_uses: dict[tuple[Any, ...], int] = {}
         self._frame = 0
@@ -276,9 +277,9 @@ class PygletBackend:
             vlist.delete()
         self._soup_lists.clear()
         self._soups.clear()
-        for sprite in self._frame_images:
-            sprite.delete()
-        self._frame_images.clear()
+        for sprite in self._frame_images[:self._frame_images_used]:
+            sprite.visible = False
+        self._frame_images_used = 0
         self._label_uses.clear()
 
     def end_frame(self) -> None:
@@ -415,9 +416,14 @@ class PygletBackend:
             x=x + width / 2, y=self._flip(y + height / 2, space), rotation=rotation,
             scale_x=width / img_w, scale_y=height / img_h,
         )
-        sprite.opacity = opacity
-        sprite.visible = visible
-        sprite.color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255))
+        # Each pyglet setter rewrites vertex data through ctypes; a moving unit only changes its position.
+        if sprite.opacity != opacity:
+            sprite.opacity = opacity
+        if sprite.visible != visible:
+            sprite.visible = visible
+        color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255))
+        if sprite.color != color:
+            sprite.color = color
 
     def set_sprite_order(self, sprite_id: int, order: int) -> None:
         space = self._sprite_meta[sprite_id][0]
@@ -485,14 +491,24 @@ class PygletBackend:
         self._push_triangles(space, order, list(points), color)
 
     def draw_image(self, image_handle, x, y, width, height, *, opacity=1.0, space: Space = "screen", order: int = 0) -> None:
-        sprite = pyglet.sprite.Sprite(
-            image_handle, x=x + width / 2, y=self._flip(y + height / 2, space),
-            batch=self.batch, group=_ImageChild(self._view_group(space, order)),
-        )
-        sprite.scale_x = width / image_handle.width
-        sprite.scale_y = height / image_handle.height
-        sprite.opacity = int(opacity * 255)
-        self._frame_images.append(sprite)
+        # A HUD draws the same images in the same order every frame: the pooled sprite
+        # keeps its vertex list and group, so this is a position update, not an allocation.
+        group = _ImageChild(self._view_group(space, order))
+        if self._frame_images_used < len(self._frame_images):
+            sprite = self._frame_images[self._frame_images_used]
+            if sprite.image is not image_handle:
+                sprite.image = image_handle
+            if sprite.group != group:
+                sprite.group = group
+            sprite.visible = True
+        else:
+            sprite = pyglet.sprite.Sprite(image_handle, batch=self.batch, group=group)
+            self._frame_images.append(sprite)
+        self._frame_images_used += 1
+        sprite.update(x=x + width / 2, y=self._flip(y + height / 2, space), scale_x=width / image_handle.width, scale_y=height / image_handle.height)
+        alpha = int(opacity * 255)
+        if sprite.opacity != alpha:
+            sprite.opacity = alpha
 
     # ------------------------------------------------------------------
     # Text

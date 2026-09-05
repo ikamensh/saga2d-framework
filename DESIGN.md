@@ -57,6 +57,16 @@ group in pyglet and a moving sprite migrates between groups as its order
 changes, so a step of one pixel made a 150-unit battle spend most of its
 frame re-sorting groups; eight is invisible on 32-unit tiles and cheap.  The backend also
 uploads a view matrix only when consecutive groups need different ones.
+Three more things keep a 150-unit battle under 16 ms: pyglet's per-call GL
+error checking is off (`saga2d/__init__.py` sets `debug_gl` before
+`pyglet.gl` loads; a frame makes thousands of GL calls), `draw_image`
+reuses a pool of pyglet sprites in call order instead of allocating one
+per call per frame (a HUD draws the same portraits every frame), and a
+sprite's appearance setters only reach the backend when the value
+changed (views set `visible`/`opacity` every frame for every unit).
+`tools/perf_warband.py` measures the frame breakdown; profile with it
+before claiming frame times, and never under `tracemalloc`, which
+triples Python allocation costs.
 Screen-space UI is ordered by the scene's position in the stack (with a
 stride of four orders per level), so an overlay always draws above the
 scene beneath it.  Text at an order draws above shapes and images at the

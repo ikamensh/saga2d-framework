@@ -7,6 +7,13 @@ Game code imports from here::
 
 __version__ = "0.2.0"
 
+import pyglet
+
+# pyglet wraps every GL call in an error check by default; a busy frame makes
+# thousands of them.  The option is read when pyglet.gl loads, so it is set
+# here, before any backend or font module imports it.
+pyglet.options["debug_gl"] = False
+
 from saga2d.actions import Action, Delay, Do, FadeIn, FadeOut, MoveTo, Parallel, PlayAnim, Remove, Repeat, Sequence
 from saga2d.animation import AnimationDef
 from saga2d.assets import AssetManager, AssetNotFoundError
