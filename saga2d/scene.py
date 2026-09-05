@@ -8,6 +8,7 @@ through the scene are released automatically when it leaves the stack.
 from __future__ import annotations
 
 import inspect
+import math
 from typing import TYPE_CHECKING, Any, Callable
 
 from saga2d.input import normalize_combo
@@ -248,6 +249,16 @@ class Scene:
         space: Space = "screen", layer: RenderLayer = RenderLayer.UI_WORLD,
     ) -> None:
         """Text with a named theme style (``"title"``, ``"hud"``…) or explicit size/colour."""
+        font_size, color, font = self._resolve_text_style(style, font_size, color, font)
+        self.game.backend.draw_text(
+            text, x, y, font_size, color, font=font, anchor_x=anchor_x, anchor_y=anchor_y,
+            space=space, order=self._order(space, layer, y),
+        )
+
+    def _resolve_text_style(
+        self, style: str | TextStyle | None, font_size: int | None,
+        color: Color | None, font: str | None,
+    ) -> tuple[int, Color, str | None]:
         theme = self.game.theme
         if style is not None:
             text_style = theme.get_text_style(style) if isinstance(style, str) else style
@@ -258,10 +269,67 @@ class Scene:
             font_size = font_size if font_size is not None else theme.font_size
             color = color if color is not None else theme.text_color
             font = font if font is not None else theme.font
-        self.game.backend.draw_text(
-            text, x, y, font_size, color, font=font, anchor_x=anchor_x, anchor_y=anchor_y,
-            space=space, order=self._order(space, layer, y),
-        )
+        return font_size, color, font
+
+    def draw_paragraph(
+        self, text: str, x: float, y: float, width: float, *,
+        style: str | TextStyle | None = None, font_size: int | None = None,
+        color: Color | None = None, font: str | None = None, line_spacing: float = 1.4,
+        space: Space = "screen", layer: RenderLayer = RenderLayer.UI_WORLD,
+    ) -> float:
+        """Draw measured, word-wrapped text from top-left and return its height.
+
+        ``line_spacing`` multiplies the backend-measured font height. The
+        returned height reaches the bottom of the final line, with no trailing
+        gap, so callers can position subsequent content below the paragraph.
+        Style and explicit font options work exactly as in :meth:`draw_text`.
+
+        Explicit newlines, including blank lines, are preserved; other
+        whitespace collapses to single spaces. Overlong words split between
+        characters. Width and spacing must be positive and finite; a width
+        too small for one character raises ``ValueError`` before drawing.
+        Empty text consumes no height.
+        """
+        if not math.isfinite(width) or width <= 0:
+            raise ValueError("Paragraph width must be positive and finite")
+        if not math.isfinite(line_spacing) or line_spacing <= 0:
+            raise ValueError("Paragraph line spacing must be positive and finite")
+        if not text:
+            return 0.0
+        font_size, color, font = self._resolve_text_style(style, font_size, color, font)
+        backend = self.game.backend
+
+        def fits(value: str) -> bool:
+            return backend.measure_text(value, font_size, font)[0] <= width
+
+        lines = []
+        for paragraph in text.split("\n"):
+            line = ""
+            for word in paragraph.split():
+                candidate = line + " " + word if line else word
+                if fits(candidate):
+                    line = candidate
+                    continue
+                if line:
+                    lines.append(line)
+                line = ""
+                if fits(word):
+                    line = word
+                    continue
+                for character in word:
+                    if not fits(character):
+                        raise ValueError(f"Paragraph width {width} cannot fit character {character!r}")
+                    if line and not fits(line + character):
+                        lines.append(line)
+                        line = ""
+                    line += character
+            lines.append(line)
+        line_height = backend.measure_text("Mg", font_size, font)[1]
+        for index, line in enumerate(lines):
+            if line:
+                self.draw_text(line, x, y + index * line_height * line_spacing, style=style,
+                               font_size=font_size, color=color, font=font, anchor_y="top", space=space, layer=layer)
+        return line_height * (1 + (len(lines) - 1) * line_spacing)
 
     # -- Save / load -----------------------------------------------------------
 
