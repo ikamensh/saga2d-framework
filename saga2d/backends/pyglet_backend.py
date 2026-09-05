@@ -226,38 +226,6 @@ class PygletBackend:
             self.set_fullscreen(True)
             self.window.set_visible(visible)
 
-    @property
-    def fullscreen(self) -> bool:
-        return self.window.fullscreen
-
-    @property
-    def window_size(self) -> tuple[int, int]:
-        width, height = self.window.get_size()
-        # Pyglet's Cocoa platform/scaled modes return backing pixels here but
-        # accept content points in set_size/fullscreen recreation. Keep that
-        # mismatch inside this adapter; do not change rendering/input units.
-        if sys.platform == "darwin" and pyglet.options.dpi_scaling in ("platform", "scaled"):
-            return round(width / self.window.scale), round(height / self.window.scale)
-        return width, height
-
-    def set_fullscreen(self, fullscreen: bool) -> None:
-        if fullscreen == self.fullscreen:
-            return
-        if fullscreen:
-            self._windowed_size = self.window_size
-            self.window.set_fullscreen(True)
-        else:
-            self.window.set_fullscreen(False, width=self._windowed_size[0], height=self._windowed_size[1])
-        self._compute_viewport(self.window.width, self.window.height)
-
-    def set_window_size(self, width: int, height: int) -> None:
-        if self.fullscreen:
-            self.window.set_fullscreen(False, width=width, height=height)
-        else:
-            self.window.set_size(width, height)
-        self._windowed_size = self.window_size
-        self._compute_viewport(self.window.width, self.window.height)
-
     def _register_handlers(self) -> None:
         window = self.window
         queue = self._event_queue
@@ -374,6 +342,38 @@ class PygletBackend:
         if self.window is not None:
             self.window.close()
             self.window = None
+
+    @property
+    def fullscreen(self) -> bool:
+        return self.window.fullscreen
+
+    @property
+    def window_size(self) -> tuple[int, int]:
+        width, height = self.window.get_size()
+        # Pyglet's Cocoa platform/scaled modes return backing pixels here but
+        # accept content points in set_size/fullscreen recreation. Keep that
+        # mismatch inside this adapter; do not change rendering/input units.
+        if sys.platform == "darwin" and pyglet.options.dpi_scaling in ("platform", "scaled"):
+            return round(width / self.window.scale), round(height / self.window.scale)
+        return width, height
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        if fullscreen == self.fullscreen:
+            return
+        if fullscreen:
+            self._windowed_size = self.window_size
+            self.window.set_fullscreen(True)
+        else:
+            self.window.set_fullscreen(False, width=self._windowed_size[0], height=self._windowed_size[1])
+        self._compute_viewport(self.window.width, self.window.height)
+
+    def set_window_size(self, width: int, height: int) -> None:
+        if self.fullscreen:
+            self.window.set_fullscreen(False, width=width, height=height)
+        else:
+            self.window.set_size(width, height)
+        self._windowed_size = self.window_size
+        self._compute_viewport(self.window.width, self.window.height)
 
     def capture_frame(self) -> Any:
         """PIL image of the frame most recently presented by :meth:`end_frame`."""

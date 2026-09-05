@@ -70,23 +70,6 @@ class MockBackend:
         self._windowed_size = (width, height)
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
 
-    def set_fullscreen(self, fullscreen: bool) -> None:
-        if fullscreen == self.fullscreen:
-            return
-        if fullscreen:
-            self._windowed_size = self.window_size
-        self.fullscreen = fullscreen
-        self.window_size = self.screen_size() if fullscreen else self._windowed_size
-
-    def set_window_size(self, width: int, height: int) -> None:
-        self.fullscreen = False
-        self.window_size = self._windowed_size = (width, height)
-
-    def inject_resize(self, width: int, height: int) -> None:
-        """Simulate an OS content resize without changing the logical canvas."""
-        self.window_size = (width, height)
-        self._pending_events.append(WindowEvent("resize"))
-
     def begin_frame(self, clear_color: Color | None = None) -> None:
         self.clear_color = clear_color
         self.texts.clear()
@@ -112,6 +95,23 @@ class MockBackend:
         for player_id in list(self._music_players):
             self.stop_player(player_id)
         self.is_running = False
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        if fullscreen == self.fullscreen:
+            return
+        if fullscreen:
+            self._windowed_size = self.window_size
+        self.fullscreen = fullscreen
+        self.window_size = self.screen_size() if fullscreen else self._windowed_size
+
+    def set_window_size(self, width: int, height: int) -> None:
+        self.fullscreen = False
+        self.window_size = self._windowed_size = (width, height)
+
+    def inject_resize(self, width: int, height: int) -> None:
+        """Simulate an OS content resize without changing the logical canvas."""
+        self.window_size = (width, height)
+        self._pending_events.append(WindowEvent("resize"))
 
     def capture_frame(self) -> Image.Image:
         return Image.new("RGBA", self.window_size, (0, 0, 0, 255))

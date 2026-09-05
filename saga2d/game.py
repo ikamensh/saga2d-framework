@@ -152,26 +152,6 @@ class Game:
         """
         return self._backend.window_size
 
-    def set_fullscreen(self, fullscreen: bool) -> None:
-        """Enter desktop fullscreen, or restore the last actual windowed size."""
-        if type(fullscreen) is not bool:
-            raise ValueError("fullscreen must be a boolean")
-        if fullscreen and _headless():
-            raise RuntimeError("Fullscreen is unavailable while SAGA2D_HEADLESS is set")
-        self._backend.set_fullscreen(fullscreen)
-
-    def set_window_size(self, size: tuple[int, int]) -> None:
-        """Select a windowed content size, leaving fullscreen if necessary.
-
-        Dimensions must be positive integers. The OS can constrain the requested
-        size; read ``window_size`` for the actual result. This never resizes the
-        logical canvas or changes scene/UI coordinates.
-        """
-        if (not isinstance(size, (tuple, list)) or len(size) != 2
-                or any(type(value) is not int or value <= 0 for value in size)):
-            raise ValueError("window size must be a pair of positive integers")
-        self._backend.set_window_size(*size)
-
     @property
     def assets(self) -> AssetManager:
         if self._assets is None:
@@ -308,6 +288,26 @@ class Game:
 
     def quit(self) -> None:
         self.running = False
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        """Enter desktop fullscreen, or restore the last actual windowed size."""
+        if type(fullscreen) is not bool:
+            raise ValueError("fullscreen must be a boolean")
+        if fullscreen and _headless():
+            raise RuntimeError("Fullscreen is unavailable while SAGA2D_HEADLESS is set")
+        self._backend.set_fullscreen(fullscreen)
+
+    def set_window_size(self, size: tuple[int, int]) -> None:
+        """Select a windowed content size, leaving fullscreen if necessary.
+
+        Dimensions must be positive integers. The OS can constrain the requested
+        size; read ``window_size`` for the actual result. This never resizes the
+        logical canvas or changes scene/UI coordinates.
+        """
+        if (not isinstance(size, (tuple, list)) or len(size) != 2
+                or any(type(value) is not int or value <= 0 for value in size)):
+            raise ValueError("window size must be a pair of positive integers")
+        self._backend.set_window_size(*size)
 
     def tick(self, dt: float | None = None) -> None:
         """Run one frame: input → update → systems → draw.
