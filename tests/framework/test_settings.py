@@ -209,3 +209,16 @@ def test_missing_file_uses_title_data_directory_without_creating_files(tmp_path,
         assert not game.data_dir.exists()
     finally:
         game._teardown()
+
+
+def test_missing_mapping_entries_use_defaults_when_validating_the_saved_candidate(tmp_path):
+    """Deleting a saved override remains valid with a game validator; reload restores its default."""
+    def validate(values):
+        if not 0 <= values["volume"] <= 1:
+            raise ValueError("volume outside range")
+
+    settings = Settings(tmp_path / "settings.json", {"volume": .8}, validator=validate)
+    settings["volume"] = .3
+    del settings["volume"]
+    settings.save()
+    assert Settings(settings.path, settings.defaults, validator=validate)["volume"] == .8

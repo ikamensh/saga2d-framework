@@ -116,7 +116,7 @@ class Settings(MutableMapping[str, Any]):
             if key in self.defaults and _kind(value) is not _kind(self.defaults[key]):
                 raise ValueError(f"Setting {key!r} must have the same JSON kind as its default")
         if self._validator is not None:
-            self._validator(values)
+            self._validator({**self.defaults, **values})
 
     def save(self) -> None:
         """Durably write preferences, retaining previous data before replacement.
