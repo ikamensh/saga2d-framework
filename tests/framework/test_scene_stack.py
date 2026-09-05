@@ -1,5 +1,7 @@
 """Scene stack behaviour through the public Game API."""
 
+import pytest
+
 from saga2d import Game, Scene
 
 
@@ -158,6 +160,125 @@ def test_scene_that_fails_on_enter_is_not_left_on_the_stack(game: Game) -> None:
     with pytest.raises(RuntimeError):
         game.push(Broken())
     assert names(game) == ["a"]
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, SystemExit])
+def test_failed_scene_startup_cancels_its_scheduled_callbacks(game: Game, error_type) -> None:
+    """A scene removed after failed startup cannot keep acting through timers."""
+    callbacks = []
+
+    class Broken(Scene):
+        def on_enter(self) -> None:
+            self.after(0, lambda: callbacks.append("after"))
+            self.every(0.01, lambda: callbacks.append("every"))
+            raise error_type("startup failed")
+
+    with pytest.raises(error_type, match="startup failed"):
+        game.push(Broken())
+    game.tick(0.02)
+    assert game.scene is None
+    assert callbacks == []
+
+
+def test_failed_scene_entry_releases_rendering_resources_and_can_be_retried(game: Game, backend) -> None:
+    """Partial entry owns resources immediately; retry starts with a fresh UI tree."""
+    from PIL import Image
+    from saga2d import Camera, Label, ParticleEmitter, Sprite, tween
+
+    game.assets.image_from_pil("dot", Image.new("RGBA", (2, 2)))
+    completed = []
+
+    class BrokenOnce(Scene):
+        attempts = 0
+
+        def on_enter(self) -> None:
+            self.attempts += 1
+            if self.attempts == 1:
+                self.sprite = self.add_sprite(Sprite("dot"))
+                tween(self.sprite, "opacity", 255, 0, 0.1, on_complete=lambda: completed.append("tween"))
+                self.emitter = self.add_emitter(ParticleEmitter("dot", (20, 20)))
+                self.emitter.burst(1)
+                self.emitter.continuous(10)
+                self.camera = Camera(game.resolution)
+                self.camera.pan_to(900, 900, 0.1)
+                self.ui.add(Label("failed entry"))
+                raise RuntimeError("startup failed")
+            self.ui.add(Label("ready"))
+
+        def on_exit(self) -> None:
+            assert self.attempts > 1, "Failed on_enter must not call on_exit on a partial scene"
+
+    scene = BrokenOnce()
+    with pytest.raises(RuntimeError, match="startup failed"):
+        game.push(scene)
+    assert scene.game is None
+    assert scene.sprite.is_removed
+    assert not scene.emitter.is_active
+    game.tick(0.5)
+    assert backend.sprites == {}
+    assert completed == []
+    assert (scene.camera.x, scene.camera.y) == (0, 0)
+
+    game.push(scene)
+    game.tick(0.01)
+    assert [text["text"] for text in backend.texts] == ["ready"]
+
+
+def test_run_closes_the_window_after_failed_startup_and_allows_a_new_game(game: Game, backend, monkeypatch) -> None:
+    """Failed startup has the same window and singleton cleanup as a completed run."""
+    monkeypatch.delenv("SAGA2D_HEADLESS", raising=False)
+    startup_error = RuntimeError("startup failed")
+
+    class Broken(Scene):
+        def on_enter(self) -> None:
+            raise startup_error
+
+    with pytest.raises(RuntimeError) as caught:
+        game.run(Broken())
+    assert caught.value is startup_error
+    assert not backend.is_running
+
+    class Quit(Scene):
+        def on_enter(self) -> None:
+            self.game.quit()
+
+    Game("Retry", backend="mock").run(Quit())
+
+
+def test_startup_error_survives_a_failing_exit_hook_and_all_scenes_are_released(game: Game, backend, monkeypatch) -> None:
+    """Cleanup failure must neither hide the startup error nor strand the lower scene."""
+    monkeypatch.delenv("SAGA2D_HEADLESS", raising=False)
+    startup_error = RuntimeError("startup failed")
+    exit_error = ValueError("exit failed")
+
+    class Cover(Scene):
+        exits = 0
+
+        def on_exit(self) -> None:
+            self.exits += 1
+            if self.exits == 2:  # First covered by Broken, then removed during teardown.
+                raise exit_error
+
+    class Broken(Scene):
+        def on_enter(self) -> None:
+            raise startup_error
+
+    base, cover = Scene(), Cover()
+    game.push(base)
+    game.push(cover)
+    with pytest.raises(RuntimeError) as caught:
+        game.run(Broken())
+    assert caught.value is startup_error
+    assert caught.value.__cause__ is exit_error
+    assert game.scenes == []
+    assert base.game is None and cover.game is None
+    assert not backend.is_running
+
+    class Quit(Scene):
+        def on_enter(self) -> None:
+            self.game.quit()
+
+    Game("Retry", backend="mock").run(Quit())
 
 
 def test_overlay_ui_draws_above_the_base_scene_hud_and_banner(game: Game, backend) -> None:
