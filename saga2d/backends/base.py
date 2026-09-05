@@ -100,6 +100,22 @@ class Backend(Protocol):
 
     def quit(self) -> None: ...
 
+    @property
+    def fullscreen(self) -> bool: ...
+
+    @property
+    def window_size(self) -> tuple[int, int]:
+        """Actual native content size, excluding decorations and backing scale."""
+        ...
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        """Enter desktop fullscreen or restore the last actual windowed size."""
+        ...
+
+    def set_window_size(self, width: int, height: int) -> None:
+        """Enter windowed mode at this content size; retain the logical canvas."""
+        ...
+
     def capture_frame(self) -> "PILImage.Image": ...
 
     # -- Camera --------------------------------------------------------------

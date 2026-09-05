@@ -35,6 +35,9 @@ class MockBackend:
         self.clear_color: Color | None = None
         self.frame_count: int = 0
         self.is_running: bool = True
+        self.fullscreen = False
+        self.window_size = (logical_width, logical_height)
+        self._windowed_size = self.window_size
 
         self.sounds_played: list[dict[str, Any]] = []
         self.sounds_playing: dict[str, dict[str, Any]] = {}
@@ -63,6 +66,26 @@ class MockBackend:
     def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True) -> None:
         self.logical_width = width
         self.logical_height = height
+        self.fullscreen = fullscreen
+        self._windowed_size = (width, height)
+        self.window_size = self.screen_size() if fullscreen else self._windowed_size
+
+    def set_fullscreen(self, fullscreen: bool) -> None:
+        if fullscreen == self.fullscreen:
+            return
+        if fullscreen:
+            self._windowed_size = self.window_size
+        self.fullscreen = fullscreen
+        self.window_size = self.screen_size() if fullscreen else self._windowed_size
+
+    def set_window_size(self, width: int, height: int) -> None:
+        self.fullscreen = False
+        self.window_size = self._windowed_size = (width, height)
+
+    def inject_resize(self, width: int, height: int) -> None:
+        """Simulate an OS content resize without changing the logical canvas."""
+        self.window_size = (width, height)
+        self._pending_events.append(WindowEvent("resize"))
 
     def begin_frame(self, clear_color: Color | None = None) -> None:
         self.clear_color = clear_color
@@ -91,7 +114,7 @@ class MockBackend:
         self.is_running = False
 
     def capture_frame(self) -> Image.Image:
-        return Image.new("RGBA", (self.logical_width, self.logical_height), (0, 0, 0, 255))
+        return Image.new("RGBA", self.window_size, (0, 0, 0, 255))
 
     def set_camera(self, x: float, y: float, zoom: float) -> None:
         self.camera = (x, y, zoom)
