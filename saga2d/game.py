@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 from weakref import WeakSet
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from saga2d.audio import AudioManager
     from saga2d.backends.base import Backend
     from saga2d.save import SaveManager
+    from saga2d.settings import Settings
     from saga2d.ui.theme import Theme
 
 _logger = logging.getLogger(__name__)
@@ -97,6 +99,7 @@ class Game:
         self._assets: AssetManager | None = None
         self._audio: AudioManager | None = None
         self._save_manager: SaveManager | None = None
+        self._settings: Settings | None = None
 
         self.running = True
         self._scene_stack = SceneStack(self)
@@ -172,15 +175,32 @@ class Game:
         return self._input
 
     @property
+    def data_dir(self) -> Path:
+        """The parent of the save directory, or ``~/.<title>`` by default."""
+        if self._save_dir is not None:
+            return self._save_dir.parent
+        slug = "".join(c if c.isalnum() else "_" for c in self._title.lower()).strip("_")
+        return Path.home() / f".{slug}"
+
+    def settings(self, defaults: Mapping[str, Any], *,
+                 validator: Callable[[Mapping[str, Any]], None] | None = None) -> Settings:
+        """Shared preferences in ``<data_dir>/settings.json``.
+
+        Defaults and the optional game validator are configured on first use;
+        later calls return that same object. Check its ``error`` after loading.
+        """
+        if self._settings is None:
+            from saga2d.settings import Settings
+
+            self._settings = Settings(self.data_dir / "settings.json", defaults, validator=validator)
+        return self._settings
+
+    @property
     def save_manager(self) -> SaveManager:
         if self._save_manager is None:
             from saga2d.save import SaveManager
 
-            save_dir = self._save_dir
-            if save_dir is None:
-                slug = "".join(c if c.isalnum() else "_" for c in self._title.lower()).strip("_")
-                save_dir = Path.home() / f".{slug}" / "saves"
-            self._save_manager = SaveManager(save_dir)
+            self._save_manager = SaveManager(self._save_dir if self._save_dir is not None else self.data_dir / "saves")
         return self._save_manager
 
     @property

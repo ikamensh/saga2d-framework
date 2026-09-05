@@ -127,6 +127,24 @@ and Warband's command-card routing exposed the same duplicated binding and
 disabled-state checks. The [shortcut example](docs/framework-button-shortcuts.md)
 demonstrates the primitive independently of those games.
 
+## Persistent preferences
+
+`Settings` persists a game's preferences independently of campaign saves.
+Warband's committed mapping/defaults interface is shared through
+`game.settings(defaults, validator=...)` and `game.data_dir`. Tribes' volume
+options, Warband's display/audio preferences and Shardbound's accessibility
+settings need the same file lifecycle, while their ranges, enums and runtime
+effects remain game code. Known keys retain their JSON kind; a game validator
+can reject its own invalid values without declaring an options schema.
+
+Loading errors are explicit on `settings.error`; defaults remain usable in
+memory so the game can present recovery. Ordinary save refuses damaged data.
+Reset stays in memory until save, which retains the displaced file's exact
+bytes under a unique recovery name. Save slots and settings share only private
+durable file staging/replacement in `_fileio.py`; each owns its validation and
+backup policy. See [the settings guide](docs/framework-settings.md) and the
+independent `tools/demo_settings.py` example.
+
 ## Testing
 
 The mock backend records every call (`backend.sprites`, `rects`,
