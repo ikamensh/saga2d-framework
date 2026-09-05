@@ -366,7 +366,7 @@ class Game:
                 raise
 
     def _teardown(self) -> None:
-        """Release scenes, sprites, timers and the module-level game reference."""
+        """Release scenes, sprites, timers, audio and the module-level game reference."""
         if not hasattr(self, "_scene_stack"):
             return
         self.running = False
@@ -379,17 +379,22 @@ class Game:
                 for sprite in list(self._all_sprites):
                     sprite.remove()
                 self._particle_emitters.clear()
-                if self._audio is not None:
-                    self._audio.stop_music()
             finally:
-                if sys.meta_path is not None:
-                    import saga2d.rendering.sprite as sprite_mod
-                    import saga2d.util.tween as tween_mod
+                try:
+                    try:
+                        if self._audio is not None:
+                            self._audio.stop_music()
+                    finally:
+                        self._backend.stop_sounds()
+                finally:
+                    if sys.meta_path is not None:
+                        import saga2d.rendering.sprite as sprite_mod
+                        import saga2d.util.tween as tween_mod
 
-                    if sprite_mod._current_game is self:
-                        sprite_mod._current_game = None
-                    if tween_mod._tween_manager is self._tween_manager:
-                        tween_mod._tween_manager = None
+                        if sprite_mod._current_game is self:
+                            sprite_mod._current_game = None
+                        if tween_mod._tween_manager is self._tween_manager:
+                            tween_mod._tween_manager = None
 
     def __del__(self) -> None:
         try:
