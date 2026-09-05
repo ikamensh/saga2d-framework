@@ -13,10 +13,16 @@ from __future__ import annotations
 import math
 
 from saga2d.assets import AssetManager
-from saga2d.backends.base import Backend, MusicPlayerId
+from saga2d.backends.base import Backend, PlayerId
 
 
 class AudioManager:
+    """Independent channel settings that also affect effects already playing.
+
+    The backend owns playback resources. This manager retains only opaque IDs
+    and each effect's local gain, so master/SFX changes preserve their balance.
+    """
+
     CHANNELS = ("master", "music", "sfx")
 
     def __init__(self, backend: Backend, assets: AssetManager) -> None:
@@ -24,8 +30,9 @@ class AudioManager:
         self._assets = assets
         self._volumes: dict[str, float] = {name: 1.0 for name in self.CHANNELS}
         self._muted = False
-        self._player: MusicPlayerId | None = None
+        self._player: PlayerId | None = None
         self._music_name: str | None = None
+        self._sounds: dict[PlayerId, float] = {}
 
     def set_volume(self, channel: str, level: float) -> None:
         self._check_channel(channel)
@@ -34,6 +41,8 @@ class AudioManager:
         self._volumes[channel] = max(0.0, min(1.0, level))
         if channel in ("master", "music"):
             self._apply_music_volume()
+        if channel in ("master", "sfx"):
+            self._apply_sound_volume()
 
     def get_volume(self, channel: str) -> float:
         self._check_channel(channel)
@@ -47,6 +56,7 @@ class AudioManager:
     def muted(self, value: bool) -> None:
         self._muted = bool(value)
         self._apply_music_volume()
+        self._apply_sound_volume()
 
     @property
     def music_name(self) -> str | None:
@@ -59,7 +69,9 @@ class AudioManager:
         handle = self._assets.sound(name)
         if self._muted:
             return
-        self._backend.play_sound(handle, volume=self._volumes["master"] * self._volumes["sfx"] * volume, pitch=pitch)
+        self._prune_sounds()
+        player = self._backend.play_sound(handle, volume=self._volumes["master"] * self._volumes["sfx"] * volume, pitch=pitch)
+        self._sounds[player] = volume
 
     def play_music(self, name: str, *, loop: bool = True) -> None:
         """Stop any current track and start *name*."""
@@ -80,6 +92,18 @@ class AudioManager:
     def _apply_music_volume(self) -> None:
         if self._player is not None:
             self._backend.set_player_volume(self._player, self._music_volume())
+
+    def _prune_sounds(self) -> None:
+        self._sounds = {
+            player: volume for player, volume in self._sounds.items()
+            if self._backend.is_player_playing(player)
+        }
+
+    def _apply_sound_volume(self) -> None:
+        self._prune_sounds()
+        gain = 0.0 if self._muted else self._volumes["master"] * self._volumes["sfx"]
+        for player, volume in self._sounds.items():
+            self._backend.set_player_volume(player, gain * volume)
 
     def _check_channel(self, channel: str) -> None:
         if channel not in self._volumes:

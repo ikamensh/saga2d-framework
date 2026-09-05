@@ -145,6 +145,25 @@ durable file staging/replacement in `_fileio.py`; each owns its validation and
 backup policy. See [the settings guide](docs/framework-settings.md) and the
 independent `tools/demo_settings.py` example.
 
+## Audio ownership
+
+`AudioManager` keeps independent master/music/SFX levels. Changing a level or
+muting updates sounds already playing as well as future sounds, preserving
+each effect's local gain. The backend owns native effect and music players;
+the manager stores opaque playback IDs and gains, pruning ended IDs when it
+next plays or adjusts effects. Natural completion releases native resources
+and removes the player from the backend on the next event poll. Game teardown
+stops all effects and its own music; backend shutdown releases any remaining
+players, including music started by another manager.
+
+Tribes' sound bank and Warband's synth bank use their own AudioManagers, while
+Shardbound needs live volume and mute settings. A global backend SFX gain would
+couple independent banks. Per-manager playback IDs solve that without adding
+an audio graph, a settings policy, or new game-facing methods. Mock recordings
+keep the original `sounds_played` history and expose current `sounds_playing`
+separately. `tools/verify_audio.py` checks native sustained playback, natural
+completion and shutdown, using the silent driver by default.
+
 ## Testing
 
 The mock backend records every call (`backend.sprites`, `rects`,
