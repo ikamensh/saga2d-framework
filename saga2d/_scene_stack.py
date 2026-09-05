@@ -33,6 +33,11 @@ class SceneStack:
     def top(self) -> Scene | None:
         return self._stack[-1] if self._stack else None
 
+    @property
+    def transition_pending(self) -> bool:
+        """Whether a callback has requested a scene change for the current phase."""
+        return bool(self._pending)
+
     def base_index(self) -> int:
         """Index of the lowest scene that must be drawn."""
         i = len(self._stack) - 1

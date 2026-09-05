@@ -256,7 +256,12 @@ class Game:
         self.running = False
 
     def tick(self, dt: float | None = None) -> None:
-        """Run one frame: input → update → systems → draw."""
+        """Run one frame: input → update → systems → draw.
+
+        A scene transition ends dispatch of the current input batch, so queued
+        double clicks cannot repeat a completed action or hit the next scene.
+        Held-key state still accounts for every press and release in the batch.
+        """
         if dt is None:
             dt = self._backend.get_dt()
         if not math.isfinite(dt) or dt < 0:
@@ -281,6 +286,8 @@ class Game:
                 if top is None:
                     break
                 self._dispatch(top, event)
+                if stack.transition_pending:
+                    break
         finally:
             stack.end_phase()
 
