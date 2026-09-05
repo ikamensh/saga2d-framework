@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
+from saga2d.input import normalize_combo
 from saga2d.rendering.shapes import draw_box, rounded_rect
 from saga2d.ui.base import Component
 from saga2d.ui.layout import Layout, compute_anchor_position, compute_content_size, compute_flow_layout
@@ -23,6 +24,15 @@ KEYCAP_PAD = 5
 KEYCAP_RADIUS = 4
 KEYCAP_GAP = 8  # between a button's text and its keycap
 KEYCAP_LIFT = 2  # the darker slab showing under a keycap
+
+
+def _normalize_shortcut(key: str) -> str:
+    if not isinstance(key, str):
+        raise TypeError("button shortcuts must be strings")
+    prefix, separator, name = normalize_combo(key).rpartition("+")
+    if not name:
+        raise ValueError("button shortcuts need a nonempty key name")
+    return prefix + separator + {"enter": "return", "esc": "escape"}.get(name, name)
 
 
 def _draw_component_box(component: Component, resolved: ResolvedStyle) -> None:
@@ -128,8 +138,23 @@ class Label(Component):
 
 class Button(Component):
     """Clickable rectangle with hover/press states.  *text* may be reactive
-    like :class:`Label`; *hotkey* (``"E"``, ``"Enter"``…) is drawn as a
-    keycap after the text."""
+    like :class:`Label`.
+
+    ``shortcut="E"`` draws a keycap and calls ``on_click`` on that key press.
+    A tuple supplies aliases; its first entry is displayed. Keys are case
+    insensitive; ``Enter``/``Return`` and ``Esc``/``Escape`` are equivalent.
+    Modifier chords such as ``Ctrl+S`` match exactly: ``Shift+1`` cannot
+    activate ``1``. Only the top scene's visible UI participates. Disabled
+    buttons (or ancestors) consume a matching shortcut without activation;
+    hidden or removed buttons have no shortcut. Two visible buttons claiming
+    the same key raise ``ValueError`` before either callback runs.
+
+    Normal UI event handlers have first refusal, then button shortcuts precede
+    the camera and scene handlers. ``hotkey="Enter"`` instead draws a
+    display-only hint for a contextual scene action. It does not bind input
+    and cannot be combined with ``shortcut``. Use :attr:`Scene.controls` for
+    actions without a button; a shortcut needs no separate scene binding.
+    """
 
     def __init__(
         self,
@@ -137,12 +162,21 @@ class Button(Component):
         *,
         on_click: Callable[[], Any] | None = None,
         hotkey: str | None = None,
+        shortcut: str | tuple[str, ...] | None = None,
         style: Style | None = None,
         **kwargs: Any,
     ) -> None:
+        if hotkey is not None and shortcut is not None:
+            raise ValueError("use hotkey for a display-only hint or shortcut for activation, not both")
+        if shortcut is not None and not isinstance(shortcut, (str, tuple)):
+            raise TypeError("shortcut must be a string, a tuple of strings, or None")
+        if shortcut == ():
+            raise ValueError("shortcut aliases cannot be empty")
         super().__init__(style=style, **kwargs)
         self._text_rv: ReactiveValue[str] = ReactiveValue(text, on_change=lambda _o, _n: self.invalidate_layout())
-        self._hotkey = hotkey
+        shortcuts = (shortcut,) if isinstance(shortcut, str) else shortcut or ()
+        self._hotkey = shortcuts[0] if shortcuts else hotkey
+        self._shortcuts = tuple(_normalize_shortcut(key) for key in shortcuts)
         self.on_click = on_click
         self._state: Literal["normal", "hovered", "pressed"] = "normal"
 
@@ -190,13 +224,16 @@ class Button(Component):
             return False  # siblings must see moves to un-hover
         if event.type == "click" and event.button == "left" and self.hit_test(event.x, event.y):
             self._state = "pressed"
-            if self.on_click is not None:
-                self.on_click()
+            self._activate()
             return True
         if event.type == "release" and self._state == "pressed":
             self._state = "hovered" if self.hit_test(event.x, event.y) else "normal"
             return True
         return False
+
+    def _activate(self) -> None:
+        if self.on_click is not None:
+            self.on_click()
 
     def on_draw(self) -> None:
         if self._game is None:

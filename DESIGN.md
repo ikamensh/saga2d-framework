@@ -117,6 +117,16 @@ names a font family, and a weight is simply another family (a bundled
 Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
 `draw_keycap`, so the game's hint strip and its buttons agree.
 
+For a key that activates the button itself, `Button(shortcut="E", on_click=...)`
+owns both its keycap and activation. It uses the current visible UI tree,
+respects enabled ancestors, and needs no scene binding or cleanup when removed.
+Exact modifier matching and duplicate-key errors prevent accidental actions.
+`hotkey` stays a display-only hint for contextual scene commands; specifying
+both is an error. Shardbound's paged relics/save rows, Tribes' recruitment keys,
+and Warband's command-card routing exposed the same duplicated binding and
+disabled-state checks. The [shortcut example](docs/framework-button-shortcuts.md)
+demonstrates the primitive independently of those games.
+
 ## Testing
 
 The mock backend records every call (`backend.sprites`, `rects`,
