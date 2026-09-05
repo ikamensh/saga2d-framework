@@ -96,6 +96,10 @@ class MockBackend:
             self.stop_player(player_id)
         self.is_running = False
 
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        return self._windowed_size if self.fullscreen else self.window_size
+
     def set_fullscreen(self, fullscreen: bool) -> None:
         if fullscreen == self.fullscreen:
             return

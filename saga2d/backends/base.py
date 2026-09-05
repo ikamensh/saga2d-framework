@@ -108,6 +108,11 @@ class Backend(Protocol):
         """Actual native content size, excluding decorations and backing scale."""
         ...
 
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        """Actual windowed size, or remembered restoration size while fullscreen."""
+        ...
+
     def set_fullscreen(self, fullscreen: bool) -> None:
         """Enter desktop fullscreen or restore the last actual windowed size."""
         ...
