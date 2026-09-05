@@ -30,8 +30,8 @@ keycaps (text is Nunito, SIL OFL, bundled in `tribes/assets/fonts`):
 | Click / Enter | act at the cursor: select, move, attack, harvest, capture | Arrows | move the cursor |
 | Tab / Shift+Tab | next / previous unit with actions left | WASD, right-drag | pan |
 | E | end turn (twice if units can still act) | Wheel, + / - | zoom |
-| T | research | C | capture village or city |
-| 1-5 | train in the selected city | H | hold (idle units heal) |
+| T | research wheel (Tab / arrows, Enter) | C | capture village or city |
+| 1-7 | train in the selected city | H | hold (idle units heal) |
 | F5 / F9 | save / load | Esc | cancel, then pause menu (settings, back to title) |
 | Home | jump to your capital | F1 | help |
 | 1 / 2 | pick a city's level reward | Tab (new game) | choose the tribe to play |
