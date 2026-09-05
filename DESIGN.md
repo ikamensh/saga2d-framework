@@ -20,8 +20,8 @@ the effects, the sound synth, the font and the minimap got in.
 ## Layers
 
 ```
-Game code            tribes/, warband/  — model, AI, textures, scenes
-Shared game pieces   render3d, effects, synth, fonts, ui.Minimap
+Game code            tribes/, warband/, eador/  — models, AI, art, scenes
+Shared game pieces   render3d, effects, synth, fonts, hexgrid, ui.Minimap
 Scene toolkit        Scene, SceneStack, Camera, Sprite, actions, particles, UI
 Backend protocol     saga2d/backends/base.py
 Backends             pyglet (GPU)   mock (records calls)
@@ -198,3 +198,36 @@ isometrically and reconciles sprites with the model; `tribes/textures.py`
 pre-renders the low-poly blocks and props with `saga2d.render3d`; `tribes/effects.py`
 holds transient animations; `tribes/sound.py` synthesises audio;
 `tribes/scene.py` and `tribes/title.py` turn input into model calls.
+
+## Shardbound and the abstraction test
+
+`eador/` is an Eador-inspired single-shard game: a province economy and
+hero army feed into separate tactical battles, then receive casualties,
+experience and rewards. `model.py` owns campaign rules and serialization;
+`battle.py` owns tactical rules, exact damage previews and enemy decisions;
+`scene.py` translates input and presents the campaign, battle and overlays;
+`art.py` draws original miniatures using ordinary Scene primitives.
+
+Building a second type of strategy game justified two small additions:
+
+* `HexGrid` combines axial geometry, picking, neighbors and weighted search.
+  A finite set of cells defines either a province map or a battlefield.
+  Callers supply blockers and the cost of entering cells. The same search
+  powers movement ranges and routes without knowing armies or terrain.
+* `Scene.draw_paragraph` measures the actual font, wraps words to a pixel
+  width, preserves paragraph breaks and returns the consumed height.
+  Guide text and recruitment descriptions exposed the need: character-count
+  wrapping overflowed their panels in real screenshots.
+
+Everything else uses existing scenes, buttons, input dispatch, draw helpers
+and save slots. Results are transparent scenes, so they cover underlying
+text and route input correctly without custom render orders. Campaign saves
+include a pending battle; applying its result clears it exactly once.
+
+The framework owns geometry and presentation mechanics. It has no province,
+economy, hero, army, spell, turn, combat, faction or victory abstraction.
+Both rule modules run without a window, and only import Saga2D's pure
+`HexGrid` utility. The [cookbook](docs/framework-hexgrid.md) demonstrates that
+primitive without importing either reference game. The
+[research and scope](docs/eador-research.md) explains which Eador systems
+this compact implementation preserves and simplifies.
