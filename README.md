@@ -16,11 +16,14 @@ speakers (`SAGA2D_HEADLESS=1` implies it and also hides windows).
 
 A 2.5D map of software-rendered low-poly blocks, units as game pieces on
 a disc so their tile is never in doubt, procedural sound, a title screen
-with map size and tribe count, and animated combat. Capture villages,
-harvest resources inside your borders to level cities up, research techs,
-train units, take every enemy city. Everything has a hotkey, and the UI
-shows them as keycaps (text is Nunito, SIL OFL, bundled in
-`tribes/assets/fonts`):
+with map size, tribe count and the tribe to play (each starts with its own
+tech), and animated combat. Capture villages, harvest resources inside
+your borders to level cities up, pick a reward at every new level
+(workshop, explorer, walls, border growth, population, park or stars),
+walk onto ruins for treasure, knowledge, settlers or a map, research
+techs, train units, take every enemy city — or lead on score when the
+round limit falls. Everything has a hotkey, and the UI shows them as
+keycaps (text is Nunito, SIL OFL, bundled in `tribes/assets/fonts`):
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
@@ -31,6 +34,7 @@ shows them as keycaps (text is Nunito, SIL OFL, bundled in
 | 1-5 | train in the selected city | H | hold (idle units heal) |
 | F5 / F9 | save / load | Esc | cancel, then pause menu (settings, back to title) |
 | Home | jump to your capital | F1 | help |
+| 1 / 2 | pick a city's level reward | Tab (new game) | choose the tribe to play |
 
 The game is `tribes/`: `model.py` holds every rule (pure Python, no
 rendering), `mapgen.py` builds connected maps, `ai.py` plays the other
