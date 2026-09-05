@@ -57,7 +57,8 @@ class KeyEvent:
 
 @dataclass(frozen=True)
 class MouseEvent:
-    """Mouse click, release, move, drag, or scroll in logical screen coords."""
+    """Mouse click, release, move, drag, or scroll in logical screen coords,
+    with the modifier keys held at the time (shift-click adds to a selection)."""
 
     type: str  # "click" | "release" | "move" | "drag" | "scroll"
     x: int
@@ -65,6 +66,10 @@ class MouseEvent:
     button: str | None = None
     dx: float = 0.0  # drag: pointer movement; scroll: wheel lines, fractional on trackpads
     dy: float = 0.0
+    shift: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    meta: bool = False
 
 
 @dataclass(frozen=True)

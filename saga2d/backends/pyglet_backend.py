@@ -224,13 +224,13 @@ class PygletBackend:
         @window.event
         def on_mouse_press(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("click", lx, ly, _button_to_name(button)))
+            queue.append(MouseEvent("click", lx, ly, _button_to_name(button), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
         def on_mouse_release(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("release", lx, ly, _button_to_name(button)))
+            queue.append(MouseEvent("release", lx, ly, _button_to_name(button), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
@@ -243,7 +243,7 @@ class PygletBackend:
         def on_mouse_drag(x: int, y: int, dx: int, dy: int, buttons: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
             s = self.scale_factor
-            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=dx / s, dy=-dy / s))
+            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=dx / s, dy=-dy / s, **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
