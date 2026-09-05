@@ -2,7 +2,8 @@
 
 Tests inspect ``mock.sprites``, ``mock.rects``, ``mock.circles``,
 ``mock.lines``, ``mock.polygons``, ``mock.texts``, ``mock.images``,
-``mock.camera``, ``mock.sounds_played``, ``mock.frame_count`` and feed
+``mock.image_updates``, ``mock.camera``, ``mock.sounds_played``,
+``mock.frame_count`` and feed
 input with ``inject_key`` / ``inject_click`` / ``inject_mouse_move`` /
 ``inject_scroll`` / ``inject_drag``.  Coordinates are recorded as given
 (logical space, no flip, no scaling).
@@ -30,6 +31,7 @@ class MockBackend:
         self.lines: list[dict[str, Any]] = []
         self.polygons: list[dict[str, Any]] = []
         self.images: list[dict[str, Any]] = []
+        self.image_updates: dict[str, int] = {}
         self.fonts: dict[str, str | None] = {}
         self.camera: tuple[float, float, float] = (0.0, 0.0, 1.0)
         self.clear_color: Color | None = None
@@ -103,6 +105,11 @@ class MockBackend:
         handle = self._make_id("pil")
         self._image_sizes[handle] = pil_image.size
         return handle
+
+    def update_image(self, image_handle: str, pil_image: Image.Image) -> None:
+        if pil_image.size != self._image_sizes.get(image_handle):
+            raise ValueError(f"update_image: got {pil_image.size}, the image is {self._image_sizes.get(image_handle)}")
+        self.image_updates[image_handle] = self.image_updates.get(image_handle, 0) + 1
 
     def get_image_size(self, image_handle: str) -> tuple[int, int]:
         return self._image_sizes.get(image_handle, self._default_image_size)

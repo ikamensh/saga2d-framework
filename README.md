@@ -23,7 +23,7 @@ your borders to level cities up, pick a reward at every new level
 walk onto ruins for treasure, knowledge, settlers or a map, research
 techs, train units, take every enemy city — or lead on score when the
 round limit falls. Everything has a hotkey, and the UI shows them as
-keycaps (text is Nunito, SIL OFL, bundled in `tribes/assets/fonts`):
+keycaps (text is Nunito, SIL OFL, bundled with saga2d):
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|

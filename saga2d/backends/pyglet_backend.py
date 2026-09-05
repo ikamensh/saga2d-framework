@@ -372,8 +372,12 @@ class PygletBackend:
         return self._atlas_add(pyglet.image.load(path))
 
     def load_image_from_pil(self, pil_image: Any) -> Any:
-        data = pyglet.image.ImageData(pil_image.width, pil_image.height, "RGBA", pil_image.tobytes(), pitch=-pil_image.width * 4)
-        return self._atlas_add(data)
+        return self._atlas_add(_image_data(pil_image))
+
+    def update_image(self, image_handle: Any, pil_image: Any) -> None:
+        if (pil_image.width, pil_image.height) != (image_handle.width, image_handle.height):
+            raise ValueError(f"update_image: got {pil_image.size}, the image is {image_handle.width}x{image_handle.height}")
+        image_handle.blit_into(_image_data(pil_image), 0, 0, 0)
 
     def get_image_size(self, image_handle: Any) -> tuple[int, int]:
         return image_handle.width, image_handle.height
@@ -562,6 +566,10 @@ class PygletBackend:
         if player_id.playing and pyglet.media.get_audio_driver() is not None:
             player_id.pause()
         player_id.delete()
+
+
+def _image_data(pil_image: Any) -> Any:
+    return pyglet.image.ImageData(pil_image.width, pil_image.height, "RGBA", pil_image.tobytes(), pitch=-pil_image.width * 4)
 
 
 def _group_order(space: Space, order: int) -> int:

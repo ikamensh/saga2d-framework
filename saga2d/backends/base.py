@@ -114,6 +114,12 @@ class Backend(Protocol):
 
     def load_image_from_pil(self, pil_image: "PILImage.Image") -> ImageHandle: ...
 
+    def update_image(self, image_handle: ImageHandle, pil_image: "PILImage.Image") -> None:
+        """Replace the pixels of an image loaded from PIL; the size must not change.
+        Sprites showing it pick the new pixels up on the next frame (fog of war,
+        a minimap, anything redrawn from game state)."""
+        ...
+
     def get_image_size(self, image_handle: ImageHandle) -> tuple[int, int]: ...
 
     # -- Retained sprites ----------------------------------------------------

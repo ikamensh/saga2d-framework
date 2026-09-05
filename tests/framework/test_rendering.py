@@ -244,3 +244,19 @@ def test_loading_a_slot_saved_by_another_scene_class_is_refused(tmp_path) -> Non
         assert game.load(1, scene=play)["state"] == {"score": 3}
     finally:
         game._teardown()
+
+
+def test_a_registered_image_can_be_redrawn_in_place(game: Game, backend) -> None:
+    from PIL import Image
+
+    game.assets.image_from_pil("fog", Image.new("RGBA", (4, 3), (0, 0, 0, 255)))
+    handle = game.assets.image("fog")
+    game.assets.update_image("fog", Image.new("RGBA", (4, 3), (0, 0, 0, 0)))
+    assert backend.image_updates[handle] == 1
+    assert game.assets.image("fog") is handle  # sprites keep showing the same handle
+    import pytest
+
+    with pytest.raises(ValueError):
+        game.assets.update_image("fog", Image.new("RGBA", (5, 3)))
+    with pytest.raises(KeyError):
+        game.assets.update_image("never", Image.new("RGBA", (4, 3)))
