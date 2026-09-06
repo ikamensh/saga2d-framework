@@ -56,12 +56,17 @@ Economy, difficulty and crystal-demand audits accept `--heroes`, `--themes` and
 `--plans` to select a small comparison. Their existing matrix sizes are preserved;
 use `--seeds 1` with those filters for a quick probe.
 
+Normal play uses `game.run(scene, fps=60)`, sleeping between frames and reducing
+unfocused or hidden windows to **15 FPS**. A game can choose `fps=30` for a lower
+active frame rate.
+
 Shardbound's `PlayerInput` verification driver caps native rendering at **30
-FPS**, including screenshot settling loops. It retains `tick(1 / 60)` simulation
-steps, so these checks can take longer without changing saved results. Direct
-mock/model tests remain unpaced; native helpers with their own frame loop must
-supply their own pacing. A frame cap limits rendering frequency, while the
-fuzzer allowance limits CPU work; neither is a battery-life measurement.
+FPS**, including screenshot settling loops. Standalone native verification
+scripts use `tools.native_frames.tick(game)` for the same cap. Both retain
+`dt=1 / 60` simulation steps, so these checks can take longer without changing
+saved results. Direct mock/model tests remain unpaced. A frame cap limits
+rendering frequency, while the fuzzer allowance limits CPU work; neither is a
+battery-life measurement.
 
 ## Tribes in one screen
 

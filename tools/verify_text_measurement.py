@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ['SAGA2D_SILENT'] = '1'
 
 from PIL import ImageChops
+from tools.native_frames import tick
 from saga2d import Anchor, Button, Column, Game, Label, Scene
 
 TEXT = 'The same visible text must measure consistently. A following control stays below every wrapped line.'
@@ -47,13 +48,13 @@ def run_case(output, direction, initial, final, *, warm):
         if warm:
             game.set_window_size(initial[0])
             game.push(MeasuredText(initial[1]))
-            game.tick(1 / 60)
+            tick(game)
             game.backend.measure_text(TEXT, initial[1], 'Verdana')
         game.set_window_size(final[0])
         scene = MeasuredText(final[1])
         game.clear_and_push(scene)
         for _ in range(2):
-            game.tick(1 / 60)
+            tick(game)
         metrics = dict(text=game.backend.measure_text(TEXT, final[1], 'Verdana'),
                        paragraph=scene.paragraph.get_preferred_size(), button=scene.confirm.bounds)
         _, top, _, height = scene.paragraph.bounds
@@ -68,7 +69,7 @@ def run_case(output, direction, initial, final, *, warm):
         py = (window.height - game.height * scale) / 2 + (game.height - y - height / 2) * scale
         window.dispatch_event('on_mouse_press', round(px), round(py), mouse.LEFT, 0)
         window.dispatch_event('on_mouse_release', round(px), round(py), mouse.LEFT, 0)
-        game.tick(1 / 60)
+        tick(game)
         assert scene.confirmations == 1
         return metrics, frame
     finally:
