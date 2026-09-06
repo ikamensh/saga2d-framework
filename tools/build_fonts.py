@@ -1,4 +1,4 @@
-"""Regenerate ``tribes/assets/fonts`` from Nunito's variable font (SIL OFL 1.1).
+"""Regenerate ``saga2d/assets/fonts`` from Nunito's variable font (SIL OFL 1.1).
 
     uv run --with fonttools python tools/build_fonts.py "Nunito[wght].ttf"
 
@@ -18,7 +18,7 @@ from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
 
 WEIGHTS = {"Nunito": 400, "Nunito SemiBold": 600, "Nunito ExtraBold": 800}
-OUT = Path(__file__).resolve().parent.parent / "tribes" / "assets" / "fonts"
+OUT = Path(__file__).resolve().parent.parent / "saga2d" / "assets" / "fonts"
 
 
 def instantiate(source: Path, family: str, weight: int) -> None:

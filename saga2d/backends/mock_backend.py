@@ -2,7 +2,8 @@
 
 Tests inspect ``mock.sprites``, ``mock.rects``, ``mock.circles``,
 ``mock.lines``, ``mock.polygons``, ``mock.texts``, ``mock.images``,
-``mock.camera``, ``mock.sounds_played``, ``mock.sounds_playing``, ``mock.frame_count`` and feed
+``mock.image_updates``, ``mock.camera``, ``mock.sounds_played``,
+``mock.sounds_playing``, ``mock.frame_count`` and feed
 input with ``inject_key`` / ``inject_click`` / ``inject_mouse_move`` /
 ``inject_scroll`` / ``inject_drag``.  Coordinates are recorded as given
 (logical space, no flip, no scaling).
@@ -30,6 +31,7 @@ class MockBackend:
         self.lines: list[dict[str, Any]] = []
         self.polygons: list[dict[str, Any]] = []
         self.images: list[dict[str, Any]] = []
+        self.image_updates: dict[str, int] = {}
         self.fonts: dict[str, str | None] = {}
         self.camera: tuple[float, float, float] = (0.0, 0.0, 1.0)
         self.clear_color: Color | None = None
@@ -145,6 +147,11 @@ class MockBackend:
         self._image_sizes[handle] = pil_image.size
         return handle
 
+    def update_image(self, image_handle: str, pil_image: Image.Image) -> None:
+        if pil_image.size != self._image_sizes.get(image_handle):
+            raise ValueError(f"update_image: got {pil_image.size}, the image is {self._image_sizes.get(image_handle)}")
+        self.image_updates[image_handle] = self.image_updates.get(image_handle, 0) + 1
+
     def get_image_size(self, image_handle: str) -> tuple[int, int]:
         return self._image_sizes.get(image_handle, self._default_image_size)
 
@@ -257,11 +264,11 @@ class MockBackend:
     def inject_key(self, key: str, type: str = "key_press", *, shift=False, ctrl=False, alt=False, meta=False) -> None:
         self._pending_events.append(KeyEvent(type=type, key=key, shift=shift, ctrl=ctrl, alt=alt, meta=meta))
 
-    def inject_click(self, x: int, y: int, button: str = "left") -> None:
-        self._pending_events.append(MouseEvent(type="click", x=x, y=y, button=button))
+    def inject_click(self, x: int, y: int, button: str = "left", *, shift=False, ctrl=False, alt=False, meta=False) -> None:
+        self._pending_events.append(MouseEvent(type="click", x=x, y=y, button=button, shift=shift, ctrl=ctrl, alt=alt, meta=meta))
 
-    def inject_release(self, x: int, y: int, button: str = "left") -> None:
-        self._pending_events.append(MouseEvent(type="release", x=x, y=y, button=button))
+    def inject_release(self, x: int, y: int, button: str = "left", *, shift=False, ctrl=False, alt=False, meta=False) -> None:
+        self._pending_events.append(MouseEvent(type="release", x=x, y=y, button=button, shift=shift, ctrl=ctrl, alt=alt, meta=meta))
 
     def inject_mouse_move(self, x: int, y: int) -> None:
         self._pending_events.append(MouseEvent(type="move", x=x, y=y))
@@ -269,8 +276,8 @@ class MockBackend:
     def inject_scroll(self, x: int, y: int, dx: float, dy: float) -> None:
         self._pending_events.append(MouseEvent(type="scroll", x=x, y=y, dx=dx, dy=dy))
 
-    def inject_drag(self, x: int, y: int, dx: float, dy: float, button: str = "left") -> None:
-        self._pending_events.append(MouseEvent(type="drag", x=x, y=y, button=button, dx=dx, dy=dy))
+    def inject_drag(self, x: int, y: int, dx: float, dy: float, button: str = "left", *, shift=False, ctrl=False, alt=False, meta=False) -> None:
+        self._pending_events.append(MouseEvent(type="drag", x=x, y=y, button=button, dx=dx, dy=dy, shift=shift, ctrl=ctrl, alt=alt, meta=meta))
 
     def inject_window_event(self, type: str) -> None:
         self._pending_events.append(WindowEvent(type=type))

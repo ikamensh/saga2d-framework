@@ -1,12 +1,14 @@
 # Saga2D
 
-A small Python framework for 2D games, exercised by **Tribes**, a
-Polytopia-style strategy game, and **Shardbound**, a compact Eador-inspired
-campaign with a province map and separate tactical battles.
+A small Python framework for 2D games, exercised by three games built on
+it: **Tribes**, a Polytopia-style turn-based strategy game; **Warband**, a
+Warcraft 2-style real-time strategy game; and **Shardbound**, a compact
+Eador-inspired campaign with a province map and separate tactical battles.
 
 ```bash
 uv sync --extra dev
 uv run python -m tribes            # title screen; --seed 7 jumps straight into a map
+uv run python -m warband           # title screen; --seed 3 starts a match directly
 uv run python -m eador             # Shardbound; --seed 7 --hero Wizard skips the title
 uv run python -m pytest tests -q   # headless integration suite
 ```
@@ -86,7 +88,7 @@ your borders to level cities up, pick a reward at every new level
 walk onto ruins for treasure, knowledge, settlers or a map, research
 techs, train units, take every enemy city — or lead on score when the
 round limit falls. Everything has a hotkey, and the UI shows them as
-keycaps (text is Nunito, SIL OFL, bundled in `tribes/assets/fonts`):
+keycaps (text is Nunito, SIL OFL, bundled with saga2d):
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
@@ -108,6 +110,48 @@ tribes, `textures.py` pre-renders the isometric blocks and props with
 effect and the ambient loop with numpy (cached under `~/.tribes`), and
 `scene.py` plus `title.py` are the saga2d scenes that turn input into
 model calls.
+
+## Warband in one screen
+
+A top-down map of meadows, woods and lakes under a soft fog of war, in
+summer, winter or wasteland; a base for each of two to four players with a
+gold mine and a wood beside it.  Peasants mine gold and fell trees; farms
+feed the army; a barracks, lumber mill, blacksmith, stables, workshop and
+church open seven units and nine upgrades; guard towers hold the line.
+Three AI difficulties expand, upgrade, raid and attack in growing waves.
+Raze every enemy building and hunt down what is left.  Selection by click
+or drag box, right-click does the sensible thing (move, harvest, attack,
+resume building), a context command card with keycaps, control groups,
+patrol, camera bookmarks, a minimap that pans and orders, alerts, three
+save slots with an autosave, persisted settings, a tutorial strip, a
+codex, and two marches under it all.
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| Drag / click | select | Right click | move · harvest · attack · rally point |
+| Shift | add to selection / queue orders | A / P | attack-move / patrol |
+| S / H | stop / hold | B then F B H T M K S W C | build farm · barracks · hall · tower · mill · smith · stables · workshop · church |
+| R | repair a damaged building (peasants) | Mac trackpad | two-finger click or Ctrl+click is the right-click; Cmd-click selects a type |
+| Letters on the card | train and research in the selected building | Ctrl+1-9 / 1-9 | assign / recall a group |
+| Tab / . | next idle peasant / soldier | Space | jump to the last alert |
+| Arrows, edges, middle-drag | scroll | Wheel, + / − | zoom |
+| F3 / F5 / F9 | pause / quicksave / quickload | Esc, F1, F2, F10 | cancel · help · codex · menu |
+
+The game is `warband/`: `model.py` is a 20 Hz fixed-step simulation with
+orders, harvesting, construction, supply, upgrades, towers, fog and
+elimination; `path.py` is A*; `mapgen.py` lays out and connects the bases
+and audits fairness; `ai.py` runs each computer player from a profile per
+difficulty; `textures.py` paints the ground and renders every prop and unit
+through `saga2d.render3d`'s front camera; `view.py` keeps sprites in step
+with the model and draws the fog, the minimap and the moving water;
+`sound.py` synthesises the effects and the marches; `scene.py`, `title.py`
+and `tutorial.py` are the saga2d scenes.  The tools: `fuzz_warband.py`
+(AI matches with invariants, monkey input), `verify_warband.py` (real
+pyglet events with frames to look at), `ai_report.py` (difficulties against
+a scripted opening and against each other), `map_report.py` (fairness over
+seeds), `perf_warband.py` (frame times of a 150-unit battle),
+`soak_warband.py` (whole matches on the real backend) and
+`build_warband.py` (a self-tested standalone build).
 
 ## The framework
 
@@ -164,7 +208,7 @@ What you get:
   display's pixel density stay crisp on HiDPI screens.
 * **Declarative input.**  `controls` maps keys and chords to methods;
   `bind_key` does the same at runtime; `game.input.is_pressed` polls held
-  keys.  Mouse events carry `world_x`/`world_y`.
+  keys.  Mouse events carry `world_x`/`world_y` and the modifier keys.
 * **A scene stack** with transparent overlays, deferred push/pop, and
   per-scene ownership of sprites, timers and particle emitters.
 * **UI**: `Label` (reactive: pass a lambda), `Button` (its optional
@@ -182,6 +226,12 @@ What you get:
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.
+* **Shared by both games**: `saga2d.render3d` (a Pillow low-poly renderer
+  with a configurable camera), `saga2d.effects` (floating text, pulses,
+  bursts, hit reactions, banners, toasts), `saga2d.synth` (procedural sound
+  with a WAV cache and a bank), `saga2d.fonts` (bundled Nunito), dynamic
+  images (`assets.update_image` for fog of war and minimaps), and a
+  `Minimap` component.
 * **A mock backend** that records every draw call for headless tests, and
   `saga2d.testing.render_scene` for offscreen screenshots you can look at.
   `Game.run()` closes automatically; callers driving `tick()` finish with

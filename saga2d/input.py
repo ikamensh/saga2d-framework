@@ -29,7 +29,8 @@ class InputEvent:
     ``x``/``y`` when the scene has no camera).  ``dx``/``dy`` carry the
     pointer movement of a drag or the wheel lines of a scroll; trackpads
     report fractions of a line, so scroll handling must scale with
-    ``dy`` rather than count events.
+    ``dy`` rather than count events.  ``shift``/``ctrl``/``alt``/``meta``
+    are the modifiers held, for keyboard and mouse events alike.
     """
 
     type: str
@@ -125,5 +126,6 @@ class InputManager:
             elif isinstance(event, MouseEvent):
                 result.append(InputEvent(
                     type=event.type, x=event.x, y=event.y, button=event.button, dx=event.dx, dy=event.dy,
+                    shift=event.shift, ctrl=event.ctrl, alt=event.alt, meta=event.meta,
                 ))
         return result

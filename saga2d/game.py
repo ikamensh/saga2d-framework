@@ -260,17 +260,18 @@ class Game:
 
     # -- Save / load -----------------------------------------------------------
 
-    def save(self, slot: int, scene: Scene | None = None) -> None:
-        """Write *scene*'s :meth:`Scene.get_save_state` to *slot* (default: the top scene).
+    def save(self, slot: int | str, scene: Scene | None = None) -> None:
+        """Write *scene*'s :meth:`Scene.get_save_state` to *slot* (default: the top scene),
+        with :meth:`Scene.get_save_summary` for save browsers.
 
         An overlay that offers "Save" passes the scene it covers: its own pop is
         deferred, so it is still the top scene while the handler runs.
         """
         target = scene if scene is not None else self.scene
         if target is not None:
-            self.save_manager.save(slot, target.get_save_state(), type(target).__name__)
+            self.save_manager.save(slot, target.get_save_state(), type(target).__name__, summary=target.get_save_summary())
 
-    def load(self, slot: int, scene: Scene | None = None) -> dict[str, Any] | None:
+    def load(self, slot: int | str, scene: Scene | None = None) -> dict[str, Any] | None:
         """Read *slot* into *scene* (default: the top scene).  Returns the raw save,
         or ``None`` when the slot is empty.  A slot written by another scene class
         is refused: feeding it to the wrong scene would fail half-way through."""

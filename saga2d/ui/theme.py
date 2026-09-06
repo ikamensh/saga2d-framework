@@ -54,6 +54,9 @@ _DEFAULT_TEXT_STYLES: dict[str, TextStyle] = {
     "body": TextStyle(16, (226, 232, 240, 255)),
     "sub": TextStyle(13, (210, 210, 225, 230)),
     "caption": TextStyle(12, (155, 155, 170, 255)),
+    "floating": TextStyle(18, (255, 255, 255, 255)),  # damage numbers and other saga2d.effects.FloatingText
+    "banner": TextStyle(40, (255, 255, 255, 255)),  # saga2d.effects.Banner
+    "banner_sub": TextStyle(17, (255, 255, 255, 255)),
 }
 
 

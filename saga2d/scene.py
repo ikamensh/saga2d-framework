@@ -342,6 +342,10 @@ class Scene:
     def get_save_state(self) -> dict[str, Any]:
         return {}
 
+    def get_save_summary(self) -> dict[str, Any]:
+        """A few JSON values a save browser shows for this scene's saves (map, clock, player…)."""
+        return {}
+
     def load_save_state(self, state: dict[str, Any]) -> None:
         pass
 

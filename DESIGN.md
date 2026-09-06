@@ -12,13 +12,16 @@ settings screen, sound pools, a HUD layer that survives scene changes,
 snapshot tooling, thirteen UI widgets).  Each of those was either vague
 enough that no game exercised it or specific enough that the one game
 that needed it would rather own it.  They were deleted rather than
-maintained.  The test for a new feature is: does Tribes, or an equally
-concrete game, need it in exactly this form?
+maintained.  The test for a new feature is: does Tribes or Warband, or an
+equally concrete game, need it in exactly this form?  A piece both games
+need in the same form is the strongest case, and that is how the renderer,
+the effects, the sound synth, the font and the minimap got in.
 
 ## Layers
 
 ```
-Game code            tribes/, eador/  — models, AI, art, scenes
+Game code            tribes/, warband/, eador/  — models, AI, art, scenes
+Shared game pieces   render3d, effects, synth, fonts, hexgrid, ui.Minimap
 Scene toolkit        Scene, SceneStack, Camera, Sprite, actions, particles, UI
 Backend protocol     saga2d/backends/base.py
 Backends             pyglet (GPU)   mock (records calls)
@@ -48,10 +51,39 @@ a per-line factor instead of stepping per event.
 Every draw call carries an integer `order`; lower draws first.  World
 content draws before screen content.  Inside the world, `RenderLayer`
 bands (`BACKGROUND < OBJECTS < UNITS < EFFECTS < UI_WORLD`) set the
-order; sprites with `y_sort=True` add their bottom edge inside the band.
-Screen-space UI is ordered by the scene's position in the stack, so an
-overlay always draws above the scene beneath it.  Text at an order draws
-above shapes at the same order; shapes at one order draw in call order.
+order; sprites with `y_sort=True` add their bottom edge inside the band,
+in steps of `Y_SORT_STEP` (eight units).  Every distinct order is a batch
+group in pyglet and a moving sprite migrates between groups as its order
+changes, so a step of one pixel made a 150-unit battle spend most of its
+frame re-sorting groups; eight is invisible on 32-unit tiles and cheap.  The backend also
+uploads a view matrix only when consecutive groups need different ones.
+Three more things keep a 150-unit battle under 16 ms: pyglet's per-call GL
+error checking is off (`saga2d/__init__.py` sets `debug_gl` before
+`pyglet.gl` loads; a frame makes thousands of GL calls), `draw_image`
+reuses a pool of pyglet sprites in call order instead of allocating one
+per call per frame (a HUD draws the same portraits every frame), and a
+sprite's appearance setters only reach the backend when the value
+changed (views set `visible`/`opacity` every frame for every unit).
+`saga2d.testing.assert_no_text_overlap(game, top_scene_only=True)` fails a
+mock-backed frame in which one text is drawn over another, using the same
+`measure_text` numbers the layout used; a game sweeps every screen through
+it at the window sizes players have (`tests/warband/test_layout.py`), which
+is how a tagline landing on a menu button and a codex column running into
+the next were caught.  On a Mac the pyglet backend reports Control+click
+as the right button, the platform's secondary click, so games need no
+trackpad special case of their own.
+`saga2d.testing.FrameTimer` measures the frame breakdown (wrap the phases,
+time frames, print the report; `tools/perf_warband.py` is its use); time
+frames with it before claiming numbers, and never under a profiler or
+`tracemalloc`, which slow tight Python loops several times over and shift
+the blame.  `ParticleEmitter.burst` and `continuous` return the emitter,
+so a view builds and starts one in a single expression.
+Screen-space UI is ordered by the scene's position in the stack (with a
+stride of four orders per level), so an overlay always draws above the
+scene beneath it.  Text at an order draws above shapes and images at the
+same order, images above shapes; shapes at one order draw in call order.
+The spare orders inside a level let a component put a shape over an image
+it drew (the minimap's viewport frame).
 
 `with scene.screen_layer(1):` groups immediate screen drawing above the
 default layer zero. The scope applies through game drawing helpers and
@@ -112,7 +144,11 @@ compares warm and fresh windows, including exact wrapped-flow pixels and native
 clicks in both directions.
 
 Textures are packed into one atlas, so sprites at the same order share a
-draw call regardless of image.
+draw call regardless of image.  An image registered from PIL can be
+redrawn in place (`assets.update_image`); every sprite showing it changes
+with it, which is how Warband draws fog of war — one pixel per tile,
+stretched over the map, bilinear filtering supplying the soft edges — and
+its minimap.
 
 ## Frame
 
@@ -168,7 +204,8 @@ Keys are plain lowercase names (`"a"`, `"space"`, `"escape"`, `"f5"`).
 defined.  A handler with a required positional parameter receives the
 `InputEvent`, one without is called bare.  Chords are tried before the
 bare key.  Mouse events reach `handle_input` with `world_x`/`world_y`
-already computed from the scene's camera.
+already computed from the scene's camera, and with the modifier keys held
+(shift-click adds to a selection, ctrl-drag differs from a drag).
 
 ## UI
 
@@ -182,7 +219,9 @@ colours, paddings, corner radii and named `TextStyle`s; a `TextStyle`
 names a font family, and a weight is simply another family (a bundled
 "Nunito SemiBold" file), which is the one mechanism every backend has.
 Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
-`draw_keycap`, so the game's hint strip and its buttons agree.
+`draw_keycap`, so the game's hint strip and its buttons agree.  `Minimap`
+draws a game-supplied image with the camera's viewport framed over it and
+turns clicks and drags into world coordinates.
 
 `Label(text, width=300, wrap=True)` opts into measured multiline text whose
 preferred height participates in ordinary flow layout. Shardbound's reward
@@ -277,6 +316,55 @@ Sound never reaches the speakers from tests or verification scripts:
 the mock backend only records `play_sound` calls, and the pyglet backend
 selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
 `SAGA2D_HEADLESS=1`) is set, still running the real load/play/stop path.
+
+## Pieces two games share
+
+* `render3d` — a Pillow software renderer for low-poly meshes: boxes,
+  pyramids, cones, cylinders, spheres, gable roofs, flat and camera-facing
+  faces; one directional light, back-to-front sorting, supersampled
+  rasterisation.  A `Projection` says where the camera stands:
+  `Projection.dimetric()` is Tribes' isometric view, `Projection.front()`
+  Warband's 3/4 view with square tile footprints, so a 3×3 building covers
+  3×3 tiles and still shows lit walls.  Both games pre-render tiles, props,
+  buildings and units with it at the display's pixel density.
+* `effects` — `Effect`/`Effects` and the transient animations every game
+  wants: floating text, pulses, particle bursts, hit flashes with knockback,
+  dissolves, a turn banner and a toast.  They draw through the scene's
+  helpers and the theme's text styles, so they look like the game they run in.
+* `synth` — `tone`, `noise`, `thump`, `mix`, `level`, `pan` and
+  `write_wav`: pure synthesis shared by every game.  Each game owns its bank
+  (which names it renders to WAV, the version marker, playback through its
+  `AudioManager`): Tribes' D-major bank in `tribes/sound.py`, Warband's
+  A-minor `SynthBank` in `warband/sound.py`.  The two banks are alike; if a
+  third game wants one, that is the moment to lift it back into saga2d.
+* `fonts` — Nunito in three weights, one family per weight because pyglet
+  cannot pick a weight out of a variable font.
+* `settings` — a JSON preferences file with defaults that keeps working
+  when the file is corrupt; `Game.settings(defaults)` puts it in the game's
+  `data_dir` next to the saves.  Save slots may be names as well as numbers
+  (`"autosave"`, `"quick"`), carry a `summary` from `Scene.get_save_summary`
+  for save browsers, and `list_slots` reports a corrupt file instead of
+  raising, so a browser can say so.  `Game.set_fullscreen` toggles the
+  window; `Toast(top=)` keeps notices clear of a game's own strips.
+
+## Warband as the second reference game
+
+`warband/model.py` is a 20 Hz fixed-step simulation: units with a queue of
+orders (move, attack-move, attack, harvest, deposit, build, hold), gold
+mining and tree felling, construction with a builder hidden inside the
+site, training queues and rally points, supply from farms, towers that
+shoot on their own, damage rolls, an under-attack alert per cooldown, fog
+of war as per-player visible and explored grids, elimination and JSON
+saves.  `path.py` is bounded A* that walks up to unreachable goals, which
+is exactly what approaching a building or a tree needs.  The scene
+accumulates frame time and steps the world in whole `SIM_DT`s, running the
+AI brains between steps, so the game is deterministic for a seed
+regardless of frame rate.  Two movement deadlocks the fuzz found — head-on
+collisions the symmetric separation push could never resolve, and paths
+made stale by a building placed across them — are why walking units
+sidestep to their right and re-plan when their next tile is no longer
+adjacent or passable.  `tools/fuzz_warband.py` plays AI-vs-AI games with
+world invariants and a stall check, and feeds the scene random input.
 
 ## Tribes as the reference game
 

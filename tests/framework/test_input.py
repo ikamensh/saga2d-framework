@@ -145,3 +145,21 @@ def test_scroll_and_drag_deltas_keep_their_fractions(game: Game, backend) -> Non
     game.tick(0.016)
     assert (events[0].type, events[0].dy) == ("scroll", 0.3)
     assert (events[1].type, events[1].dx, events[1].dy) == ("drag", 1.5, -0.25)
+
+
+def test_mouse_events_carry_the_modifier_keys(game: Game, backend) -> None:
+    seen: list[tuple[str, bool, bool]] = []
+
+    class S(Scene):
+        def handle_input(self, event: InputEvent) -> bool:
+            if event.is_mouse:
+                seen.append((event.type, event.shift, event.ctrl))
+            return True
+
+    game.push(S())
+    backend.inject_click(10, 10, shift=True)
+    backend.inject_release(10, 10, shift=True)
+    backend.inject_drag(12, 12, 2, 2, ctrl=True)
+    backend.inject_click(10, 10)
+    game.tick(0.016)
+    assert seen == [("click", True, False), ("release", True, False), ("drag", False, True), ("click", False, False)]

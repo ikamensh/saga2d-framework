@@ -59,6 +59,13 @@ class AssetManager:
         self._images[key] = handle
         return handle
 
+    def update_image(self, key: str, pil_image: "Image.Image") -> None:
+        """Redraw a registered image in place (same size); sprites using it change with it."""
+        handle = self._images.get(key)
+        if handle is None:
+            raise KeyError(f"No image registered as {key!r}; register it with image_from_pil first")
+        self._backend.update_image(handle, pil_image.convert("RGBA"))
+
     def has_image(self, key: str) -> bool:
         return key in self._images
 

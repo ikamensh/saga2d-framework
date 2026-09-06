@@ -195,7 +195,10 @@ class Sprite:
 
     @opacity.setter
     def opacity(self, value: float) -> None:
-        self._opacity = max(0, min(255, int(value)))
+        opacity = max(0, min(255, int(value)))
+        if opacity == self._opacity:
+            return  # views set appearance every frame; only a change reaches the backend
+        self._opacity = opacity
         self._sync()
 
     @property
@@ -204,7 +207,10 @@ class Sprite:
 
     @visible.setter
     def visible(self, value: bool) -> None:
-        self._visible = bool(value)
+        visible = bool(value)
+        if visible == self._visible:
+            return
+        self._visible = visible
         self._sync()
 
     @property
@@ -214,6 +220,8 @@ class Sprite:
     @tint.setter
     def tint(self, value: tuple[float, float, float]) -> None:
         r, g, b = (max(0.0, min(1.0, float(c))) for c in value)
+        if (r, g, b) == self._tint:
+            return
         self._tint = (r, g, b)
         self._sync()
 
@@ -223,7 +231,10 @@ class Sprite:
 
     @rotation.setter
     def rotation(self, value: float) -> None:
-        self._rotation = float(value)
+        rotation = float(value)
+        if rotation == self._rotation:
+            return
+        self._rotation = rotation
         self._sync()
 
     @property

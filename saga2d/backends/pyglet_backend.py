@@ -89,6 +89,9 @@ def _mods_to_kwargs(modifiers: int) -> dict[str, bool]:
     }
 
 
+_MAC = sys.platform == "darwin"
+
+
 def _button_to_name(button: int) -> str | None:
     from pyglet.window import mouse
 
@@ -121,7 +124,9 @@ class PygletBackend:
         self._shape_program: Any = None
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
         self._soup_lists: list[Any] = []
-        self._frame_images: list[Any] = []
+        self._frame_images: list[Any] = []  # pooled pyglet sprites for draw_image, reused in call order frame to frame
+        self._ctrl_click = False  # a Mac Control+click in progress, reported as the right button
+        self._frame_images_used = 0
         self._labels: dict[tuple[Any, ...], tuple[Any, int]] = {}
         self._label_uses: dict[tuple[Any, ...], int] = {}
         self._frame = 0
@@ -130,6 +135,7 @@ class PygletBackend:
         self._identity: Any = None
         self._screen_view: Any = None
         self._world_view: Any = None
+        self._applied_view: Any = None
         self._players: dict[int, Any] = {}
         self._sound_players: set[int] = set()
         self._next_player_id = 0
@@ -174,6 +180,7 @@ class PygletBackend:
             @ Mat4.from_translation(Vec3(-cx * zoom, self.logical_height + cy * zoom, 0))
             @ Mat4.from_scale(Vec3(zoom, zoom, 1))
         )
+        self._applied_view = None
 
     def _to_physical(self, x: float, y: float, space: Space) -> tuple[float, float]:
         """Framework coords in *space* → physical pixels (y-up)."""
@@ -241,16 +248,29 @@ class PygletBackend:
             queue.append(KeyEvent("key_release", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
             return True
 
+        def name_of(button: int, modifiers: int, pressing: bool) -> str | None:
+            # A Mac trackpad has no right button: Control+click is the secondary click there, as in
+            # every Mac application.  The release and the drag keep the button the press reported.
+            from pyglet.window import key
+
+            name = _button_to_name(button)
+            if _MAC and name == "left":
+                if pressing:
+                    self._ctrl_click = bool(modifiers & key.MOD_CTRL)
+                if self._ctrl_click:
+                    return "right"
+            return name
+
         @window.event
         def on_mouse_press(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("click", lx, ly, _button_to_name(button)))
+            queue.append(MouseEvent("click", lx, ly, name_of(button, modifiers, True), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
         def on_mouse_release(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("release", lx, ly, _button_to_name(button)))
+            queue.append(MouseEvent("release", lx, ly, name_of(button, modifiers, False), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
@@ -263,7 +283,7 @@ class PygletBackend:
         def on_mouse_drag(x: int, y: int, dx: int, dy: int, buttons: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
             s = self.scale_factor
-            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=dx / s, dy=-dy / s))
+            queue.append(MouseEvent("drag", lx, ly, name_of(buttons, modifiers, False), dx=dx / s, dy=-dy / s, **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
@@ -310,9 +330,9 @@ class PygletBackend:
             vlist.delete()
         self._soup_lists.clear()
         self._soups.clear()
-        for sprite in self._frame_images:
-            sprite.delete()
-        self._frame_images.clear()
+        for sprite in self._frame_images[:self._frame_images_used]:
+            sprite.visible = False
+        self._frame_images_used = 0
         self._label_uses.clear()
 
     def end_frame(self) -> None:
@@ -433,9 +453,15 @@ class PygletBackend:
         key = (space, order)
         group = self._text_groups.get(key)
         if group is None:
-            group = pyglet.graphics.Group(order=_group_order(space, order) + 1)
+            group = _TextGroup(self, _group_order(space, order) + 1)
             self._text_groups[key] = group
         return group
+
+    def _apply_view(self, view: Any) -> None:
+        """Upload the view matrix only when it changes: hundreds of groups share two matrices."""
+        if self._applied_view is not view:
+            self.window.view = view
+            self._applied_view = view
 
     # ------------------------------------------------------------------
     # Images and sprites
@@ -454,8 +480,12 @@ class PygletBackend:
         return self._atlas_add(pyglet.image.load(path))
 
     def load_image_from_pil(self, pil_image: Any) -> Any:
-        data = pyglet.image.ImageData(pil_image.width, pil_image.height, "RGBA", pil_image.tobytes(), pitch=-pil_image.width * 4)
-        return self._atlas_add(data)
+        return self._atlas_add(_image_data(pil_image))
+
+    def update_image(self, image_handle: Any, pil_image: Any) -> None:
+        if (pil_image.width, pil_image.height) != (image_handle.width, image_handle.height):
+            raise ValueError(f"update_image: got {pil_image.size}, the image is {image_handle.width}x{image_handle.height}")
+        image_handle.blit_into(_image_data(pil_image), 0, 0, 0)
 
     def get_image_size(self, image_handle: Any) -> tuple[int, int]:
         return image_handle.width, image_handle.height
@@ -480,9 +510,14 @@ class PygletBackend:
             x=x + width / 2, y=self._flip(y + height / 2, space), rotation=rotation,
             scale_x=width / img_w, scale_y=height / img_h,
         )
-        sprite.opacity = opacity
-        sprite.visible = visible
-        sprite.color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255))
+        # Each pyglet setter rewrites vertex data through ctypes; a moving unit only changes its position.
+        if sprite.opacity != opacity:
+            sprite.opacity = opacity
+        if sprite.visible != visible:
+            sprite.visible = visible
+        color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255))
+        if sprite.color != color:
+            sprite.color = color
 
     def set_sprite_order(self, sprite_id: int, order: int) -> None:
         space = self._sprite_meta[sprite_id][0]
@@ -550,14 +585,24 @@ class PygletBackend:
         self._push_triangles(space, order, list(points), color)
 
     def draw_image(self, image_handle, x, y, width, height, *, opacity=1.0, space: Space = "screen", order: int = 0) -> None:
-        sprite = pyglet.sprite.Sprite(
-            image_handle, x=x + width / 2, y=self._flip(y + height / 2, space),
-            batch=self.batch, group=_ImageChild(self._view_group(space, order)),
-        )
-        sprite.scale_x = width / image_handle.width
-        sprite.scale_y = height / image_handle.height
-        sprite.opacity = int(opacity * 255)
-        self._frame_images.append(sprite)
+        # A HUD draws the same images in the same order every frame: the pooled sprite
+        # keeps its vertex list and group, so this is a position update, not an allocation.
+        group = _ImageChild(self._view_group(space, order))
+        if self._frame_images_used < len(self._frame_images):
+            sprite = self._frame_images[self._frame_images_used]
+            if sprite.image is not image_handle:
+                sprite.image = image_handle
+            if sprite.group != group:
+                sprite.group = group
+            sprite.visible = True
+        else:
+            sprite = pyglet.sprite.Sprite(image_handle, batch=self.batch, group=group)
+            self._frame_images.append(sprite)
+        self._frame_images_used += 1
+        sprite.update(x=x + width / 2, y=self._flip(y + height / 2, space), scale_x=width / image_handle.width, scale_y=height / image_handle.height)
+        alpha = int(opacity * 255)
+        if sprite.opacity != alpha:
+            sprite.opacity = alpha
 
     # ------------------------------------------------------------------
     # Text
@@ -667,6 +712,10 @@ class PygletBackend:
         player.delete()
 
 
+def _image_data(pil_image: Any) -> Any:
+    return pyglet.image.ImageData(pil_image.width, pil_image.height, "RGBA", pil_image.tobytes(), pitch=-pil_image.width * 4)
+
+
 def _group_order(space: Space, order: int) -> int:
     return (_SCREEN_ORDER_BASE if space == "screen" else 0) + 2 * order
 
@@ -681,19 +730,35 @@ class _ViewGroup(pyglet.graphics.Group):
 
     def set_state(self) -> None:
         backend = self._backend
-        backend.window.view = backend._world_view if self._space == "world" else backend._screen_view
+        backend._apply_view(backend._world_view if self._space == "world" else backend._screen_view)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
     def unset_state(self) -> None:
         glDisable(GL_BLEND)
-        self._backend.window.view = self._backend._identity
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _ViewGroup) and other._order == self._order and other._space == self._space
 
     def __hash__(self) -> int:
         return hash((_ViewGroup, self._order, self._space))
+
+
+class _TextGroup(pyglet.graphics.Group):
+    """Labels are positioned in physical pixels: they draw under the identity view."""
+
+    def __init__(self, backend: PygletBackend, order: int) -> None:
+        super().__init__(order=order)
+        self._backend = backend
+
+    def set_state(self) -> None:
+        self._backend._apply_view(self._backend._identity)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _TextGroup) and other._order == self._order
+
+    def __hash__(self) -> int:
+        return hash((_TextGroup, self._order))
 
 
 class _ShaderChild(pyglet.graphics.ShaderGroup):

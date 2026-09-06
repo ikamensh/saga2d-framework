@@ -57,7 +57,8 @@ class KeyEvent:
 
 @dataclass(frozen=True)
 class MouseEvent:
-    """Mouse click, release, move, drag, or scroll in logical screen coords."""
+    """Mouse click, release, move, drag, or scroll in logical screen coords,
+    with the modifier keys held at the time (shift-click adds to a selection)."""
 
     type: str  # "click" | "release" | "move" | "drag" | "scroll"
     x: int
@@ -65,6 +66,10 @@ class MouseEvent:
     button: str | None = None
     dx: float = 0.0  # drag: pointer movement; scroll: wheel lines, fractional on trackpads
     dy: float = 0.0
+    shift: bool = False
+    ctrl: bool = False
+    alt: bool = False
+    meta: bool = False
 
 
 @dataclass(frozen=True)
@@ -134,6 +139,12 @@ class Backend(Protocol):
     def load_image(self, path: str) -> ImageHandle: ...
 
     def load_image_from_pil(self, pil_image: "PILImage.Image") -> ImageHandle: ...
+
+    def update_image(self, image_handle: ImageHandle, pil_image: "PILImage.Image") -> None:
+        """Replace the pixels of an image loaded from PIL; the size must not change.
+        Sprites showing it pick the new pixels up on the next frame (fog of war,
+        a minimap, anything redrawn from game state)."""
+        ...
 
     def get_image_size(self, image_handle: ImageHandle) -> tuple[int, int]: ...
 
