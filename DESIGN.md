@@ -175,6 +175,16 @@ or manual invalidation requirement. Default single-line Labels stay unchanged.
 Width and maximum screen content remain the game's choice. See the independent
 [wrapped-label example](docs/framework-wrapped-label.md).
 
+`Scene.measure(component)` returns an unattached tree's preferred size using
+the scene's current theme, font metrics and viewport scale. It removes the
+temporary attach/measure/remove sequence needed by Shardbound's complete save
+rows and rival force layout. It neither parents the tree nor registers input;
+the measurement context is released even when content evaluation raises.
+Already owned trees are rejected instead of being borrowed from another scene.
+Games still choose widths, content budgets, pagination and placement. The
+independent [preview example](docs/framework-ui-measurement.md) positions a
+variable-height card before adding it to the UI.
+
 For a key that activates the button itself, `Button(shortcut="E", on_click=...)`
 owns both its keycap and activation. It uses the current visible UI tree,
 respects enabled ancestors, and needs no scene binding or cleanup when removed.

@@ -143,6 +143,9 @@ What you get:
   `Label(text, width=300, wrap=True)` also sizes multiline descriptions and
   moves following controls when text or fonts change. See the independent
   [wrapped-label example](docs/framework-wrapped-label.md).
+  `Scene.measure(component)` sizes an unattached tree before choosing where it
+  belongs, using the same theme and fonts; see the independent
+  [preview example](docs/framework-ui-measurement.md).
   Use `hotkey` for a display-only contextual hint; see
   [button shortcuts](docs/framework-button-shortcuts.md).
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,

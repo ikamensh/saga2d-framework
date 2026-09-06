@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from saga2d.rendering.camera import Camera
     from saga2d.rendering.particles import ParticleEmitter
     from saga2d.rendering.sprite import Sprite
-    from saga2d.ui.base import _UIRoot
+    from saga2d.ui.base import Component, _UIRoot
     from saga2d.ui.theme import TextStyle
 
 #: Screen-space immediate draws of scene-stack level ``k`` use order
@@ -346,6 +346,21 @@ class Scene:
         pass
 
     # -- UI --------------------------------------------------------------------
+
+    def measure(self, component: Component) -> tuple[int, int]:
+        """Return an unattached UI tree's preferred size in this scene's game.
+
+        Uses the current theme, fonts and display scale without parenting,
+        drawing or activating the tree. Already attached trees are rejected;
+        ask those components for their ``get_preferred_size()`` directly.
+        """
+        if component.parent is not None or component._game is not None:
+            raise ValueError('Scene.measure requires an unattached UI tree')
+        component._propagate_game(component, self.game)
+        try:
+            return component.get_preferred_size()
+        finally:
+            component._propagate_game(component, None)
 
     @property
     def ui(self) -> _UIRoot:
