@@ -15,7 +15,6 @@ import socket
 import struct
 import time
 from collections.abc import Callable
-from typing import Any
 
 _MAX_FRAME = 8 * 1024 * 1024
 _MAX_QUEUE = 2 * _MAX_FRAME
@@ -71,7 +70,7 @@ class _Peer:
                 break
             try:
                 message = json.loads(self.incoming[4:size + 4], parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
-            except (ValueError, UnicodeError) as exc:
+            except (ValueError, UnicodeError, RecursionError) as exc:
                 raise ConnectionError('Invalid JSON network message.') from exc
             del self.incoming[:size + 4]
             if not isinstance(message, dict):
@@ -144,13 +143,15 @@ class MatchHost:
             return
         try:
             for message in self.peer.poll():
+                if self.peer is None:
+                    break
                 if self._rejecting:
                     continue
                 if not self.ready:
                     if (message.get('type') != 'hello' or message.get('protocol') != _PROTOCOL
                             or message.get('game') != self.game_id
                             or not isinstance(message.get('token'), str)
-                            or not secrets.compare_digest(message['token'], self.token)):
+                            or not secrets.compare_digest(message['token'].encode(), self.token.encode())):
                         self.peer.send({'type': 'reject', 'error': 'Wrong game version or room token.'})
                         self._rejecting = True
                         continue
@@ -164,7 +165,7 @@ class MatchHost:
                         self.peer.send({'type': 'error', 'error': str(exc)})
                 else:
                     raise ConnectionError('Unexpected network message.')
-            if self._rejecting and not self.peer.outgoing:
+            if self.peer is not None and self._rejecting and not self.peer.outgoing:
                 self._drop('Guest rejected: wrong game version or room token.')
         except (OSError, ConnectionError) as exc:
             self._drop(exc)
@@ -245,6 +246,7 @@ class MatchClient:
                     self.error = message['error']
                     if kind == 'reject':
                         self.close()
+                        break
                 else:
                     raise ConnectionError('Unexpected network message.')
         except (OSError, ConnectionError) as exc:

@@ -447,3 +447,9 @@ the session is not ready and own the session lifetime alongside their scene.
 Commands, snapshot schemas, fog, turns, simulation clocks, AI, faction ownership
 and victory remain in each game. The transport does not call arbitrary model
 methods, deserialize Python objects, or prescribe lockstep to an RTS.
+
+A session also exposed a concrete scene-lifetime distinction: `on_exit` runs
+when an overlay covers a scene, so it cannot close a match connection.
+`Scene.on_close` runs on permanent removal or failed entry, before detaching
+and releasing owned rendering resources. All three network scenes use it;
+the existing scene-owned timer keeps network traffic moving under menus.

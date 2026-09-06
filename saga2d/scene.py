@@ -164,23 +164,34 @@ class Scene:
         self._owned_timers.discard(timer_id)
         self.game.cancel(timer_id)
 
+    def on_close(self) -> None:
+        """Release external resources on removal or failed entry, never on cover.
+
+        Unlike on_exit, this hook does not run when an overlay is pushed. The
+        game is still attached here; owned rendering resources are released next.
+        """
+        pass
+
     def _release_resources(self) -> None:
         """Release ownership after removal or failed entry, then detach the scene."""
         try:
-            for sprite in list(self._owned_sprites):
-                sprite.remove()
-            self._owned_sprites.clear()
-            for emitter in list(self._owned_emitters):
-                emitter.remove()
-            self._owned_emitters.clear()
-            for timer_id in self._owned_timers:
-                self.game.cancel(timer_id)
-            self._owned_timers.clear()
-            if self.camera is not None:
-                self.camera._cancel_pan()
+            self.on_close()
         finally:
-            self._ui = None
-            self.game = None  # type: ignore[assignment]
+            try:
+                for sprite in list(self._owned_sprites):
+                    sprite.remove()
+                self._owned_sprites.clear()
+                for emitter in list(self._owned_emitters):
+                    emitter.remove()
+                self._owned_emitters.clear()
+                for timer_id in self._owned_timers:
+                    self.game.cancel(timer_id)
+                self._owned_timers.clear()
+                if self.camera is not None:
+                    self.camera._cancel_pan()
+            finally:
+                self._ui = None
+                self.game = None  # type: ignore[assignment]
 
     # -- Input -----------------------------------------------------------------
 

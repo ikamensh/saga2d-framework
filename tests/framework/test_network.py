@@ -81,3 +81,34 @@ def test_wrong_game_and_token_are_rejected_without_consuming_the_seat():
                 client.close()
     finally:
         host.close()
+
+
+def test_scene_connection_survives_overlays_and_closes_on_removal(game):
+    """Covering a scene must keep its socket alive; removing it must release it."""
+    from saga2d import Scene
+    host = MatchHost('test', lambda *_: None, lambda _: {}, address=('127.0.0.1', 0), token='test')
+    class Room(Scene):
+        def on_close(self):
+            host.close()
+    game.push(Room())
+    game.push(Scene())
+    assert not host.closed
+    game.pop()
+    assert not host.closed
+    game.pop()
+    assert host.closed
+
+
+def test_failed_scene_entry_closes_its_connection(game):
+    """An unusable match scene must not leave its listening port behind."""
+    import pytest
+    from saga2d import Scene
+    host = MatchHost('test', lambda *_: None, lambda _: {}, address=('127.0.0.1', 0), token='test')
+    class FailedRoom(Scene):
+        def on_enter(self):
+            raise RuntimeError('broken setup')
+        def on_close(self):
+            host.close()
+    with pytest.raises(RuntimeError, match='broken setup'):
+        game.push(FailedRoom())
+    assert host.closed
