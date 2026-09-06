@@ -7,9 +7,12 @@ text and in front of each hint in :class:`KeyHints`, styled by the theme's
 
 from __future__ import annotations
 
+import math
+
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from saga2d.input import normalize_combo
+from saga2d.rendering._text import _Paragraph, _layout_paragraph
 from saga2d.rendering.shapes import draw_box, rounded_rect
 from saga2d.ui.base import Component
 from saga2d.ui.layout import Layout, compute_anchor_position, compute_content_size, compute_flow_layout
@@ -59,7 +62,7 @@ def draw_keycap(backend: Backend, theme: Theme, key: str, x: float, y: float, or
 
 
 class Label(Component):
-    """Single line of text.  *text* may be a string or a zero-argument
+    """Text, optionally wrapped to an explicit width. *text* may be a string or a zero-argument
     callable re-evaluated every frame::
 
         Label(lambda: f"Gold {self.gold}", text_style="hud")
@@ -67,6 +70,7 @@ class Label(Component):
     Parameters:
         text_style: Named theme style or a :class:`TextStyle`.
         font_size / text_color / font: One-off overrides.
+        wrap: Measure and wrap to ``width``; preferred height fits all lines.
         align: ``"left"`` (default), ``"center"`` or ``"right"`` inside an
                explicit ``width``.
     """
@@ -80,10 +84,16 @@ class Label(Component):
         text_color: Color | None = None,
         font: str | None = None,
         align: str = "left",
+        wrap: bool = False,
         style: Style | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(style=merge_styles(Style(font=font, font_size=font_size, text_color=text_color), style), **kwargs)
+        if wrap and (self._width is None or not math.isfinite(self._width) or self._width <= 0):
+            raise ValueError("Wrapped labels require a positive finite width")
+        self._wrap = wrap
+        self._paragraph_key = None
+        self._wrapped_paragraph = _Paragraph((), 0, 1.4)
         self._text_style = text_style
         self._align = align
         self._text_rv: ReactiveValue[str] = ReactiveValue(text if text is not None else "", default="", on_change=self._on_text_changed)
@@ -107,10 +117,32 @@ class Label(Component):
         base = Style(font=ts.font, font_size=ts.font_size, text_color=ts.color) if ts is not None else None
         return theme.resolve_label_style(merge_styles(base, self.style))
 
+    def _prepare_layout(self) -> None:
+        super()._prepare_layout()
+        if self._wrap:
+            self._text_rv.refresh()
+            self._paragraph(self._resolve())
+
+    def _paragraph(self, resolved: ResolvedStyle) -> _Paragraph:
+        backend = self._game.backend if self._game is not None else None
+        key = (backend, backend.scale_factor if backend is not None else None,
+               self.text, self._width, resolved.font_size, resolved.font)
+        if key != self._paragraph_key:
+            def measure(text):
+                if backend is not None:
+                    return backend.measure_text(text, resolved.font_size, resolved.font)
+                return int(len(text) * resolved.font_size * 0.6), int(resolved.font_size * 1.2)
+            self._wrapped_paragraph = _layout_paragraph(self.text, self._width, measure)
+            self._paragraph_key = key
+            self.invalidate_layout()
+        return self._wrapped_paragraph
+
     def get_preferred_size(self) -> tuple[int, int]:
         self._text_rv.refresh()
         resolved = self._resolve()
-        if self._game is not None:
+        if self._wrap:
+            w, h = self._width, math.ceil(self._paragraph(resolved).height)
+        elif self._game is not None:
             w, h = self._game.backend.measure_text(self.text, resolved.font_size, resolved.font)
         else:
             w, h = int(len(self.text) * resolved.font_size * 0.6), int(resolved.font_size * 1.2)
@@ -130,6 +162,17 @@ class Label(Component):
             anchor_x, tx = "right", x + w
         else:
             anchor_x, tx = "left", x
+        if self._wrap:
+            paragraph = self._paragraph(resolved)
+            top = y + (h - paragraph.height) / 2 if self._height is not None else y
+            for index, line in enumerate(paragraph.lines):
+                if line:
+                    self._game.backend.draw_text(
+                        line, tx, top + index * paragraph.line_height * paragraph.line_spacing,
+                        resolved.font_size, resolved.text_color, font=resolved.font,
+                        anchor_x=anchor_x, anchor_y="top", order=self._order,
+                    )
+            return
         self._game.backend.draw_text(
             self.text, tx, y + h // 2, resolved.font_size, resolved.text_color,
             font=resolved.font, anchor_x=anchor_x, anchor_y="center", order=self._order,

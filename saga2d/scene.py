@@ -8,11 +8,11 @@ through the scene are released automatically when it leaves the stack.
 from __future__ import annotations
 
 import inspect
-import math
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from saga2d.input import normalize_combo
+from saga2d.rendering._text import _layout_paragraph, _validate_paragraph_size
 from saga2d.rendering.layers import RenderLayer, world_order
 from saga2d.rendering.shapes import draw_box
 
@@ -325,46 +325,17 @@ class Scene:
         too small for one character raises ``ValueError`` before drawing.
         Empty text consumes no height.
         """
-        if not math.isfinite(width) or width <= 0:
-            raise ValueError("Paragraph width must be positive and finite")
-        if not math.isfinite(line_spacing) or line_spacing <= 0:
-            raise ValueError("Paragraph line spacing must be positive and finite")
+        _validate_paragraph_size(width, line_spacing)
         if not text:
             return 0.0
         font_size, color, font = self._resolve_text_style(style, font_size, color, font)
-        backend = self.game.backend
-
-        def fits(value: str) -> bool:
-            return backend.measure_text(value, font_size, font)[0] <= width
-
-        lines = []
-        for paragraph in text.split("\n"):
-            line = ""
-            for word in paragraph.split():
-                candidate = line + " " + word if line else word
-                if fits(candidate):
-                    line = candidate
-                    continue
-                if line:
-                    lines.append(line)
-                line = ""
-                if fits(word):
-                    line = word
-                    continue
-                for character in word:
-                    if not fits(character):
-                        raise ValueError(f"Paragraph width {width} cannot fit character {character!r}")
-                    if line and not fits(line + character):
-                        lines.append(line)
-                        line = ""
-                    line += character
-            lines.append(line)
-        line_height = backend.measure_text("Mg", font_size, font)[1]
-        for index, line in enumerate(lines):
+        paragraph = _layout_paragraph(text, width,
+                                      lambda value: self.game.backend.measure_text(value, font_size, font), line_spacing)
+        for index, line in enumerate(paragraph.lines):
             if line:
-                self.draw_text(line, x, y + index * line_height * line_spacing, style=style,
+                self.draw_text(line, x, y + index * paragraph.line_height * line_spacing, style=style,
                                font_size=font_size, color=color, font=font, anchor_y="top", space=space, layer=layer)
-        return line_height * (1 + (len(lines) - 1) * line_spacing)
+        return paragraph.height
 
     # -- Save / load -----------------------------------------------------------
 

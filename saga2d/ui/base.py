@@ -150,7 +150,14 @@ class Component:
         if self._parent is not None:
             self._parent.invalidate_layout()
 
+    def _prepare_layout(self) -> None:
+        """Refresh derived measurements before input or drawing uses the layout."""
+        for child in self._children:
+            if child.visible:
+                child._prepare_layout()
+
     def _ensure_layout(self) -> None:
+        self._prepare_layout()
         if self._layout_dirty:
             self.compute_layout(self._computed_x, self._computed_y, self._computed_w, self._computed_h)
 

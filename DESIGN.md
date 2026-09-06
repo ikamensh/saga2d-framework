@@ -157,6 +157,17 @@ names a font family, and a weight is simply another family (a bundled
 Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
 `draw_keycap`, so the game's hint strip and its buttons agree.
 
+`Label(text, width=300, wrap=True)` opts into measured multiline text whose
+preferred height participates in ordinary flow layout. Shardbound's reward
+card descriptions and Warband's width-390 tutorial objective need the next
+control to follow the complete text, including after reactive text or font
+changes. Immediate paragraphs and retained labels share one private layout
+helper. A private preparation hook runs at existing input/draw layout
+boundaries, including visible paused scenes; games acquire no new lifecycle
+or manual invalidation requirement. Default single-line Labels stay unchanged.
+Width and maximum screen content remain the game's choice. See the independent
+[wrapped-label example](docs/framework-wrapped-label.md).
+
 For a key that activates the button itself, `Button(shortcut="E", on_click=...)`
 owns both its keycap and activation. It uses the current visible UI tree,
 respects enabled ancestors, and needs no scene binding or cleanup when removed.
