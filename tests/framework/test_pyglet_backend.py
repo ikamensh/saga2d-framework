@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 from PIL import Image
 
@@ -60,6 +62,24 @@ def test_immediate_images_show_where_this_frame_drew_them_and_nowhere_else() -> 
         scene.spots = [(10, 10), (60, 10), (110, 10), (150, 60)]
         game.tick(1 / 60)
         assert all(red_at(game, x, y) for x, y in scene.spots)
+    finally:
+        game._teardown()
+        game.backend.quit()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="Control+click stands in for the right button on a Mac only")
+def test_control_click_is_a_right_click_on_a_mac() -> None:
+    from pyglet.window import key, mouse
+
+    game = Game("pyglet", resolution=(200, 120), backend="pyglet", visible=False)
+    try:
+        window = game.backend.window
+        window.dispatch_event("on_mouse_press", 50, 60, mouse.LEFT, key.MOD_CTRL)
+        window.dispatch_event("on_mouse_release", 50, 60, mouse.LEFT, 0)  # Control let go first: still the same button
+        window.dispatch_event("on_mouse_press", 50, 60, mouse.LEFT, 0)
+        window.dispatch_event("on_mouse_release", 50, 60, mouse.LEFT, 0)
+        events = [(e.type, e.button) for e in game.backend.poll_events() if e.type in ("click", "release")]
+        assert events == [("click", "right"), ("release", "right"), ("click", "left"), ("release", "left")]
     finally:
         game._teardown()
         game.backend.quit()

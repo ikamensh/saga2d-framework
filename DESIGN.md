@@ -64,6 +64,14 @@ reuses a pool of pyglet sprites in call order instead of allocating one
 per call per frame (a HUD draws the same portraits every frame), and a
 sprite's appearance setters only reach the backend when the value
 changed (views set `visible`/`opacity` every frame for every unit).
+`saga2d.testing.assert_no_text_overlap(game, top_scene_only=True)` fails a
+mock-backed frame in which one text is drawn over another, using the same
+`measure_text` numbers the layout used; a game sweeps every screen through
+it at the window sizes players have (`tests/warband/test_layout.py`), which
+is how a tagline landing on a menu button and a codex column running into
+the next were caught.  On a Mac the pyglet backend reports Control+click
+as the right button, the platform's secondary click, so games need no
+trackpad special case of their own.
 `saga2d.testing.FrameTimer` measures the frame breakdown (wrap the phases,
 time frames, print the report; `tools/perf_warband.py` is its use); time
 frames with it before claiming numbers, and never under a profiler or

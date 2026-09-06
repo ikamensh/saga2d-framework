@@ -89,6 +89,9 @@ def _mods_to_kwargs(modifiers: int) -> dict[str, bool]:
     }
 
 
+_MAC = sys.platform == "darwin"
+
+
 def _button_to_name(button: int) -> str | None:
     from pyglet.window import mouse
 
@@ -122,6 +125,7 @@ class PygletBackend:
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
         self._soup_lists: list[Any] = []
         self._frame_images: list[Any] = []  # pooled pyglet sprites for draw_image, reused in call order frame to frame
+        self._ctrl_click = False  # a Mac Control+click in progress, reported as the right button
         self._frame_images_used = 0
         self._labels: dict[tuple[Any, ...], tuple[Any, int]] = {}
         self._label_uses: dict[tuple[Any, ...], int] = {}
@@ -243,16 +247,29 @@ class PygletBackend:
             queue.append(KeyEvent("key_release", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
             return True
 
+        def name_of(button: int, modifiers: int, pressing: bool) -> str | None:
+            # A Mac trackpad has no right button: Control+click is the secondary click there, as in
+            # every Mac application.  The release and the drag keep the button the press reported.
+            from pyglet.window import key
+
+            name = _button_to_name(button)
+            if _MAC and name == "left":
+                if pressing:
+                    self._ctrl_click = bool(modifiers & key.MOD_CTRL)
+                if self._ctrl_click:
+                    return "right"
+            return name
+
         @window.event
         def on_mouse_press(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("click", lx, ly, _button_to_name(button), **_mods_to_kwargs(modifiers)))
+            queue.append(MouseEvent("click", lx, ly, name_of(button, modifiers, True), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
         def on_mouse_release(x: int, y: int, button: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
-            queue.append(MouseEvent("release", lx, ly, _button_to_name(button), **_mods_to_kwargs(modifiers)))
+            queue.append(MouseEvent("release", lx, ly, name_of(button, modifiers, False), **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event
@@ -265,7 +282,7 @@ class PygletBackend:
         def on_mouse_drag(x: int, y: int, dx: int, dy: int, buttons: int, modifiers: int) -> bool:
             lx, ly = self._to_logical(x, y)
             s = self.scale_factor
-            queue.append(MouseEvent("drag", lx, ly, _button_to_name(buttons), dx=dx / s, dy=-dy / s, **_mods_to_kwargs(modifiers)))
+            queue.append(MouseEvent("drag", lx, ly, name_of(buttons, modifiers, False), dx=dx / s, dy=-dy / s, **_mods_to_kwargs(modifiers)))
             return True
 
         @window.event

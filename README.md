@@ -94,7 +94,7 @@ codex, and two marches under it all.
 | Drag / click | select | Right click | move · harvest · attack · rally point |
 | Shift | add to selection / queue orders | A / P | attack-move / patrol |
 | S / H | stop / hold | B then F B H T M K S W C | build farm · barracks · hall · tower · mill · smith · stables · workshop · church |
-| R | repair a damaged building (peasants) | | |
+| R | repair a damaged building (peasants) | Mac trackpad | two-finger click or Ctrl+click is the right-click; Cmd-click selects a type |
 | Letters on the card | train and research in the selected building | Ctrl+1-9 / 1-9 | assign / recall a group |
 | Tab / . | next idle peasant / soldier | Space | jump to the last alert |
 | Arrows, edges, middle-drag | scroll | Wheel, + / − | zoom |
