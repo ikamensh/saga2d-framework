@@ -576,13 +576,12 @@ class PygletBackend:
         result = self._measure_cache.get(key)
         if result is None:
             label = pyglet.text.Label(text, font_name=font or "sans-serif", font_size=size)
-            result = (
-                int(round(label.content_width / self.scale_factor)),
-                int(round(label.content_height / self.scale_factor)),
-            )
+            # The key identifies physical glyph size. Keep those physical
+            # metrics so a later viewport scale cannot reuse old logical units.
+            result = (label.content_width, label.content_height)
             label.delete()
             self._measure_cache[key] = result
-        return result
+        return tuple(int(round(dimension / self.scale_factor)) for dimension in result)
 
     def load_font(self, name: str, path: str | None = None) -> str:
         if path is not None:
