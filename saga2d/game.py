@@ -15,6 +15,7 @@ import logging
 import math
 import os
 import sys
+import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -102,6 +103,8 @@ class Game:
         self._settings: Settings | None = None
 
         self.running = True
+        self._window_visible = visible
+        self._window_focused = False
         self._scene_stack = SceneStack(self)
         self._input = InputManager()
         self._timer_manager = TimerManager()
@@ -335,6 +338,10 @@ class Game:
             if isinstance(event, WindowEvent):
                 if event.type == "close":
                     self.quit()
+                elif event.type in ('activate', 'deactivate'):
+                    self._window_focused = event.type == 'activate'
+                elif event.type in ('show', 'hide'):
+                    self._window_visible = event.type == 'show'
                 continue
             if isinstance(event, MouseEvent) and event.type in ("move", "drag"):
                 self._mouse = (float(event.x), float(event.y))
@@ -404,15 +411,26 @@ class Game:
         if top.pop_on_cancel and event.type == "key_press" and event.key == "escape":
             self.pop()
 
-    def run(self, start_scene: Scene) -> None:
-        """Push *start_scene* and loop until :meth:`quit` or window close."""
+    def run(self, start_scene: Scene, *, fps: float = 60) -> None:
+        """Run at most *fps* frames per second, sleeping between completed frames.
+
+        Unfocused or hidden windows run at no more than 15 FPS.
+        ``tick(dt)`` remains unpaced for callers that manage their own clock.
+        """
         if _headless():
             raise RuntimeError("game.run() is disabled while SAGA2D_HEADLESS is set; use game.tick(dt) or saga2d.testing.render_scene().")
         run_error: BaseException | None = None
         try:
+            if not math.isfinite(fps) or fps <= 0:
+                raise ValueError('fps must be a finite number greater than zero')
             self.push(start_scene)
             while self.running:
+                started = time.perf_counter()
                 self.tick()
+                limit = fps if self._window_visible and self._window_focused else min(fps, 15)
+                remaining = 1 / limit - (time.perf_counter() - started)
+                if self.running and remaining > 0:
+                    time.sleep(remaining)
         except BaseException as exc:
             run_error = exc
             raise

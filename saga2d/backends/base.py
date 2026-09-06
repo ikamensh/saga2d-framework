@@ -69,7 +69,7 @@ class MouseEvent:
 
 @dataclass(frozen=True)
 class WindowEvent:
-    type: str  # "close" | "resize"
+    type: str  # "close" | "resize" | "activate" | "deactivate" | "show" | "hide"
 
 
 Event = KeyEvent | MouseEvent | WindowEvent

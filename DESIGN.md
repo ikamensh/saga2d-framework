@@ -132,6 +132,16 @@ draw call regardless of image.
 Scene-stack operations requested during steps 2–3 are queued and applied
 after the phase, so a scene never mutates the stack under itself.
 
+`Game.run(scene, fps=60)` sleeps for the unused part of each frame instead of
+spinning. Inactive or hidden windows are limited to 15 FPS; a lower chosen cap
+also applies there. Focus and show/hide notifications use the existing backend
+event queue, including minimization and restoration. Rendering and VSync time
+count toward the interval, and slow frames do not create catch-up bursts.
+Elapsed time continues to drive animation and timers at either rate.
+`tick(dt)` still advances exactly one unpaced frame for embedding and deterministic
+tests; those callers own their pacing. No game has to write a sleep loop.
+See the independent [frame-pacing example](docs/framework-frame-pacing.md).
+
 ## Scenes own their resources
 
 `Scene.add_sprite`, `add_emitter`, `after`, `every` register resources

@@ -207,11 +207,11 @@ class PygletBackend:
             config = pyglet.gl.Config(sample_buffers=1, samples=4, double_buffer=True)
             self.window = pyglet.window.Window(
                 width=width, height=height, caption=title, resizable=True,
-                vsync=True, visible=visible and not fullscreen, config=config,
+                vsync=True, visible=False, config=config,
             )
         except pyglet.window.NoSuchConfigException:
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, resizable=True, vsync=True, visible=visible and not fullscreen,
+                width=width, height=height, caption=title, resizable=True, vsync=True, visible=False,
             )
         self.batch = pyglet.graphics.Batch()
         self._identity = Mat4()
@@ -224,7 +224,8 @@ class PygletBackend:
         self._windowed_size = self.window_size
         if fullscreen:
             self.set_fullscreen(True)
-            self.window.set_visible(visible)
+        # Register first so the initial show/focus events enter the game queue.
+        self.window.set_visible(visible)
 
     def _register_handlers(self) -> None:
         window = self.window
@@ -276,6 +277,22 @@ class PygletBackend:
         def on_close() -> bool:
             queue.append(WindowEvent("close"))
             return pyglet.event.EVENT_HANDLED
+
+        @window.event
+        def on_activate() -> None:
+            queue.append(WindowEvent('activate'))
+
+        @window.event
+        def on_deactivate() -> None:
+            queue.append(WindowEvent('deactivate'))
+
+        @window.event
+        def on_show() -> None:
+            queue.append(WindowEvent('show'))
+
+        @window.event
+        def on_hide() -> None:
+            queue.append(WindowEvent('hide'))
 
         @window.event
         def on_resize(new_width: int, new_height: int) -> None:
