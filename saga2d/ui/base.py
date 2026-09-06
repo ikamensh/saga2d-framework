@@ -18,6 +18,10 @@ if TYPE_CHECKING:
     from saga2d.scene import Scene
 
 
+# Components may use order + 1 for a frame above an image (Warband Minimap).
+_COMPONENT_ORDER_STRIDE = 4
+
+
 class Component:
     """Parameters:
         width / height: Explicit size, or ``None`` to fit content.
@@ -58,6 +62,7 @@ class Component:
         self._computed_h = 0
         self._game: Game | None = None
         self._layout_dirty = True
+        self._paint_index = 0
 
     @property
     def visible(self) -> bool:
@@ -188,14 +193,15 @@ class Component:
 
     @property
     def _order(self) -> int:
-        """Screen-space draw order: the owning scene's level in the stack."""
-        from saga2d.scene import UI_ORDER_BASE
+        """Tree paint order above the owning scene's immediate screen layers."""
+        from saga2d.scene import UI_ORDER_BASE, UI_ORDER_STRIDE, _SCREEN_LAYER_COUNT
 
         root = self
         while root._parent is not None:
             root = root._parent
         scene = getattr(root, "_scene", None)
-        return UI_ORDER_BASE + (scene._level if scene is not None else 0)
+        return (UI_ORDER_BASE + (scene._level if scene is not None else 0) * UI_ORDER_STRIDE
+                + _SCREEN_LAYER_COUNT + self._paint_index * _COMPONENT_ORDER_STRIDE)
 
     @staticmethod
     def _propagate_game(component: Component, game: Game | None) -> None:
@@ -216,6 +222,17 @@ class _UIRoot(Component):
 
     def get_preferred_size(self) -> tuple[int, int]:
         return (self._computed_w, self._computed_h)
+
+    def draw(self) -> None:
+        from saga2d.scene import UI_ORDER_STRIDE, _SCREEN_LAYER_COUNT
+
+        # Preorder matches draw() and the reverse sibling order used by input.
+        # Reassign every frame so hiding, removal and reparenting leave no stale order.
+        for index, component in enumerate(self.walk(include_self=True)):
+            if _SCREEN_LAYER_COUNT + (index + 1) * _COMPONENT_ORDER_STRIDE > UI_ORDER_STRIDE:
+                raise ValueError("UI tree exceeds the scene's draw-order capacity")
+            component._paint_index = index
+        super().draw()
 
     def handle_event(self, event: InputEvent) -> bool:
         """Let normal UI consume first, then resolve live button shortcuts."""

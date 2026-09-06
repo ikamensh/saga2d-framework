@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import inspect
 import math
-from typing import TYPE_CHECKING, Any, Callable
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from saga2d.input import normalize_combo
 from saga2d.rendering.layers import RenderLayer, world_order
@@ -26,8 +27,11 @@ if TYPE_CHECKING:
     from saga2d.ui.theme import TextStyle
 
 #: Screen-space immediate draws of scene-stack level ``k`` use order
-#: ``UI_ORDER_BASE + k`` so overlays always draw above the scene below.
+#: ``UI_ORDER_BASE + k * UI_ORDER_STRIDE``. Local drawing and the UI tree
+#: occupy separate ranges inside that scene, so overlays stay above both.
 UI_ORDER_BASE = 1_000_000
+UI_ORDER_STRIDE = 1_000_000
+_SCREEN_LAYER_COUNT = 1000
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
@@ -105,6 +109,7 @@ class Scene:
         self._owned_timers: set[int] = set()
         self._owned_emitters: set[ParticleEmitter] = set()
         self._key_handlers: dict[str, Callable[..., Any]] = {}
+        self._screen_draw_layer = 0
         return self
 
     # -- Lifecycle hooks -------------------------------------------------------
@@ -206,10 +211,33 @@ class Scene:
 
     # -- Drawing helpers -------------------------------------------------------
 
+    @contextmanager
+    def screen_layer(self, layer: int) -> Iterator[None]:
+        """Draw screen content on a local layer (0–999; default 0).
+
+        Higher layers cover lower shapes, images and text regardless of call
+        order. Within one layer, text stays above images, and images above
+        shapes. The scene's UI tree is above all these layers; the next scene
+        is above both. Use an overlay Scene when a panel must also own input.
+
+        The scope applies to every immediate ``draw_*`` helper, including
+        calls made by your own drawing functions. Nested scopes choose an
+        absolute layer and restore the previous one, even after an exception.
+        World-space drawing and retained sprites are unaffected.
+        """
+        if isinstance(layer, bool) or not isinstance(layer, int) or not 0 <= layer < _SCREEN_LAYER_COUNT:
+            raise ValueError("Screen layer must be an integer from 0 to 999")
+        previous = self._screen_draw_layer
+        self._screen_draw_layer = layer
+        try:
+            yield
+        finally:
+            self._screen_draw_layer = previous
+
     def _order(self, space: Space, layer: RenderLayer, y: float) -> int:
         if space == "world":
             return world_order(layer, y)
-        return UI_ORDER_BASE + self._level
+        return UI_ORDER_BASE + self._level * UI_ORDER_STRIDE + self._screen_draw_layer
 
     def draw_rect(
         self, x: float, y: float, width: float, height: float, color: Color, *,

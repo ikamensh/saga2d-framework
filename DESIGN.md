@@ -53,6 +53,21 @@ Screen-space UI is ordered by the scene's position in the stack, so an
 overlay always draws above the scene beneath it.  Text at an order draws
 above shapes at the same order; shapes at one order draw in call order.
 
+`with scene.screen_layer(1):` groups immediate screen drawing above the
+default layer zero. The scope applies through game drawing helpers and
+paragraphs, restores after nesting or failure, and does not change world
+`RenderLayer` or retained sprites. Local layers are bounded to 0–999 so they
+cannot escape their scene. Controls draw above all local layers; children and
+later UI siblings paint above earlier ones, matching mouse dispatch. A modal
+scene remains above all content below it and owns its input independently.
+
+Shardbound's stationary damage pill and Tribes' floating text/toast panels
+need shapes to cover earlier text. Warband's committed Minimap needs a frame
+above its image. The private scene stride builds on that Warband change;
+each UI component keeps four suborders, preserving its frame-at-`order + 1`
+composition while keeping later siblings above it. There is no popup manager
+or tactical effect in the framework. See the [screen layer example](docs/framework-screen-layers.md).
+
 ## Window display
 
 `Game.set_fullscreen(bool)` adopts the committed Warband interface. Together
