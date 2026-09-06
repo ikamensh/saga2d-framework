@@ -241,3 +241,9 @@ What you get:
 
 See [DESIGN.md](DESIGN.md) for the architecture and the reasoning behind
 the cuts.
+
+## Multiplayer
+
+All three games support two-player LAN/private-VPN host/join play from **M** on
+the title: competitive Tribes and Warband, shared-campaign Shardbound co-op.
+See [setup, controls and architecture](docs/multiplayer.md).
