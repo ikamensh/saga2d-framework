@@ -52,8 +52,10 @@ control/role/relic/extraction/Causeway/Aerie/Relief audit CLIs target
 The allowance is cooperative: one atomic model command may exceed the roughly
 50 ms work block, and several simultaneous processes add their CPU use together.
 Run heavy checks one at a time on a shared laptop.
-Hero equipment and Pin verification also pace their campaign preparation at this allowance;
+Hero equipment, Pin, save and result verification also pace their campaign preparation at this allowance;
 `--cpu-percent` controls that work independently of its native frame cap.
+The older Relief prototype applies the same allowance to its paid preparation,
+orders and searches; `--trials` and `--world-seeds` select small search samples.
 
 Economy, difficulty and crystal-demand audits accept `--heroes`, `--themes` and
 `--plans` to select a small comparison. Their existing matrix sizes are preserved;
