@@ -45,12 +45,14 @@ uv run python tools/verify_eador.py     # real input + PNGs in /tmp/shardbound
 ```
 
 Both fuzz drivers and the economy, difficulty, crystal-demand, world, linked
-campaign, discipline, army-plan and tactical control/role/relic audit CLIs target
+campaign, discipline, army-plan and tactical control/role/relic/extraction/Causeway audit CLIs target
 **25% of one CPU core** by sleeping between short work blocks. Choose
 `--cpu-percent 100` explicitly for an unrestricted stress run.
 The allowance is cooperative: one atomic model command may exceed the roughly
 50 ms work block, and several simultaneous processes add their CPU use together.
 Run heavy checks one at a time on a shared laptop.
+Hero equipment verification also paces its campaign preparation at this allowance;
+`--cpu-percent` controls that work independently of its native frame cap.
 
 Economy, difficulty and crystal-demand audits accept `--heroes`, `--themes` and
 `--plans` to select a small comparison. Their existing matrix sizes are preserved;
