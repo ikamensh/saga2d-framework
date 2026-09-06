@@ -184,6 +184,8 @@ What you get:
   animation, audio (sounds and looping music), JSON save slots.
 * **A mock backend** that records every draw call for headless tests, and
   `saga2d.testing.render_scene` for offscreen screenshots you can look at.
+  `Game.run()` closes automatically; callers driving `tick()` finish with
+  `game.close()`. See the [two-session example](docs/framework-game-lifetime.md).
 * **Audio** with `master`/`music`/`sfx` channels, pitch variation, mute,
   and a silent driver for tests.
 

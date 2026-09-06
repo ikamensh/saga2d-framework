@@ -147,8 +147,7 @@ def verify(output):
             capture('restored-controls')
             print(f'Native layer coverage, UI clicks and modal isolation passed: {output}')
         finally:
-            game._teardown()
-            game.backend.quit()
+            game.close()
 
 
 if __name__ == '__main__':

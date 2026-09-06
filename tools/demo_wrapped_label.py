@@ -160,7 +160,7 @@ def verify(output):
             print(f'Native wrapped bounds, reactive/paused flow, fonts and clicks passed: {report}')
             return report
         finally:
-            game._teardown()
+            game.close()
 
 
 if __name__ == '__main__':

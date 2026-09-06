@@ -6,7 +6,8 @@
     game.run(TitleScene())
 
 ``run()`` loops until :meth:`quit` or the window closes; ``tick(dt)``
-runs exactly one frame for deterministic tests.
+runs exactly one frame for deterministic tests. Call :meth:`close` after
+driving frames yourself; ``run()`` closes automatically.
 """
 
 from __future__ import annotations
@@ -72,7 +73,7 @@ class Game:
         import saga2d.util.tween as tween_mod
 
         if sprite_mod._current_game is not None:
-            raise RuntimeError("A Game instance already exists. Call game._teardown() before creating another.")
+            raise RuntimeError("A Game instance already exists. Call game.close() before creating another.")
         if _headless():
             fullscreen = False
             visible = False
@@ -298,7 +299,20 @@ class Game:
     # -- Loop ------------------------------------------------------------------
 
     def quit(self) -> None:
+        """Request the running loop to stop; ``run()`` then closes the game."""
         self.running = False
+
+    def close(self) -> None:
+        """Release scenes and resources, then close the backend window.
+
+        Call from the owner of an explicitly ticked game when finished.
+        ``run()`` does this automatically. Scene cleanup failures propagate,
+        but the backend still closes and a new Game can be created.
+        """
+        try:
+            self._teardown()
+        finally:
+            self._backend.quit()
 
     def set_fullscreen(self, fullscreen: bool) -> None:
         """Enter desktop fullscreen, or restore the last actual windowed size."""
@@ -436,10 +450,7 @@ class Game:
             raise
         finally:
             try:
-                try:
-                    self._teardown()
-                finally:
-                    self._backend.quit()
+                self.close()
             except BaseException as cleanup_error:
                 if run_error is not None:
                     raise run_error from cleanup_error

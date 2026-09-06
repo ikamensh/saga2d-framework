@@ -142,6 +142,16 @@ Elapsed time continues to drive animation and timers at either rate.
 tests; those callers own their pacing. No game has to write a sleep loop.
 See the independent [frame-pacing example](docs/framework-frame-pacing.md).
 
+`Game.close()` owns final scene/resource cleanup and backend shutdown for
+callers that drive explicit ticks. `run()` and `render_scene()` use the same
+operation; ordinary launchers need no additional call. Scene cleanup failures
+still propagate after the backend is closed. `quit()` only requests loop exit,
+so an input callback does not tear resources out from under its current frame.
+Independent display, wrapping and measurement checks previously duplicated
+private teardown and backend-close calls, sometimes missing window cleanup.
+The [two-session example](docs/framework-game-lifetime.md) demonstrates the
+single public operation without a new lifecycle manager or game policy.
+
 ## Scenes own their resources
 
 `Scene.add_sprite`, `add_emitter`, `after`, `every` register resources

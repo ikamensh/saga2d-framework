@@ -73,8 +73,7 @@ def run_case(output, direction, initial, final, *, warm):
         assert scene.confirmations == 1
         return metrics, frame
     finally:
-        game._teardown()
-        game.backend.quit()
+        game.close()
 
 
 def verify(output):

@@ -131,8 +131,7 @@ def verify(output):
             (output / 'verification.json').write_text(json.dumps(report, indent=2) + '\n')
             print(f'Native unattached measurement passed: {len(layouts)} layouts / {inputs} inputs')
         finally:
-            game._teardown()
-            game.backend.quit()
+            game.close()
 
 
 if __name__ == '__main__':

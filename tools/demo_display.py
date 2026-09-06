@@ -157,8 +157,7 @@ def verify(out: Path):
         assert not game.fullscreen and game.window_size == (1280, 800)
         check('size-exits-fullscreen')
     finally:
-        game._teardown()
-        game.backend.quit()
+        game.close()
     game = Game('Saga2D fullscreen startup verification', resolution=(1280, 800), fullscreen=True, visible=False)
     try:
         game.push(Display())
@@ -168,8 +167,7 @@ def verify(out: Path):
         assert not game.fullscreen and game.window_size == (1280, 800)
         check('fullscreen-start-restored')
     finally:
-        game._teardown()
-        game.backend.quit()
+        game.close()
     (out / 'report.json').write_text(json.dumps(observations, indent=2) + '\n')
     print(f'Native resize/fullscreen restoration, letterboxed UI/world input and captures passed: {out}')
 
