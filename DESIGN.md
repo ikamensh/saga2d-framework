@@ -104,6 +104,13 @@ and caches text labels across frames keyed by their content, so a HUD
 with dozens of labels and a few hundred highlight rectangles renders in
 a couple of milliseconds.
 
+Text measurement caches physical glyph dimensions at the rounded raster size;
+logical dimensions are calculated using the current viewport scale at return.
+Caching the already-divided result would conflate different logical font sizes
+after a resize. The independent `tools/verify_text_measurement.py` regression
+compares warm and fresh windows, including exact wrapped-flow pixels and native
+clicks in both directions.
+
 Textures are packed into one atlas, so sprites at the same order share a
 draw call regardless of image.
 
