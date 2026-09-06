@@ -428,3 +428,22 @@ Both rule modules run without a window, and only import Saga2D's pure
 primitive without importing either reference game. The
 [research and scope](docs/eador-research.md) explains which Eador systems
 this compact implementation preserves and simplifies.
+
+## Multiplayer transport
+
+`MatchHost` and `MatchClient` provide a two-seat host/join session. Nonblocking
+TCP, bounded length-prefixed JSON messages, version/room checks, connection
+health, command rejection and snapshot delivery belong to Saga2D. Polling is
+explicit, so tests use actual loopback sockets without a window or threads.
+The host assigns seats and never trusts a player id supplied by the guest.
+
+The game supplies `apply(player, command)` and `snapshot(player)`, raises
+`CommandError` for an expected invalid order, and publishes after autonomous
+simulation. Unexpected implementation errors propagate. Optional revision
+checks reject orders based on obsolete turn state. A guest can reconnect with
+the same room token; the host sends its current snapshot. Games pause whenever
+the session is not ready and own the session lifetime alongside their scene.
+
+Commands, snapshot schemas, fog, turns, simulation clocks, AI, faction ownership
+and victory remain in each game. The transport does not call arbitrary model
+methods, deserialize Python objects, or prescribe lockstep to an RTS.
