@@ -255,9 +255,9 @@ completion and shutdown, using the silent driver by default.
 
 The mock backend records every call (`backend.sprites`, `rects`,
 `texts`, `camera`, ...) and injects input (`inject_key`, `inject_click`,
-`inject_scroll`, `inject_drag`).  Tests drive `game.tick(dt)` and assert
-on model state and recorded draws; the whole suite runs headless in well
-under a second.
+`inject_scroll`, `inject_drag`). Tests drive `game.tick(dt)` and assert
+on model state and recorded draws. Focused checks run without a GPU; the full
+suite also includes longer campaign and content journeys.
 
 Mock tests prove logic, not pixels.  `saga2d.testing.render_scene`
 renders through the real pyglet backend into a hidden window and returns
@@ -282,7 +282,7 @@ holds transient animations; `tribes/sound.py` synthesises audio;
 
 ## Shardbound and the abstraction test
 
-`eador/` is an Eador-inspired single-shard game: a province economy and
+`eador/` is an Eador-inspired game with linked shard campaigns: a province economy and
 hero army feed into separate tactical battles, then receive casualties,
 experience and rewards. `model.py` owns campaign rules and serialization;
 `battle.py` owns tactical rules, exact damage previews and enemy decisions;
