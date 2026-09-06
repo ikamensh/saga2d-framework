@@ -90,6 +90,11 @@ techs, train units, take every enemy city — or lead on score when the
 round limit falls. Everything has a hotkey, and the UI shows them as
 keycaps (text is Nunito, SIL OFL, bundled with saga2d):
 
+Finished games show a score breakdown, victory and early-finish bonuses, and
+local high scores (**L** from the title or results). Armyless computer opponents
+concede when they cannot rebuild. See [scoring and surrender](docs/tribes-scores.md)
+for the rules and local storage details.
+
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
 | Click / Enter | act at the cursor: select, move, attack, harvest, capture | Arrows | move the cursor |
