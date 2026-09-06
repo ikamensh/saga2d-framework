@@ -40,6 +40,9 @@ uv run python -m eador --join 192.168.1.20 --room CODE
 host; the guest always receives the host's existing world. Network matches
 have exactly two human seats.
 
+Tribes shows final multiplayer scores without entering them on its solo high-score
+board. Start another room from the title to play again.
+
 A disconnected guest can return to the title and join the same address, port
 and code while the host remains open. The host pauses while disconnected and
 sends the current state on reconnection. Menus do not disconnect either player;

@@ -453,3 +453,11 @@ when an overlay covers a scene, so it cannot close a match connection.
 `Scene.on_close` runs on permanent removal or failed entry, before detaching
 and releasing owned rendering resources. All three network scenes use it;
 the existing scene-owned timer keeps network traffic moving under menus.
+
+`MatchMenu` and `MatchLobby` share address/code entry and the handoff into a
+game-supplied scene. `tribes.multiplayer` validates alternating faction orders;
+`warband.multiplayer` runs a host-owned fixed-step clock and sends numbered
+feedback events; `eador.multiplayer` serializes both partners' orders into one
+shared campaign and refreshes its map/battle/progression screens. These adapters
+reuse each game's existing model and views. See [multiplayer](docs/multiplayer.md)
+for launch instructions, supported modes and transport limits.
