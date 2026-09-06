@@ -128,6 +128,9 @@ What you get:
   drawn as a keycap), `KeyHints`, `Panel`, `Row`, `Column`, `ProgressBar`,
   anchors, flow layout, and a `Theme` with named text styles, corner radii
   and keycap colours.  Text is measured by the backend, so layout fits.
+  `Label(text, width=300, wrap=True)` also sizes multiline descriptions and
+  moves following controls when text or fonts change. See the independent
+  [wrapped-label example](docs/framework-wrapped-label.md).
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.
