@@ -44,12 +44,17 @@ uv run python tools/fuzz_eador.py       # seeded checks, default CPU allowance: 
 uv run python tools/verify_eador.py     # real input + PNGs in /tmp/shardbound
 ```
 
-Development checks are paced by default. Both `tools/fuzz_eador.py` and
-`tools/fuzz.py` target **25% of one CPU core** by sleeping between short work
-blocks; choose `--cpu-percent 100` explicitly for an unrestricted stress run.
+Both fuzz drivers and the economy, difficulty, crystal-demand, world, linked
+campaign, discipline, army-plan and tactical control/role/relic audit CLIs target
+**25% of one CPU core** by sleeping between short work blocks. Choose
+`--cpu-percent 100` explicitly for an unrestricted stress run.
 The allowance is cooperative: one atomic model command may exceed the roughly
 50 ms work block, and several simultaneous processes add their CPU use together.
 Run heavy checks one at a time on a shared laptop.
+
+Economy, difficulty and crystal-demand audits accept `--heroes`, `--themes` and
+`--plans` to select a small comparison. Their existing matrix sizes are preserved;
+use `--seeds 1` with those filters for a quick probe.
 
 Shardbound's `PlayerInput` verification driver caps native rendering at **30
 FPS**, including screenshot settling loops. It retains `tick(1 / 60)` simulation
