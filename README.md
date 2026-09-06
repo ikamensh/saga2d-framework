@@ -8,7 +8,7 @@ campaign with a province map and separate tactical battles.
 uv sync --extra dev
 uv run python -m tribes            # title screen; --seed 7 jumps straight into a map
 uv run python -m eador             # Shardbound; --seed 7 --hero Wizard skips the title
-uv run python -m pytest tests -q   # headless suite, a few seconds
+uv run python -m pytest tests -q   # headless integration suite
 ```
 
 Set `SAGA2D_SILENT=1` to keep any pyglet-backed script or test off the
@@ -19,10 +19,11 @@ speakers (`SAGA2D_HEADLESS=1` implies it and also hides windows).
 Choose one of four heroes, develop a stronghold, explore guarded ruins,
 recruit an army, and take Duskspire before the rival reaches Westwatch.
 The 19-province campaign carries wounds, casualties and experience between
-hex battles. Movement highlights, exact attack previews, two spells,
+hex battles. Movement highlights, exact attack and ability previews,
 optional automatic rounds and saves during battle keep the tactics usable.
-Heroes choose between two class disciplines as they level; six adventure
-types award relics with combat and economy effects. Manual slots, rolling
+Heroes choose between two class disciplines as they level. Ten recruitable
+roles, twelve relics, and authored hold, escape and rout adventures provide
+different tactical plans. Manual slots, rolling
 autosaves and explicit backup recovery preserve battles and pending choices.
 
 The [player guide](eador/README.md) includes a tested opening and controls.
@@ -31,6 +32,9 @@ scope and deliberate simplifications. The game now offers a three-shard
 linked campaign with challenge choices, a traveling retinue and one recovery
 expedition, alongside quick standalone shards. Its original content and
 bounded progression are described in the [linked journey](docs/eador-linked-ui.md).
+Accessible, Standard and Challenge select saved realm rules; the
+[difficulty comparison](docs/eador-difficulty-candidate.md) records their
+current limits. Difficulty and seed can be chosen on the title or command line.
 The [Early Access criteria](docs/early-access-criteria.md) define the larger
 release goal; [progress and remaining gaps](docs/early-access-progress.md)
 are tracked explicitly. The current build is a development milestone.
@@ -80,28 +84,36 @@ Saga2D renders sprites and simple shapes on the GPU through pyglet, lays
 out a small UI toolkit, and runs a scene stack. Game code never touches
 the backend.
 
+This complete example needs no image or sound files:
+
 ```python
-from saga2d import Anchor, Camera, Game, Label, RenderLayer, Scene, Sprite
+from saga2d import Anchor, Button, Column, Game, Label, Scene
 
 
 class World(Scene):
     background_color = (18, 20, 30, 255)
-    controls = {"e": "end_turn", ("tab", "n"): "next_unit", "ctrl+s": "save"}
+    controls = {"escape": "close"}
 
     def on_enter(self):
-        self.camera = Camera(self.game.resolution, zoom=1.0)
-        self.hero = self.add_sprite(Sprite("hero", position=(320, 240), size=(64, 64)))
-        self.ui.add(Label(lambda: f"Gold {self.gold}", text_style="hud", anchor=Anchor.TOP_LEFT, margin=12))
+        self.gold = 0
+        self.ui.add(Column(
+            Label(lambda: f"Gold: {self.gold}", text_style="heading"),
+            Button("Collect a coin", shortcut="Space", on_click=self.collect, width=220),
+            Label("Esc closes the window.", text_style="caption"),
+            spacing=16, anchor=Anchor.TOP_LEFT, margin=24,
+        ))
 
     def draw(self):
-        self.draw_rect(0, 0, 64, 64, (255, 255, 255, 60), space="world", layer=RenderLayer.OBJECTS)
+        self.draw_circle(360, 220, 32, (230, 190, 90, 255))
 
-    def end_turn(self): ...
-    def next_unit(self, event): ...   # handlers may take the InputEvent
-    def save(self): ...
+    def collect(self):
+        self.gold += 1
+
+    def close(self):
+        self.game.quit()
 
 
-Game("My Game", resolution=(1280, 800)).run(World())
+Game("My Game", resolution=(640, 400)).run(World())
 ```
 
 What you get:
@@ -124,13 +136,15 @@ What you get:
   keys.  Mouse events carry `world_x`/`world_y`.
 * **A scene stack** with transparent overlays, deferred push/pop, and
   per-scene ownership of sprites, timers and particle emitters.
-* **UI**: `Label` (reactive: pass a lambda), `Button` (its `hotkey` is
-  drawn as a keycap), `KeyHints`, `Panel`, `Row`, `Column`, `ProgressBar`,
+* **UI**: `Label` (reactive: pass a lambda), `Button` (its optional
+  `shortcut` owns keyboard input and the visible keycap), `KeyHints`, `Panel`, `Row`, `Column`, `ProgressBar`,
   anchors, flow layout, and a `Theme` with named text styles, corner radii
   and keycap colours.  Text is measured by the backend, so layout fits.
   `Label(text, width=300, wrap=True)` also sizes multiline descriptions and
   moves following controls when text or fonts change. See the independent
   [wrapped-label example](docs/framework-wrapped-label.md).
+  Use `hotkey` for a display-only contextual hint; see
+  [button shortcuts](docs/framework-button-shortcuts.md).
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.
