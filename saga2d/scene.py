@@ -8,10 +8,11 @@ through the scene are released automatically when it leaves the stack.
 from __future__ import annotations
 
 import inspect
-import math
-from typing import TYPE_CHECKING, Any, Callable
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from saga2d.input import normalize_combo
+from saga2d.rendering._text import _layout_paragraph, _validate_paragraph_size
 from saga2d.rendering.layers import RenderLayer, world_order
 from saga2d.rendering.shapes import draw_box
 
@@ -22,16 +23,15 @@ if TYPE_CHECKING:
     from saga2d.rendering.camera import Camera
     from saga2d.rendering.particles import ParticleEmitter
     from saga2d.rendering.sprite import Sprite
-    from saga2d.ui.base import _UIRoot
+    from saga2d.ui.base import Component, _UIRoot
     from saga2d.ui.theme import TextStyle
 
 #: Screen-space immediate draws of scene-stack level ``k`` use order
-#: ``UI_ORDER_BASE + k * UI_ORDER_STRIDE`` so overlays always draw above the
-#: scene below.  Within a level, images draw above shapes and text above
-#: both; the orders in between the levels let a component put a shape over
-#: an image it drew (a minimap's viewport frame) with ``order + 1``.
+#: ``UI_ORDER_BASE + k * UI_ORDER_STRIDE``. Local drawing and the UI tree
+#: occupy separate ranges inside that scene, so overlays stay above both.
 UI_ORDER_BASE = 1_000_000
-UI_ORDER_STRIDE = 4
+UI_ORDER_STRIDE = 1_000_000
+_SCREEN_LAYER_COUNT = 1000
 
 
 def _call_with_optional_event(cb: Callable[..., Any], event: Any) -> None:
@@ -109,6 +109,7 @@ class Scene:
         self._owned_timers: set[int] = set()
         self._owned_emitters: set[ParticleEmitter] = set()
         self._key_handlers: dict[str, Callable[..., Any]] = {}
+        self._screen_draw_layer = 0
         return self
 
     # -- Lifecycle hooks -------------------------------------------------------
@@ -210,10 +211,33 @@ class Scene:
 
     # -- Drawing helpers -------------------------------------------------------
 
+    @contextmanager
+    def screen_layer(self, layer: int) -> Iterator[None]:
+        """Draw screen content on a local layer (0–999; default 0).
+
+        Higher layers cover lower shapes, images and text regardless of call
+        order. Within one layer, text stays above images, and images above
+        shapes. The scene's UI tree is above all these layers; the next scene
+        is above both. Use an overlay Scene when a panel must also own input.
+
+        The scope applies to every immediate ``draw_*`` helper, including
+        calls made by your own drawing functions. Nested scopes choose an
+        absolute layer and restore the previous one, even after an exception.
+        World-space drawing and retained sprites are unaffected.
+        """
+        if isinstance(layer, bool) or not isinstance(layer, int) or not 0 <= layer < _SCREEN_LAYER_COUNT:
+            raise ValueError("Screen layer must be an integer from 0 to 999")
+        previous = self._screen_draw_layer
+        self._screen_draw_layer = layer
+        try:
+            yield
+        finally:
+            self._screen_draw_layer = previous
+
     def _order(self, space: Space, layer: RenderLayer, y: float) -> int:
         if space == "world":
             return world_order(layer, y)
-        return UI_ORDER_BASE + self._level * UI_ORDER_STRIDE
+        return UI_ORDER_BASE + self._level * UI_ORDER_STRIDE + self._screen_draw_layer
 
     def draw_rect(
         self, x: float, y: float, width: float, height: float, color: Color, *,
@@ -301,46 +325,17 @@ class Scene:
         too small for one character raises ``ValueError`` before drawing.
         Empty text consumes no height.
         """
-        if not math.isfinite(width) or width <= 0:
-            raise ValueError("Paragraph width must be positive and finite")
-        if not math.isfinite(line_spacing) or line_spacing <= 0:
-            raise ValueError("Paragraph line spacing must be positive and finite")
+        _validate_paragraph_size(width, line_spacing)
         if not text:
             return 0.0
         font_size, color, font = self._resolve_text_style(style, font_size, color, font)
-        backend = self.game.backend
-
-        def fits(value: str) -> bool:
-            return backend.measure_text(value, font_size, font)[0] <= width
-
-        lines = []
-        for paragraph in text.split("\n"):
-            line = ""
-            for word in paragraph.split():
-                candidate = line + " " + word if line else word
-                if fits(candidate):
-                    line = candidate
-                    continue
-                if line:
-                    lines.append(line)
-                line = ""
-                if fits(word):
-                    line = word
-                    continue
-                for character in word:
-                    if not fits(character):
-                        raise ValueError(f"Paragraph width {width} cannot fit character {character!r}")
-                    if line and not fits(line + character):
-                        lines.append(line)
-                        line = ""
-                    line += character
-            lines.append(line)
-        line_height = backend.measure_text("Mg", font_size, font)[1]
-        for index, line in enumerate(lines):
+        paragraph = _layout_paragraph(text, width,
+                                      lambda value: self.game.backend.measure_text(value, font_size, font), line_spacing)
+        for index, line in enumerate(paragraph.lines):
             if line:
-                self.draw_text(line, x, y + index * line_height * line_spacing, style=style,
+                self.draw_text(line, x, y + index * paragraph.line_height * line_spacing, style=style,
                                font_size=font_size, color=color, font=font, anchor_y="top", space=space, layer=layer)
-        return line_height * (1 + (len(lines) - 1) * line_spacing)
+        return paragraph.height
 
     # -- Save / load -----------------------------------------------------------
 
@@ -355,6 +350,21 @@ class Scene:
         pass
 
     # -- UI --------------------------------------------------------------------
+
+    def measure(self, component: Component) -> tuple[int, int]:
+        """Return an unattached UI tree's preferred size in this scene's game.
+
+        Uses the current theme, fonts and display scale without parenting,
+        drawing or activating the tree. Already attached trees are rejected;
+        ask those components for their ``get_preferred_size()`` directly.
+        """
+        if component.parent is not None or component._game is not None:
+            raise ValueError('Scene.measure requires an unattached UI tree')
+        component._propagate_game(component, self.game)
+        try:
+            return component.get_preferred_size()
+        finally:
+            component._propagate_game(component, None)
 
     @property
     def ui(self) -> _UIRoot:

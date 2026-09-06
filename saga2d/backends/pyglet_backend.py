@@ -214,11 +214,11 @@ class PygletBackend:
             config = pyglet.gl.Config(sample_buffers=1, samples=4, double_buffer=True)
             self.window = pyglet.window.Window(
                 width=width, height=height, caption=title, resizable=True,
-                vsync=True, visible=visible and not fullscreen, config=config,
+                vsync=True, visible=False, config=config,
             )
         except pyglet.window.NoSuchConfigException:
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, resizable=True, vsync=True, visible=visible and not fullscreen,
+                width=width, height=height, caption=title, resizable=True, vsync=True, visible=False,
             )
         self.batch = pyglet.graphics.Batch()
         self._identity = Mat4()
@@ -231,7 +231,8 @@ class PygletBackend:
         self._windowed_size = self.window_size
         if fullscreen:
             self.set_fullscreen(True)
-            self.window.set_visible(visible)
+        # Register first so the initial show/focus events enter the game queue.
+        self.window.set_visible(visible)
 
     def _register_handlers(self) -> None:
         window = self.window
@@ -296,6 +297,22 @@ class PygletBackend:
         def on_close() -> bool:
             queue.append(WindowEvent("close"))
             return pyglet.event.EVENT_HANDLED
+
+        @window.event
+        def on_activate() -> None:
+            queue.append(WindowEvent('activate'))
+
+        @window.event
+        def on_deactivate() -> None:
+            queue.append(WindowEvent('deactivate'))
+
+        @window.event
+        def on_show() -> None:
+            queue.append(WindowEvent('show'))
+
+        @window.event
+        def on_hide() -> None:
+            queue.append(WindowEvent('hide'))
 
         @window.event
         def on_resize(new_width: int, new_height: int) -> None:
@@ -376,6 +393,10 @@ class PygletBackend:
         if sys.platform == "darwin" and pyglet.options.dpi_scaling in ("platform", "scaled"):
             return round(width / self.window.scale), round(height / self.window.scale)
         return width, height
+
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        return self._windowed_size if self.fullscreen else self.window_size
 
     def set_fullscreen(self, fullscreen: bool) -> None:
         if fullscreen == self.fullscreen:
@@ -617,13 +638,12 @@ class PygletBackend:
         result = self._measure_cache.get(key)
         if result is None:
             label = pyglet.text.Label(text, font_name=font or "sans-serif", font_size=size)
-            result = (
-                int(round(label.content_width / self.scale_factor)),
-                int(round(label.content_height / self.scale_factor)),
-            )
+            # The key identifies physical glyph size. Keep those physical
+            # metrics so a later viewport scale cannot reuse old logical units.
+            result = (label.content_width, label.content_height)
             label.delete()
             self._measure_cache[key] = result
-        return result
+        return tuple(int(round(dimension / self.scale_factor)) for dimension in result)
 
     def load_font(self, name: str, path: str | None = None) -> str:
         if path is not None:

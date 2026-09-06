@@ -51,8 +51,8 @@ class SaveError(Exception):
     """A save cannot be read/written, or its envelope is invalid/unsupported."""
 
 
-def _reject_nonfinite(value: str) -> None:
-    raise ValueError(f"Non-finite JSON number {value} is not supported")
+def _reject_nonfinite(_value: str) -> None:
+    raise ValueError("Non-finite JSON number is not supported; expected a finite number")
 
 
 def _finite_float(value: str) -> float:
@@ -207,14 +207,20 @@ class SaveManager:
     def _validate_payload(data: Any) -> dict[str, Any]:
         if not isinstance(data, dict):
             raise ValueError(f"Expected a JSON object, got {type(data).__name__}")
-        if type(data.get("version")) is not int or data["version"] != 1:
-            raise ValueError(f"Unsupported save format version {data.get('version')!r}; expected version 1")
+        version = data.get("version")
+        if type(version) is not int:
+            raise ValueError(f"Save format version must be integer 1, got {type(version).__name__}")
+        if version != 1:
+            # Unknown metadata is untrusted: preserve useful ordinary version
+            # numbers without expanding an arbitrary-size integer into UI prose.
+            detail = f" {version}" if version.bit_length() <= 64 else ""
+            raise ValueError(f"Unsupported save format version{detail}; expected version 1")
         if not isinstance(data.get("timestamp"), str):
             raise ValueError("Save timestamp must be an ISO date/time string")
         try:
             datetime.fromisoformat(data["timestamp"])
         except ValueError as exc:
-            raise ValueError(f"Invalid save timestamp {data['timestamp']!r}") from exc
+            raise ValueError("Invalid save timestamp; expected an ISO date/time string") from exc
         if not isinstance(data.get("scene_class"), str) or not data["scene_class"].strip():
             raise ValueError("Save scene_class must be a nonempty string")
         if not isinstance(data.get("state"), dict):

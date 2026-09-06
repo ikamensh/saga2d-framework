@@ -82,3 +82,9 @@ The implementation reuses Pyglet's
 Pyglet requires a resizable window for defined `set_size` behavior. The adapter
 also accounts for the pinned Cocoa implementation's differing getter/setter
 units and refreshes the projection after fullscreen recreates the context.
+
+A display preview can snapshot `game.windowed_size` and `game.fullscreen`,
+then restore with `set_window_size(saved_size)` and `set_fullscreen(saved_mode)`.
+`windowed_size` reports the actual OS windowed size, or the remembered restoration
+size while fullscreen. It avoids mistaking the desktop dimensions for the player's
+previous window when cancelling a fullscreen preview.

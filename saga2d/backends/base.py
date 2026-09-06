@@ -74,7 +74,7 @@ class MouseEvent:
 
 @dataclass(frozen=True)
 class WindowEvent:
-    type: str  # "close" | "resize"
+    type: str  # "close" | "resize" | "activate" | "deactivate" | "show" | "hide"
 
 
 Event = KeyEvent | MouseEvent | WindowEvent
@@ -111,6 +111,11 @@ class Backend(Protocol):
     @property
     def window_size(self) -> tuple[int, int]:
         """Actual native content size, excluding decorations and backing scale."""
+        ...
+
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        """Actual windowed size, or remembered restoration size while fullscreen."""
         ...
 
     def set_fullscreen(self, fullscreen: bool) -> None:

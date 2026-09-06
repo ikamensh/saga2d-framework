@@ -85,6 +85,21 @@ same order, images above shapes; shapes at one order draw in call order.
 The spare orders inside a level let a component put a shape over an image
 it drew (the minimap's viewport frame).
 
+`with scene.screen_layer(1):` groups immediate screen drawing above the
+default layer zero. The scope applies through game drawing helpers and
+paragraphs, restores after nesting or failure, and does not change world
+`RenderLayer` or retained sprites. Local layers are bounded to 0–999 so they
+cannot escape their scene. Controls draw above all local layers; children and
+later UI siblings paint above earlier ones, matching mouse dispatch. A modal
+scene remains above all content below it and owns its input independently.
+
+Shardbound's stationary damage pill and Tribes' floating text/toast panels
+need shapes to cover earlier text. Warband's committed Minimap needs a frame
+above its image. The private scene stride builds on that Warband change;
+each UI component keeps four suborders, preserving its frame-at-`order + 1`
+composition while keeping later siblings above it. There is no popup manager
+or tactical effect in the framework. See the [screen layer example](docs/framework-screen-layers.md).
+
 ## Window display
 
 `Game.set_fullscreen(bool)` adopts the committed Warband interface. Together
@@ -121,6 +136,13 @@ and caches text labels across frames keyed by their content, so a HUD
 with dozens of labels and a few hundred highlight rectangles renders in
 a couple of milliseconds.
 
+Text measurement caches physical glyph dimensions at the rounded raster size;
+logical dimensions are calculated using the current viewport scale at return.
+Caching the already-divided result would conflate different logical font sizes
+after a resize. The independent `tools/verify_text_measurement.py` regression
+compares warm and fresh windows, including exact wrapped-flow pixels and native
+clicks in both directions.
+
 Textures are packed into one atlas, so sprites at the same order share a
 draw call regardless of image.  An image registered from PIL can be
 redrawn in place (`assets.update_image`); every sprite showing it changes
@@ -145,6 +167,16 @@ its minimap.
 
 Scene-stack operations requested during steps 2–3 are queued and applied
 after the phase, so a scene never mutates the stack under itself.
+
+`Game.run(scene, fps=60)` sleeps for the unused part of each frame instead of
+spinning. Inactive or hidden windows are limited to 15 FPS; a lower chosen cap
+also applies there. Focus and show/hide notifications use the existing backend
+event queue, including minimization and restoration. Rendering and VSync time
+count toward the interval, and slow frames do not create catch-up bursts.
+Elapsed time continues to drive animation and timers at either rate.
+`tick(dt)` still advances exactly one unpaced frame for embedding and deterministic
+tests; those callers own their pacing. No game has to write a sleep loop.
+See the independent [frame-pacing example](docs/framework-frame-pacing.md).
 
 ## Scenes own their resources
 
@@ -180,6 +212,27 @@ Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
 `draw_keycap`, so the game's hint strip and its buttons agree.  `Minimap`
 draws a game-supplied image with the camera's viewport framed over it and
 turns clicks and drags into world coordinates.
+
+`Label(text, width=300, wrap=True)` opts into measured multiline text whose
+preferred height participates in ordinary flow layout. Shardbound's reward
+card descriptions and Warband's width-390 tutorial objective need the next
+control to follow the complete text, including after reactive text or font
+changes. Immediate paragraphs and retained labels share one private layout
+helper. A private preparation hook runs at existing input/draw layout
+boundaries, including visible paused scenes; games acquire no new lifecycle
+or manual invalidation requirement. Default single-line Labels stay unchanged.
+Width and maximum screen content remain the game's choice. See the independent
+[wrapped-label example](docs/framework-wrapped-label.md).
+
+`Scene.measure(component)` returns an unattached tree's preferred size using
+the scene's current theme, font metrics and viewport scale. It removes the
+temporary attach/measure/remove sequence needed by Shardbound's complete save
+rows and rival force layout. It neither parents the tree nor registers input;
+the measurement context is released even when content evaluation raises.
+Already owned trees are rejected instead of being borrowed from another scene.
+Games still choose widths, content budgets, pagination and placement. The
+independent [preview example](docs/framework-ui-measurement.md) positions a
+variable-height card before adding it to the UI.
 
 For a key that activates the button itself, `Button(shortcut="E", on_click=...)`
 owns both its keycap and activation. It uses the current visible UI tree,

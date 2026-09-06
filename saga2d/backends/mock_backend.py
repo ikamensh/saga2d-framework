@@ -71,6 +71,8 @@ class MockBackend:
         self.fullscreen = fullscreen
         self._windowed_size = (width, height)
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
+        if visible:
+            self.inject_focus(True)
 
     def begin_frame(self, clear_color: Color | None = None) -> None:
         self.clear_color = clear_color
@@ -98,6 +100,10 @@ class MockBackend:
             self.stop_player(player_id)
         self.is_running = False
 
+    @property
+    def windowed_size(self) -> tuple[int, int]:
+        return self._windowed_size if self.fullscreen else self.window_size
+
     def set_fullscreen(self, fullscreen: bool) -> None:
         if fullscreen == self.fullscreen:
             return
@@ -114,6 +120,14 @@ class MockBackend:
         """Simulate an OS content resize without changing the logical canvas."""
         self.window_size = (width, height)
         self._pending_events.append(WindowEvent("resize"))
+
+    def inject_focus(self, focused: bool) -> None:
+        """Simulate the window gaining or losing keyboard focus."""
+        self._pending_events.append(WindowEvent('activate' if focused else 'deactivate'))
+
+    def inject_visibility(self, visible: bool) -> None:
+        """Simulate showing/restoring or hiding/minimizing the window."""
+        self._pending_events.append(WindowEvent('show' if visible else 'hide'))
 
     def capture_frame(self) -> Image.Image:
         return Image.new("RGBA", self.window_size, (0, 0, 0, 255))

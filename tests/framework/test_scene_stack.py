@@ -304,4 +304,4 @@ def test_overlay_ui_draws_above_the_base_scene_hud_and_banner(game: Game, backen
     game.push(Overlay())
     game.tick(0.016)
     order = {t["text"]: t["order"] for t in backend.texts}
-    assert order["hud"] == order["banner"] < backend.rects[0]["order"] == order["menu"]
+    assert order["banner"] < order["hud"] < backend.rects[0]["order"] < order["menu"]
