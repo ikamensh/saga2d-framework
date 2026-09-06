@@ -21,6 +21,7 @@ from saga2d.audio import AudioManager
 from saga2d.backends.base import Event, KeyEvent, MouseEvent, WindowEvent
 from saga2d.game import Game
 from saga2d.hexgrid import HexGrid
+from saga2d.multiplayer_ui import MatchLobby, MatchMenu, add_match_arguments, match_from_arguments
 from saga2d.network import CommandError, MatchClient, MatchHost
 from saga2d.input import InputEvent, InputManager
 from saga2d.rendering import Camera, ParticleEmitter, RenderLayer, Sprite, SpriteAnchor
@@ -33,7 +34,7 @@ from saga2d.util.reactive import ReactiveValue
 from saga2d.util.tween import Ease, tween
 
 __all__ = [
-    "CommandError", "MatchClient", "MatchHost",
+    "CommandError", "MatchClient", "MatchHost", "MatchLobby", "MatchMenu", "add_match_arguments", "match_from_arguments",
     "Action", "Anchor", "AnimationDef", "AssetManager", "AssetNotFoundError", "AudioManager", "Button", "Camera",
     "Column", "Component", "Delay", "Do", "Ease", "Event", "FadeIn", "FadeOut", "Game", "HexGrid", "InputEvent", "InputManager",
     "KeyEvent", "KeyHints", "Label", "Layout", "Minimap", "MouseEvent", "MoveTo", "Panel", "Parallel", "ParticleEmitter", "PlayAnim",

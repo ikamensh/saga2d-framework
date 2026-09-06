@@ -112,3 +112,21 @@ def test_failed_scene_entry_closes_its_connection(game):
     with pytest.raises(RuntimeError, match='broken setup'):
         game.push(FailedRoom())
     assert host.closed
+
+
+def test_entering_a_match_removes_lobby_and_title_resources(game):
+    """A title backdrop must not remain visible through a new match's fog of war."""
+    from saga2d import MatchLobby, Scene
+    host = MatchHost('test', lambda *_: None, lambda _: {}, address=('127.0.0.1', 0), token='test')
+    client = MatchClient('test', host.address, token='test')
+    match_scene = Scene()
+    try:
+        game.push(Scene())
+        game.push(MatchLobby(client, lambda _: match_scene))
+        pump(host, client, lambda: client.ready)
+        game.tick(.03)
+        assert game.scenes == [match_scene]
+        assert client.ready
+    finally:
+        client.close()
+        host.close()
