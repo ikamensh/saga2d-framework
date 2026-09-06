@@ -40,9 +40,23 @@ release goal; [progress and remaining gaps](docs/early-access-progress.md)
 are tracked explicitly. The current build is a development milestone.
 
 ```bash
-uv run python tools/fuzz_eador.py       # seeded rule and scene-input checks
+uv run python tools/fuzz_eador.py       # seeded checks, default CPU allowance: 25% of one core
 uv run python tools/verify_eador.py     # real input + PNGs in /tmp/shardbound
 ```
+
+Development checks are paced by default. Both `tools/fuzz_eador.py` and
+`tools/fuzz.py` target **25% of one CPU core** by sleeping between short work
+blocks; choose `--cpu-percent 100` explicitly for an unrestricted stress run.
+The allowance is cooperative: one atomic model command may exceed the roughly
+50 ms work block, and several simultaneous processes add their CPU use together.
+Run heavy checks one at a time on a shared laptop.
+
+Shardbound's `PlayerInput` verification driver caps native rendering at **30
+FPS**, including screenshot settling loops. It retains `tick(1 / 60)` simulation
+steps, so these checks can take longer without changing saved results. Direct
+mock/model tests remain unpaced; native helpers with their own frame loop must
+supply their own pacing. A frame cap limits rendering frequency, while the
+fuzzer allowance limits CPU work; neither is a battery-life measurement.
 
 ## Tribes in one screen
 
