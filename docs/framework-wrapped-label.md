@@ -75,3 +75,6 @@ larger font. Inspected captures and reports are retained in
 [scene fuzz](evidence/framework-wrapped-label-2026-09-06/eador-ui-fuzz.json),
 [native results](evidence/framework-wrapped-label-2026-09-06/verification.json),
 and [prior-renderer comparison](evidence/framework-wrapped-label-2026-09-06/paragraph-comparison.json).
+
+After merging relic-content main `9d52700`, integration checkpoint `c2bbb2c`
+passes all 894 tests. Its framework implementation is unchanged from `25cda6a`.
