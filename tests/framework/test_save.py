@@ -23,6 +23,48 @@ def test_unsupported_save_envelopes_are_refused_with_explicit_errors(tmp_path, v
         manager.load(1)
 
 
+@pytest.mark.parametrize('version', ['X' * 5000, ['X' * 5000], {'X' * 5000: 1}, 10 ** 1000, True, None, 999],
+                         ids=['huge-string', 'list', 'object', 'huge-integer', 'boolean', 'null', 'future-version'])
+def test_invalid_version_diagnostics_do_not_expand_untrusted_payloads(tmp_path, version):
+    """A save browser gets a useful bounded version error, while bad bytes and usable backups stay intact."""
+    manager = SaveManager(tmp_path)
+    manager.save(1, {'turn': 1}, 'Campaign')
+    manager.save(1, {'turn': 2}, 'Campaign')
+    path = tmp_path / 'save_1.json'
+    payload = json.loads(path.read_text())
+    payload['version'] = version
+    path.write_text(json.dumps(payload))
+    before = {file.name: file.read_bytes() for file in tmp_path.iterdir()}
+    for operation in (lambda: manager.load(1), lambda: manager.save(1, {'turn': 3}, 'Campaign')):
+        with pytest.raises(SaveError, match='version') as error:
+            operation()
+        assert len(str(error.value)) < len(str(path)) + 160
+        if version == 999:
+            assert '999' in str(error.value) and 'version 1' in str(error.value)
+    assert {file.name: file.read_bytes() for file in tmp_path.iterdir()} == before
+    assert manager.load_backup(1)['state']['turn'] == 1
+
+
+@pytest.mark.parametrize('field', ['timestamp', 'number'])
+def test_other_parser_diagnostics_do_not_echo_unbounded_invalid_values(tmp_path, field):
+    """Invalid dates and overflowing JSON numbers report the defect without copying the corrupt value into a dialog."""
+    manager = SaveManager(tmp_path)
+    manager.save(1, {'turn': 1}, 'Campaign')
+    path = tmp_path / 'save_1.json'
+    payload = json.loads(path.read_text())
+    if field == 'timestamp':
+        payload['timestamp'] = 'X' * 5000
+        content = json.dumps(payload)
+    else:
+        payload['state']['value'] = 'raw-number'
+        content = json.dumps(payload).replace('"raw-number"', '1e' + '9' * 5000)
+    path.write_text(content)
+    with pytest.raises(SaveError, match=field) as error:
+        manager.load(1)
+    assert len(str(error.value)) < len(str(path)) + 160
+    assert path.read_text() == content
+
+
 @pytest.mark.parametrize(('field', 'value'), [('timestamp', None), ('timestamp', 'not a date'),
                                            ('scene_class', None), ('scene_class', ''), ('state', []), ('state', None)])
 def test_malformed_save_metadata_is_rejected_before_it_reaches_a_scene(tmp_path, field, value):
