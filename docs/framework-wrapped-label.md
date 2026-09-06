@@ -63,3 +63,15 @@ long tokens, alignment and unchanged single-line rendering. The extracted
 `Scene.draw_paragraph` renderer was also compared against actual prior source
 `3923255` with three fonts, authored blank lines and a long token: the native
 1800×1200 frames matched pixel for pixel.
+
+Checkpoint `25cda6a` passed 888 full tests (239 framework tests), 60 Tribes AI
+games and 20 Tribes random-input runs. Twenty Shardbound scene runs exercised
+10,003 random input activations, with source hashes unchanged. The native
+example passed nine keyboard/mouse activations and three confirmations after
+reflow; its initial description grew from 192 to 368 logical pixels with the
+larger font. Inspected captures and reports are retained in
+[the evidence directory](evidence/framework-wrapped-label-2026-09-06/), including
+[checks and source hashes](evidence/framework-wrapped-label-2026-09-06/checks.json),
+[scene fuzz](evidence/framework-wrapped-label-2026-09-06/eador-ui-fuzz.json),
+[native results](evidence/framework-wrapped-label-2026-09-06/verification.json),
+and [prior-renderer comparison](evidence/framework-wrapped-label-2026-09-06/paragraph-comparison.json).
