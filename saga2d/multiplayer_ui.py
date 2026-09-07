@@ -37,14 +37,17 @@ class MatchLobby(Scene):
         if self.session.closed:
             return 'Could not connect'
         if getattr(self.session, 'online', False):
-            return 'Waiting for your partner' if self.session.room else 'Connecting to the online server'
+            return ('Waiting for your partner' if self.session.state is not None else
+                    'Connecting to the online server')
         return 'Waiting for partner' if isinstance(self.session, MatchHost) else 'Joining match'
 
     def _instructions(self):
         if getattr(self.session, 'online', False):
-            if self.session.room:
+            if self.session.state is not None:
                 return (f'Room code: {self.session.room}\n'
                         'Share this code with your partner. Choose Online, enter the code and Join room.')
+            if self.session.room:
+                return f'Joining online room {self.session.room}…'
             return 'Creating your online room. You will receive a code to share.'
         if isinstance(self.session, MatchHost):
             return (f'Listening on port {self.session.address[1]}\nRoom code: {self.session.token}\n'
@@ -53,10 +56,11 @@ class MatchLobby(Scene):
 
     def update(self, dt):
         self.session.poll()
-        if getattr(self.session, 'online', False) and self.session.room and not self._reported_room:
+        confirmed = getattr(self.session, 'online', False) and self.session.state is not None
+        if confirmed and not self._reported_room:
             print(f'{self.title}: online room {self.session.room}', flush=True)
             self._reported_room = True
-        if getattr(self.session, 'online', False) and self.session.resume_token and not self._saved_room:
+        if confirmed and not self._saved_room:
             record = _last_room(self.game)
             if record.error:
                 record.reset()  # Preserve a damaged record as a recovery file before saving the new seat.
