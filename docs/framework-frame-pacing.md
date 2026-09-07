@@ -43,5 +43,21 @@ Native test drivers have separate limits, and model fuzzers require CPU budgets:
 neither VSync nor a `run()` cap can throttle code that deliberately bypasses it.
 Run one expensive job at a time on an interactive machine.
 
+The fuzz and long audit CLIs default to `--cpu-percent 25`, a cooperative
+allowance relative to one CPU core. They yield between commands; a single long
+command can temporarily exceed it. The same budget must cover preparation as
+well as the visible test. For example, `verify_eador_choices.py` prepares twelve
+hero/theme campaigns before testing reward controls; those campaigns now share
+its `--cpu-percent` allowance. [The preparation regression and focused checks](evidence/choice-preparation-budget-4b55df0/README.md)
+retain the exact earned results. Setting 100 explicitly disables that CPU pacing.
+Native input retains its separate 30 FPS cap.
+
+Ordinary `pytest` and direct model calls remain unpaced. A full suite can use
+one core even when no game window is open; use focused checks while iterating
+and serialize expensive suites across agents. A CPU allowance spreads necessary
+simulation work over more time, while the game's frame cap removes unnecessary
+redraws. The [retained before/after measurements](evidence/frame-pacing-069f79c/README.md)
+show the resulting native CPU reduction, without claiming a measured battery life.
+
 Primary implementation context: [Pyglet's event-loop documentation](https://pyglet.readthedocs.io/en/latest/programming_guide/eventloop.html)
 and [window events](https://pyglet.readthedocs.io/en/latest/modules/window.html).

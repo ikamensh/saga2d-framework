@@ -30,6 +30,10 @@ class Component:
         margin:  Inset from the anchored edge(s); an int or ``(x, y)``.
         visible: Hidden components neither draw nor receive input.
         enabled: Disabled components draw greyed and ignore input.
+        tooltip: Hover explanation, optionally a zero-argument callable. Disabled
+                 controls still explain themselves; children inherit a parent's tip.
+                 Tips wrap inside the viewport; text too tall to fit ends in an
+                 ellipsis. Only the top scene's front-most hovered tree participates.
         style:   :class:`Style` overrides.
     """
 
@@ -42,6 +46,7 @@ class Component:
         margin: int | tuple[int, int] = 0,
         visible: bool = True,
         enabled: bool = True,
+        tooltip: str | Callable[[], str] | None = None,
         style: Style | None = None,
     ) -> None:
         mx, my = (margin, margin) if isinstance(margin, int) else margin
@@ -53,6 +58,7 @@ class Component:
         self._margin = (mx, my)
         self._visible = visible
         self.enabled = enabled
+        self.tooltip = tooltip
         self.style = style
         self._parent: Component | None = None
         self._children: list[Component] = []
@@ -181,6 +187,19 @@ class Component:
     def on_event(self, event: InputEvent) -> bool:
         return False
 
+    def _tooltip_text(self) -> str | None:
+        return self.tooltip() if callable(self.tooltip) else self.tooltip
+
+    def _at_pointer(self, x: float, y: float) -> Component | None:
+        """Front-most visible paint target, regardless of enabled state."""
+        if not self.visible:
+            return None
+        for child in reversed(self._children):
+            target = child._at_pointer(x, y)
+            if target is not None:
+                return target
+        return self if self.hit_test(x, y) else None
+
     # -- Drawing / update --------------------------------------------------------
 
     def draw(self) -> None:
@@ -236,10 +255,57 @@ class _UIRoot(Component):
         # Preorder matches draw() and the reverse sibling order used by input.
         # Reassign every frame so hiding, removal and reparenting leave no stale order.
         for index, component in enumerate(self.walk(include_self=True)):
-            if _SCREEN_LAYER_COUNT + (index + 1) * _COMPONENT_ORDER_STRIDE > UI_ORDER_STRIDE:
+            if _SCREEN_LAYER_COUNT + (index + 2) * _COMPONENT_ORDER_STRIDE > UI_ORDER_STRIDE:
                 raise ValueError("UI tree exceeds the scene's draw-order capacity")
             component._paint_index = index
         super().draw()
+        self._draw_tooltip()
+
+    def _draw_tooltip(self) -> None:
+        # Resolve against the current tree on every draw. No stored target can
+        # survive removal, reparenting, hidden ancestry or a covering scene.
+        if self._game.scene is not self._scene or self._game._mouse is None:
+            return
+        mx, my = self._game._mouse
+        target = self._at_pointer(mx, my)
+        text = None
+        while target is not None:
+            text = target._tooltip_text()
+            if text is not None:
+                break
+            target = target.parent
+        if not text:
+            return
+        from saga2d.rendering._text import _layout_paragraph
+        from saga2d.rendering.shapes import draw_box
+        from saga2d.scene import UI_ORDER_BASE, UI_ORDER_STRIDE
+
+        backend, theme = self._game.backend, self._game.theme
+        style = theme.get_text_style("body")
+        font = style.font or theme.font
+        padding, margin = 8, 6
+        width = min(320, self._game.width - 2 * (padding + margin))
+        measure = lambda line: backend.measure_text(line, style.font_size, font)
+        paragraph = _layout_paragraph(text, width, measure, line_spacing=1.2)
+        step = paragraph.line_height * paragraph.line_spacing
+        available = self._game.height - 2 * (padding + margin)
+        limit = max(1, int((available - paragraph.line_height) // step) + 1)
+        lines = list(paragraph.lines[:limit])
+        if len(paragraph.lines) > limit:
+            while lines[-1] and measure(lines[-1] + "…")[0] > width:
+                lines[-1] = lines[-1][:-1]
+            lines[-1] += "…"
+        w = max(measure(line)[0] for line in lines) + 2 * padding
+        h = paragraph.line_height + (len(lines) - 1) * step + 2 * padding
+        x = max(margin, min(mx + 12, self._game.width - w - margin))
+        y = my + 18 if my + 18 + h + margin <= self._game.height else my - h - 12
+        y = max(margin, min(y, self._game.height - h - margin))
+        order = UI_ORDER_BASE + (self._scene._level + 1) * UI_ORDER_STRIDE - _COMPONENT_ORDER_STRIDE
+        draw_box(backend, x, y, w, h, (*theme.panel_background_color[:3], 255),
+                 border_color=theme.panel_border_color, border_width=1, radius=4, order=order)
+        for index, line in enumerate(lines):
+            backend.draw_text(line, x + padding, y + padding + index * step, style.font_size,
+                              theme.text_color, font=font, anchor_y="top", order=order)
 
     def handle_event(self, event: InputEvent) -> bool:
         """Let normal UI consume first, then resolve live button shortcuts."""

@@ -28,7 +28,7 @@ from saga2d.rendering import Camera, ParticleEmitter, RenderLayer, Sprite, Sprit
 from saga2d.save import SaveError, SaveManager
 from saga2d.scene import Scene
 from saga2d.settings import Settings, SettingsError
-from saga2d.ui import Anchor, Button, Column, Component, KeyHints, Label, Layout, Minimap, Panel, ProgressBar, Row, Style, TextStyle, Theme
+from saga2d.ui import Anchor, Button, Column, Component, Image, KeyHints, Label, Layout, Minimap, Panel, ProgressBar, Row, Style, TextStyle, Theme
 from saga2d.util.collision import Rect, aabb_overlap
 from saga2d.util.reactive import ReactiveValue
 from saga2d.util.tween import Ease, tween
@@ -36,7 +36,7 @@ from saga2d.util.tween import Ease, tween
 __all__ = [
     "CommandError", "MatchClient", "MatchHost", "MatchLobby", "MatchMenu", "add_match_arguments", "match_from_arguments",
     "Action", "Anchor", "AnimationDef", "AssetManager", "AssetNotFoundError", "AudioManager", "Button", "Camera",
-    "Column", "Component", "Delay", "Do", "Ease", "Event", "FadeIn", "FadeOut", "Game", "HexGrid", "InputEvent", "InputManager",
+    "Column", "Component", "Delay", "Do", "Ease", "Event", "FadeIn", "FadeOut", "Game", "HexGrid", "Image", "InputEvent", "InputManager",
     "KeyEvent", "KeyHints", "Label", "Layout", "Minimap", "MouseEvent", "MoveTo", "Panel", "Parallel", "ParticleEmitter", "PlayAnim",
     "ProgressBar", "ReactiveValue", "Rect", "Remove", "RenderLayer", "Repeat", "Row", "SaveError", "SaveManager",
     "Scene", "Sequence", "Settings", "SettingsError", "Sprite", "SpriteAnchor", "Style", "TextStyle", "Theme", "WindowEvent", "aabb_overlap", "tween",

@@ -1,4 +1,4 @@
-"""Label, Button, KeyHints, Panel, Row, Column, ProgressBar.
+"""Label, Image, Button, KeyHints, Panel, Row, Column, ProgressBar.
 
 Hotkeys are drawn as *keycaps*: small rounded key labels after a button's
 text and in front of each hint in :class:`KeyHints`, styled by the theme's
@@ -42,6 +42,17 @@ def _draw_component_box(component: Component, resolved: ResolvedStyle) -> None:
     x, y, w, h = component.bounds
     draw_box(component._game.backend, x, y, w, h, resolved.background_color, border_color=resolved.border_color,
              border_width=resolved.border_width, radius=resolved.radius, order=component._order)
+
+
+def _draw_image(component: Component, name: str, x: float, y: float, w: float, h: float) -> None:
+    """Fit an ordinary cached image inside the offered rectangle."""
+    game = component._game
+    handle = game.assets.image(name)
+    iw, ih = game.backend.get_image_size(handle)
+    scale = min(w / iw, h / ih)
+    width, height = iw * scale, ih * scale
+    game.backend.draw_image(handle, x + (w - width) / 2, y + (h - height) / 2, width, height,
+                            opacity=1 if component.enabled else .45, order=component._order)
 
 
 def keycap_size(backend: Backend, theme: Theme, key: str) -> tuple[int, int]:
@@ -179,6 +190,23 @@ class Label(Component):
         )
 
 
+class Image(Component):
+    """An ordinary cached image fitted inside a layout rectangle, preserving aspect ratio.
+
+    ``Image("icons/gold", width=24, height=24, tooltip="Gold")`` can sit beside
+    a reactive Label in a Row. The asset name follows :meth:`AssetManager.image`;
+    the shared cache owns its handle, so removal and reattachment need no cleanup.
+    """
+
+    def __init__(self, image: str, *, width: int = 24, height: int = 24, **kwargs: Any) -> None:
+        super().__init__(width=width, height=height, **kwargs)
+        self.image = image
+
+    def on_draw(self) -> None:
+        if self._game is not None:
+            _draw_image(self, self.image, *self.bounds)
+
+
 class Button(Component):
     """Clickable rectangle with hover/press states.  *text* may be reactive
     like :class:`Label`.
@@ -197,6 +225,10 @@ class Button(Component):
     display-only hint for a contextual scene action. It does not bind input
     and cannot be combined with ``shortcut``. Use :attr:`Scene.controls` for
     actions without a button; a shortcut needs no separate scene binding.
+
+    ``icon="icons/save"`` uses the ordinary image asset cache. ``show_text=False``
+    draws a compact icon/keycap while retaining :attr:`text` as its full name
+    and default tooltip. ``icon_size`` is the square fitting box in logical pixels.
     """
 
     def __init__(
@@ -206,6 +238,9 @@ class Button(Component):
         on_click: Callable[[], Any] | None = None,
         hotkey: str | None = None,
         shortcut: str | tuple[str, ...] | None = None,
+        icon: str | None = None,
+        show_text: bool = True,
+        icon_size: int = 24,
         style: Style | None = None,
         **kwargs: Any,
     ) -> None:
@@ -215,7 +250,12 @@ class Button(Component):
             raise TypeError("shortcut must be a string, a tuple of strings, or None")
         if shortcut == ():
             raise ValueError("shortcut aliases cannot be empty")
+        if not show_text and not icon:
+            raise ValueError("an icon-only button requires an icon")
+        if not math.isfinite(icon_size) or icon_size <= 0:
+            raise ValueError("icon_size must be positive and finite")
         super().__init__(style=style, **kwargs)
+        self.icon, self.show_text, self.icon_size = icon, show_text, icon_size
         self._text_rv: ReactiveValue[str] = ReactiveValue(text, on_change=lambda _o, _n: self.invalidate_layout())
         shortcuts = (shortcut,) if isinstance(shortcut, str) else shortcut or ()
         self._hotkey = shortcuts[0] if shortcuts else hotkey
@@ -239,21 +279,30 @@ class Button(Component):
         theme = self._game.theme if self._game is not None else Theme()
         return theme.resolve_button_style(self.style, state)  # type: ignore[arg-type]
 
-    def _content_size(self, resolved: ResolvedStyle) -> tuple[int, int, int]:
-        """``(text width, keycap width, height)`` of the label and its keycap."""
+    def _tooltip_text(self) -> str | None:
+        text = super()._tooltip_text()
+        if text is None and not self.show_text:
+            self._text_rv.refresh()
+            return self.text
+        return text
+
+    def _content_size(self, resolved: ResolvedStyle) -> tuple[int, int, int, int]:
+        """``(icon width, text width, keycap width, height)`` of the visible content."""
         self._text_rv.refresh()
+        iw = self.icon_size if self.icon else 0
         if self._game is None:
-            return int(len(self.text) * resolved.font_size * 0.6), 0, int(resolved.font_size * 1.2)
+            tw, th = (int(len(self.text) * resolved.font_size * 0.6), int(resolved.font_size * 1.2)) if self.show_text else (0, 0)
+            return iw, tw, 0, max(iw, th)
         backend, theme = self._game.backend, self._game.theme
-        tw, th = backend.measure_text(self.text, resolved.font_size, resolved.font)
+        tw, th = backend.measure_text(self.text, resolved.font_size, resolved.font) if self.show_text else (0, 0)
         kw, kh = keycap_size(backend, theme, self._hotkey) if self._hotkey else (0, 0)
-        return tw, kw, max(th, kh)
+        return iw, tw, kw, max(iw, th, kh)
 
     def get_preferred_size(self) -> tuple[int, int]:
         resolved = self._resolve()
-        tw, kw, h = self._content_size(resolved)
-        min_width = self._game.theme.button_min_width if self._game is not None else 120
-        content = tw + (kw + KEYCAP_GAP if kw else 0)
+        iw, tw, kw, h = self._content_size(resolved)
+        min_width = (self._game.theme.button_min_width if self._game is not None else 120) if self.show_text else 0
+        content = iw + tw + kw + KEYCAP_GAP * max(0, sum(bool(width) for width in (iw, tw, kw)) - 1)
         w = max(content + 2 * resolved.padding, min_width) if self._width is None else self._width
         return (w, h + 2 * resolved.padding if self._height is None else self._height)
 
@@ -285,14 +334,19 @@ class Button(Component):
         x, y, w, h = self.bounds
         backend, theme = self._game.backend, self._game.theme
         _draw_component_box(self, resolved)
-        tw, kw, _ = self._content_size(resolved)
-        content = tw + (kw + KEYCAP_GAP if kw else 0)
+        iw, tw, kw, _ = self._content_size(resolved)
+        content = iw + tw + kw + KEYCAP_GAP * max(0, sum(bool(width) for width in (iw, tw, kw)) - 1)
         left = x + (w - content) / 2
-        backend.draw_text(self.text, left, y + h / 2, resolved.font_size, resolved.text_color,
-                          font=resolved.font, anchor_x="left", anchor_y="center", order=self._order)
+        if self.icon:
+            _draw_image(self, self.icon, left, y + (h - iw) / 2, iw, iw)
+            left += iw + (KEYCAP_GAP if tw or kw else 0)
+        if self.show_text:
+            backend.draw_text(self.text, left, y + h / 2, resolved.font_size, resolved.text_color,
+                              font=resolved.font, anchor_x="left", anchor_y="center", order=self._order)
+            left += tw + (KEYCAP_GAP if tw and kw else 0)
         if self._hotkey:
             _, kh = keycap_size(backend, theme, self._hotkey)
-            draw_keycap(backend, theme, self._hotkey, left + tw + KEYCAP_GAP, y + (h - kh) / 2, self._order)
+            draw_keycap(backend, theme, self._hotkey, left, y + (h - kh) / 2, self._order)
 
 
 class Panel(Component):
