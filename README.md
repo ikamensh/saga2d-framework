@@ -254,3 +254,9 @@ on the title: competitive Tribes and Warband, shared-campaign Shardbound co-op.
 The Scaleway server runs the match; players need no router setup. Direct LAN
 remains an explicit mode. See [online play and reconnection](docs/online-multiplayer.md)
 and [the LAN transport and game interfaces](docs/multiplayer.md).
+
+For a small independent consumer, follow the
+[counter-room tutorial](docs/framework-match-menu.md): two counters use the
+shared menu, lobby and OnlineClient against a local server. It shows command
+ownership, connection handoff, polling under Help and cleanup without importing
+a reference game.
