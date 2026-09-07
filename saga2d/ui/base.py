@@ -305,7 +305,7 @@ class _UIRoot(Component):
                  border_color=theme.panel_border_color, border_width=1, radius=4, order=order)
         for index, line in enumerate(lines):
             backend.draw_text(line, x + padding, y + padding + index * step, style.font_size,
-                              theme.text_color, font=font, anchor_y="top", order=order)
+                              style.color, font=font, anchor_y="top", order=order)
 
     def handle_event(self, event: InputEvent) -> bool:
         """Let normal UI consume first, then resolve live button shortcuts."""
