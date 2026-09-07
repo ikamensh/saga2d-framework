@@ -461,3 +461,21 @@ feedback events; `eador.multiplayer` serializes both partners' orders into one
 shared campaign and refreshes its map/battle/progression screens. These adapters
 reuse each game's existing model and views. See [multiplayer](docs/multiplayer.md)
 for launch instructions, supported modes and transport limits.
+
+`OnlineClient` implements the same polled session interface for both players
+against a dedicated server. One asynchronous worker owns DNS, TLS, WebSocket
+I/O and reconnects; `poll()` delivers state on the game thread. Private seat
+credentials permit automatic recovery without replaying uncertain commands.
+Online room-code entry is the default and explicit LAN keeps the original
+transport. The shared menu accepts JSON creation options so an online creator
+never constructs a local authoritative model.
+
+The deployable `online_server` package composes the existing game matches.
+Its room loop owns player identity, admission, revisions, bounded input and
+private reconnect credentials. Independent writers coalesce queued snapshots;
+a slow connection cannot stall another match. Only Warband advances at 20 Hz,
+and publishes at 10 Hz while both seats are connected. The catalog validates
+bounded map options and restores each game's JSON state. A private SQLite
+store retains room checkpoints across process restarts and expires disconnected
+rooms. This deployment package imports the games; Saga2D itself still has no
+game rules. See [online play](docs/online-multiplayer.md).

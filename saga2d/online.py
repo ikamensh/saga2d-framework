@@ -37,6 +37,8 @@ def _endpoint(value):
         raise ValueError('Use a wss:// server address.')
     if parsed.scheme == 'ws' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'):
         raise ValueError('Online connections require TLS (wss://).')
+    if parsed.port == 0:
+        raise ValueError('The server port must be between 1 and 65535.')
     return value
 
 
@@ -76,6 +78,7 @@ class OnlineClient:
         self._incoming = deque()
         self._lock = threading.Lock()
         self._stop = threading.Event()
+        self._accept_orders = threading.Event()
         self._loop = None
         self._task = None
         self._thread = threading.Thread(target=self._run, name='saga2d-online', daemon=True)
@@ -98,6 +101,7 @@ class OnlineClient:
                 return
 
     async def _session(self, hello):
+        self._discard_orders()
         async with connect(self.endpoint, open_timeout=10, close_timeout=1,
                            ping_interval=5, ping_timeout=10, max_size=MAX_STATE,
                            max_queue=4, compression=None, proxy=None) as connection:
@@ -127,6 +131,11 @@ class OnlineClient:
                                     or type(message.get('revision')) is not int
                                     or type(message.get('ready')) is not bool):
                                 raise ValueError('Invalid match state from server.')
+                            if message['ready']:
+                                self._accept_orders.set()
+                            else:
+                                self._accept_orders.clear()
+                                self._discard_orders()
                         elif kind in ('error', 'reject'):
                             if not isinstance(message.get('error'), str):
                                 raise ValueError('Invalid server error.')
@@ -156,6 +165,7 @@ class OnlineClient:
                 await self._session(self._resume or self._hello)
                 return
             except (OSError, WebSocketException, TimeoutError, ConnectionError) as exc:
+                self._accept_orders.clear()
                 self._discard_orders()
                 if not self._resume:
                     self._emit({'type': 'reject', 'error': f'Cannot reach the online server: {exc}'})
@@ -208,7 +218,7 @@ class OnlineClient:
                     break
 
     def submit(self, command, *, revision=None):
-        if not self.ready or self.closed:
+        if not self.ready or self.closed or not self._accept_orders.is_set():
             raise CommandError(self.error or 'Waiting for your partner to connect.')
         data = json.dumps({'type': 'command', 'command': command, 'revision': revision}, allow_nan=False)
         if len(data.encode()) > MAX_COMMAND:
@@ -223,6 +233,7 @@ class OnlineClient:
             return
         self.closed, self.ready = True, False
         self._stop.set()
+        self._accept_orders.clear()
         loop, task = self._loop, self._task
         if loop is not None and task is not None and not loop.is_closed():
             try:

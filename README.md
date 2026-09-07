@@ -249,6 +249,8 @@ the cuts.
 
 ## Multiplayer
 
-All three games support two-player LAN/private-VPN host/join play from **M** on
-the title: competitive Tribes and Warband, shared-campaign Shardbound co-op.
-See [setup, controls and architecture](docs/multiplayer.md).
+All three games offer **Online** room creation and code-based joining from **M**
+on the title: competitive Tribes and Warband, shared-campaign Shardbound co-op.
+The Scaleway server runs the match; players need no router setup. Direct LAN
+remains an explicit mode. See [online play and reconnection](docs/online-multiplayer.md)
+and [the LAN transport and game interfaces](docs/multiplayer.md).

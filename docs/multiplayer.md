@@ -1,6 +1,10 @@
-# Multiplayer in the three games
+# LAN multiplayer and game integration
 
-Each title has **M / Multiplayer** (Shardbound calls it **Co-op**). Choose
+For internet play, use the default **Online** mode described in
+[the online multiplayer guide](online-multiplayer.md). The following describes
+the explicit **LAN** mode.
+
+Each title has **M / Multiplayer** (Shardbound calls it **Co-op**). Choose **LAN**, then
 **Host room** on one computer. On the other, enter the host's LAN or private-VPN
 address, the displayed port and room code, then choose **Join room**. Click a
 field to replace it, use Tab to move between fields, and Backspace to edit.
