@@ -135,7 +135,8 @@ def test_long_tooltip_wraps_inside_small_viewport_at_large_text_size():
     from saga2d import TextStyle
 
     game = Game('Small tooltip', backend='mock', resolution=(240, 160))
-    game.theme.set_text_style('body', TextStyle(20, (255, 255, 255, 255)))
+    body_color = (140, 200, 255, 255)
+    game.theme.set_text_style('body', TextStyle(20, body_color))
     game.assets.image_from_pil('mark', PILImage.new('RGBA', (24, 24), 'cyan'))
 
     class Menu(Scene):
@@ -151,6 +152,7 @@ def test_long_tooltip_wraps_inside_small_viewport_at_large_text_size():
         tip = [draw for draw in backend.texts if draw['order'] > backend.images[0]['order']]
         assert len(tip) > 1 and tip[-1]['text'].endswith('…')
         for draw in tip:
+            assert draw['color'] == body_color
             width, height = backend.measure_text(draw['text'], draw['font_size'], draw['font'])
             assert 0 <= draw['x'] < draw['x'] + width <= game.width
             assert 0 <= draw['y'] < draw['y'] + height <= game.height
