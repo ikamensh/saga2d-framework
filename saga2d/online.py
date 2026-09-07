@@ -100,8 +100,13 @@ class OnlineClient:
             except queue.Empty:
                 return
 
+    def _pause_orders(self):
+        with self._lock:
+            self._accept_orders.clear()
+            self._discard_orders()
+
     async def _session(self, hello):
-        self._discard_orders()
+        self._pause_orders()
         async with connect(self.endpoint, open_timeout=10, close_timeout=1,
                            ping_interval=5, ping_timeout=10, max_size=MAX_STATE,
                            max_queue=4, compression=None, proxy=None) as connection:
@@ -134,8 +139,7 @@ class OnlineClient:
                             if message['ready']:
                                 self._accept_orders.set()
                             else:
-                                self._accept_orders.clear()
-                                self._discard_orders()
+                                self._pause_orders()
                         elif kind in ('error', 'reject'):
                             if not isinstance(message.get('error'), str):
                                 raise ValueError('Invalid server error.')
@@ -165,8 +169,7 @@ class OnlineClient:
                 await self._session(self._resume or self._hello)
                 return
             except (OSError, WebSocketException, TimeoutError, ConnectionError) as exc:
-                self._accept_orders.clear()
-                self._discard_orders()
+                self._pause_orders()
                 if not self._resume:
                     self._emit({'type': 'reject', 'error': f'Cannot reach the online server: {exc}'})
                     return
@@ -218,22 +221,23 @@ class OnlineClient:
                     break
 
     def submit(self, command, *, revision=None):
-        if not self.ready or self.closed or not self._accept_orders.is_set():
-            raise CommandError(self.error or 'Waiting for your partner to connect.')
         data = json.dumps({'type': 'command', 'command': command, 'revision': revision}, allow_nan=False)
         if len(data.encode()) > MAX_COMMAND:
             raise CommandError('That order exceeds the online message limit.')
-        try:
-            self._outgoing.put_nowait(data)
-        except queue.Full as exc:
-            raise CommandError('Too many pending orders. Please wait.') from exc
+        with self._lock:
+            if not self.ready or self.closed or not self._accept_orders.is_set():
+                raise CommandError(self.error or 'Waiting for your partner to connect.')
+            try:
+                self._outgoing.put_nowait(data)
+            except queue.Full as exc:
+                raise CommandError('Too many pending orders. Please wait.') from exc
 
     def close(self):
         if self.closed:
             return
         self.closed, self.ready = True, False
         self._stop.set()
-        self._accept_orders.clear()
+        self._pause_orders()
         loop, task = self._loop, self._task
         if loop is not None and task is not None and not loop.is_closed():
             try:
