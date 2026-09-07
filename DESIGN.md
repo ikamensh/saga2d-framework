@@ -184,6 +184,15 @@ names a font family, and a weight is simply another family (a bundled
 Hotkeys are drawn as keycaps: `Button(hotkey="E")` and `KeyHints` share
 `draw_keycap`, so the game's hint strip and its buttons agree.
 
+`Image("icons/gold", width=24, height=24)` fits an ordinary cached image in
+the layout. `Button("Save", icon="icons/save", show_text=False, shortcut="F5")`
+keeps its full name and input while drawing the icon and keycap. Any component
+can supply a reactive `tooltip`; children share a parent's explanation. Disabled
+controls still explain themselves, and covered or removed controls cannot leave
+tips behind. Tooltips wrap inside the viewport using the theme's body text style
+and draw below the next scene. The game owns icon artwork and meanings. See the
+[independent icon-controls example](docs/framework-icon-controls.md).
+
 `Label(text, width=300, wrap=True)` opts into measured multiline text whose
 preferred height participates in ordinary flow layout. Shardbound's reward
 card descriptions and Warband's width-390 tutorial objective need the next
