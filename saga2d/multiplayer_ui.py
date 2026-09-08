@@ -51,7 +51,8 @@ class MatchLobby(Scene):
                 controls.append(Button('Open download page', on_click=self.open_download, width=280))
             else:
                 self.copy_button = Button('Copy room code', on_click=self.copy_room, width=280, enabled=False)
-                controls.append(self.copy_button)
+                self.invite_button = Button('Copy invite link', on_click=self.copy_invite, width=280, enabled=False)
+                controls.append(Row(self.copy_button, self.invite_button, spacing=20))
         self.ui.add(Column(Label(self.title, font_size=28),
                            Label(self._status, font_size=20),
                            Label(self._instructions, width=580, wrap=True, font_size=18),
@@ -78,7 +79,7 @@ class MatchLobby(Scene):
                 return 'This version of the game cannot play online any more. Install the current release and try again.'
             if self.session.state is not None:
                 return (f'Room code: {self.session.room}\n'
-                        'Copy the code and send it to your friend. They paste it in Multiplayer and choose Join room.\n'
+                        'Send your friend the invite link, or the code to paste in Multiplayer before Join room.\n'
                         'The match starts when you both connect. '
                         f'Your seats are kept for {_duration(self.session.retention)} without both players.')
             if self.session.room:
@@ -89,9 +90,20 @@ class MatchLobby(Scene):
                     'Share your LAN or VPN address and this code with your partner.')
         return 'Connecting to the host. Both games must use the same version.'
 
+    def invite_link(self):
+        """A public link naming only the game and room; the private seat never leaves this computer."""
+        from saga2d.release import home_page
+        return f'{home_page()}join/{self.session.game_id}/{self.session.room}'
+
     def copy_room(self):
         self.game.backend.set_clipboard_text(self.session.room)
         self.copy_button.text = 'Copied!'
+        self.invite_button.text = 'Copy invite link'
+
+    def copy_invite(self):
+        self.game.backend.set_clipboard_text(self.invite_link())
+        self.invite_button.text = 'Copied!'
+        self.copy_button.text = 'Copy room code'
 
     def update(self, dt):
         self.session.poll()
@@ -101,7 +113,7 @@ class MatchLobby(Scene):
                 self._offered_update = True
                 self._build()
             elif not self.session.incompatible:
-                self.copy_button.enabled = confirmed and not self.session.closed
+                self.copy_button.enabled = self.invite_button.enabled = confirmed and not self.session.closed
         if confirmed and not self._reported_room:
             print(f'{self.title}: online room {self.session.room}', flush=True)
             self._reported_room = True
