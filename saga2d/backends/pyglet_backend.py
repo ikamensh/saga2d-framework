@@ -132,6 +132,7 @@ class PygletBackend:
         self._frame = 0
         self._measure_cache: dict[tuple[str, str | None, int], tuple[int, int]] = {}
         self._atlas: Any = None
+        self._padded_images: dict[Any, Any] = {}
         self._identity: Any = None
         self._screen_view: Any = None
         self._world_view: Any = None
@@ -477,7 +478,12 @@ class PygletBackend:
         if image_data.width > 1024 or image_data.height > 1024:
             region = image_data.get_texture()
         else:
-            region = self._atlas.add(image_data, border=1)
+            # Transparent-black atlas padding darkens opaque tile edges under
+            # linear filtering, even when an identical tile lies underneath.
+            # Extrude edge colours and keep the public region at its true size.
+            padded = self._atlas.add(_extruded_image(image_data))
+            region = padded.get_region(1, 1, image_data.width, image_data.height)
+            self._padded_images[region] = padded
         region.anchor_x = region.width / 2
         region.anchor_y = region.height / 2
         return region
@@ -491,7 +497,11 @@ class PygletBackend:
     def update_image(self, image_handle: Any, pil_image: Any) -> None:
         if (pil_image.width, pil_image.height) != (image_handle.width, image_handle.height):
             raise ValueError(f"update_image: got {pil_image.size}, the image is {image_handle.width}x{image_handle.height}")
-        image_handle.blit_into(_image_data(pil_image), 0, 0, 0)
+        padded = self._padded_images.get(image_handle)
+        if padded is not None:
+            padded.blit_into(_extruded_image(_image_data(pil_image)), 0, 0, 0)
+        else:
+            image_handle.blit_into(_image_data(pil_image), 0, 0, 0)
 
     def get_image_size(self, image_handle: Any) -> tuple[int, int]:
         return image_handle.width, image_handle.height
@@ -720,6 +730,16 @@ class PygletBackend:
 
 def _image_data(pil_image: Any) -> Any:
     return pyglet.image.ImageData(pil_image.width, pil_image.height, "RGBA", pil_image.tobytes(), pitch=-pil_image.width * 4)
+
+
+def _extruded_image(image: Any) -> Any:
+    """Duplicate the outer pixel ring so filtered atlas samples stay in-image."""
+    width, height = image.width, image.height
+    raw = image.get_image_data().get_bytes("RGBA", width * 4)
+    stride = width * 4
+    rows = [raw[start:start + 4] + raw[start:start + stride] + raw[start + stride - 4:start + stride]
+            for start in range(0, len(raw), stride)]
+    return pyglet.image.ImageData(width + 2, height + 2, "RGBA", rows[0] + b"".join(rows) + rows[-1], pitch=(width + 2) * 4)
 
 
 def _group_order(space: Space, order: int) -> int:

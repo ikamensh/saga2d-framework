@@ -144,7 +144,10 @@ compares warm and fresh windows, including exact wrapped-flow pixels and native
 clicks in both directions.
 
 Textures are packed into one atlas, so sprites at the same order share a
-draw call regardless of image.  An image registered from PIL can be
+draw call regardless of image. Atlas entries duplicate their outer pixels
+into a one-pixel border, keeping bilinear filtering from drawing dark seams
+between overlapping opaque ground chunks. Updates refresh that border too.
+An image registered from PIL can be
 redrawn in place (`assets.update_image`); every sprite showing it changes
 with it, which is how Warband draws fog of war — one pixel per tile,
 stretched over the map, bilinear filtering supplying the soft edges — and

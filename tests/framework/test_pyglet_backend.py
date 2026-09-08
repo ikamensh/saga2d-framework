@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 from saga2d import Game, Scene
+from tools.native_frames import tick
 
 
 def _display_available() -> bool:
@@ -83,3 +84,32 @@ def test_control_click_is_a_right_click_on_a_mac() -> None:
     finally:
         game._teardown()
         game.backend.quit()
+
+
+def test_scaled_opaque_images_have_no_dark_seams_before_or_after_update() -> None:
+    """Bilinear filtering at atlas edges must preserve a continuous opaque surface."""
+    class Tiles(Scene):
+        background_color = (80, 150, 70, 255)
+
+        def on_enter(self):
+            self.game.assets.image_from_pil("tile", Image.new("RGBA", (16, 16), self.background_color))
+
+        def draw(self):
+            for x, y in ((30.3, 20.2), (75.7, 20.2), (30.3, 65.6)):
+                self.draw_image("tile", x, y, 57.2, 50.4)
+
+    game = Game("texture seams", resolution=(200, 120), backend="pyglet", visible=False)
+    try:
+        scene = Tiles()
+        game.push(scene)
+        for color in ((80, 150, 70, 255), (150, 85, 60, 255)):
+            scene.background_color = color
+            game.assets.update_image("tile", Image.new("RGBA", (16, 16), color))
+            tick(game)
+            frame = game.backend.capture_frame()
+            scale = frame.width / game.width
+            pixels = frame.crop(tuple(round(v * scale) for v in (20, 10, 150, 118))).convert("RGB")
+            for bounds, expected in zip(pixels.getextrema(), color[:3]):
+                assert bounds[0] >= expected - 1 and bounds[1] <= expected + 1, (bounds, expected)
+    finally:
+        game.close()
