@@ -158,8 +158,9 @@ class CounterRoom:
             async with self.lock:
                 player = self.enter(hello)
                 self.peers[player] = websocket
+                # Seats last while this process lives; the client shows the retention it is told.
                 await websocket.send(json.dumps({'type': 'welcome', 'room': 'counter', 'player': player,
-                                                 'resume_token': self.tokens[player]}))
+                                                 'resume_token': self.tokens[player], 'retention': 3600}))
                 await self.publish()
             async for raw in websocket:
                 async with self.lock:
