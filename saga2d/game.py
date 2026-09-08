@@ -246,6 +246,15 @@ class Game:
     def pop(self) -> None:
         self._scene_stack.pop()
 
+    def pop_to(self, scene: Scene) -> None:
+        """Close all scenes above *scene*, then reveal that retained scene once.
+
+        Like ``pop``, this is deferred during input, update and lifecycle hooks.
+        The target is matched by identity when the operation applies; an absent
+        target raises ``ValueError`` before removal. Already-top is a no-op.
+        """
+        self._scene_stack.pop_to(self._check_scene(scene))
+
     def replace(self, scene: Scene) -> None:
         self._scene_stack.replace(self._check_scene(scene))
 

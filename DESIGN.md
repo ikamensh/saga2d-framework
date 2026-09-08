@@ -168,6 +168,15 @@ its minimap.
 Scene-stack operations requested during steps 2–3 are queued and applied
 after the phase, so a scene never mutates the stack under itself.
 
+`Game.pop_to(scene)` closes every scene above a retained target in one
+operation, then reveals only that target. Its identity and owned resources
+survive; missing targets fail before removal. Shardbound's authoritative
+updates can invalidate several open screens at once, and repeated `pop()`
+would reveal each stale screen between removals. The same deferred operation
+handles an editor's nested settings and confirmation pages in the independent
+[scene-return example](docs/framework-scene-return.md). Selecting the target
+and refreshing game state remain game code.
+
 `Game.run(scene, fps=60)` sleeps for the unused part of each frame instead of
 spinning. Inactive or hidden windows are limited to 15 FPS; a lower chosen cap
 also applies there. Focus and show/hide notifications use the existing backend

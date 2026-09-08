@@ -1,4 +1,4 @@
-"""SceneStack — push/pop/replace/clear_and_push with deferred application.
+"""SceneStack — scene transitions with deferred application.
 
 Operations requested while the game loop is dispatching input or updating
 are queued and applied afterwards, so a scene never mutates the stack
@@ -55,6 +55,11 @@ class SceneStack:
 
     def pop(self) -> None:
         self._request("pop", None)
+
+    def pop_to(self, scene: Scene) -> None:
+        if self.top() is scene and not self._pending:
+            return
+        self._request("pop_to", scene)
 
     def replace(self, scene: Scene) -> None:
         self._request("replace", scene)
@@ -136,6 +141,22 @@ class SceneStack:
         if self._stack:
             self._leave(self._stack.pop())
         self._enter(scene)
+
+    def _apply_pop_to(self, scene: Scene) -> None:
+        target = next((i for i, item in enumerate(self._stack) if item is scene), None)
+        if target is None:
+            raise ValueError("pop_to target is not on the scene stack")
+        if target == len(self._stack) - 1:
+            return
+        first_error: BaseException | None = None
+        while len(self._stack) > target + 1:
+            try:
+                self._leave(self._stack.pop())
+            except BaseException as exc:
+                first_error = first_error or exc
+        scene.on_reveal()
+        if first_error is not None:
+            raise first_error
 
     def _apply_clear_and_push(self, scene: Scene) -> None:
         self.clear()
