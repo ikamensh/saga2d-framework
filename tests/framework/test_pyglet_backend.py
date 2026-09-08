@@ -7,7 +7,7 @@ import sys
 import pytest
 from PIL import Image
 
-from saga2d import Game, Scene
+from saga2d import Camera, Game, Scene
 from tools.native_frames import tick
 
 
@@ -111,5 +111,33 @@ def test_scaled_opaque_images_have_no_dark_seams_before_or_after_update() -> Non
             pixels = frame.crop(tuple(round(v * scale) for v in (20, 10, 150, 118))).convert("RGB")
             for bounds, expected in zip(pixels.getextrema(), color[:3]):
                 assert bounds[0] >= expected - 1 and bounds[1] <= expected + 1, (bounds, expected)
+    finally:
+        game.close()
+
+
+def test_transparent_panel_preserves_panned_and_zoomed_world_pixels() -> None:
+    """A menu's screen-space drawing must not move the world beneath it to the origin."""
+    class Map(Scene):
+        def on_enter(self):
+            self.camera = Camera(self.game.resolution, zoom=1.5)
+            self.camera.scroll(700, 400)
+
+        def draw(self):
+            self.draw_rect(730, 440, 16, 16, (255, 0, 0, 255), space="world")
+
+    class Panel(Scene):
+        transparent = True
+
+        def draw(self):
+            self.draw_rect(140, 10, 50, 30, (0, 0, 255, 255))
+
+    game = Game("overlay camera", resolution=(200, 120), backend="pyglet", visible=False)
+    try:
+        game.push(Map())
+        tick(game)
+        assert red_at(game, 45, 60)
+        game.push(Panel())
+        tick(game)
+        assert red_at(game, 45, 60)
     finally:
         game.close()

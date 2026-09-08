@@ -408,6 +408,12 @@ class Game:
         camera = top.camera if top is not None else None
         if camera is not None:
             camera.update(dt, self._mouse)
+        else:
+            # Screen-space overlays retain the visible map's transform without
+            # sending their pointer/key input to the covered camera.
+            camera = next((scene.camera for scene in reversed(stack.scenes[stack.base_index():])
+                           if scene.camera is not None), None)
+        if camera is not None:
             ox, oy = camera.offset
             self._backend.set_camera(ox, oy, camera.zoom)
         else:

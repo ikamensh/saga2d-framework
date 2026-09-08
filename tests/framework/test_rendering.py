@@ -132,6 +132,36 @@ def test_camera_key_scroll_moves_while_keys_are_held(world: Game, backend) -> No
     assert scene.camera.x == pytest.approx(50)
 
 
+def test_screen_overlays_preserve_visible_world_camera_without_scrolling_it(world: Game, backend) -> None:
+    """Nested menus keep the map in place; opaque screens start their own view."""
+    class Map(Scene):
+        def on_enter(self):
+            self.camera = Camera(self.game.resolution, zoom=1.5)
+            self.camera.scroll(700, 400)
+            self.camera.enable_edge_scroll(12, 100)
+
+    class Menu(Scene):
+        transparent = True
+
+    scene = Map()
+    world.push(scene)
+    world.tick(0)
+    expected = backend.camera
+    for _ in range(2):
+        world.push(Menu())
+        backend.inject_mouse_move(0, 0)
+        backend.inject_key('left')
+        world.tick(.1)
+        assert backend.camera == expected
+        assert (*scene.camera.offset, scene.camera.zoom) == expected
+    world.push(Scene())
+    world.tick(.1)
+    assert backend.camera == (0, 0, 1)
+    world.pop()
+    world.tick(.1)
+    assert backend.camera == expected
+
+
 def test_burst_particles_live_then_die_and_the_emitter_retires(world: Game, backend) -> None:
     emitter = ParticleEmitter("dot", position=(50, 50), lifetime=(0.2, 0.2), fade_out=True)
     emitter.burst(5)

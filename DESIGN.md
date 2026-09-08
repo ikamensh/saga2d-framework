@@ -164,7 +164,9 @@ its minimap.
 3. `update(dt)` on the top scene (and the scenes below it while
    `pause_below` is false), then the UI tree.
 4. Actions, particles, timers, tweens, frame animation.
-5. Camera update; the backend receives the camera offset and zoom.
+5. Update the top scene's camera. The backend uses the nearest visible camera's
+   offset and zoom, preserving the map beneath screen-space overlays without
+   scrolling the covered camera from overlay input.
 6. Clear with the base scene's `background_color`; draw every visible
    scene bottom-up (`draw()` then its UI).
 
