@@ -3,6 +3,8 @@
 Games supply server creation options, a LAN match factory and a scene factory.
 Online creators and guests both receive their authoritative state from the server.
 """
+import webbrowser
+
 from saga2d.network import MatchHost, MatchClient
 from saga2d.scene import Scene
 from saga2d.settings import Settings
@@ -16,6 +18,18 @@ def _last_room(game):
                     {'game_id': '', 'endpoint': '', 'room': '', 'resume_token': ''})
 
 
+def _duration(seconds):
+    for unit, size in (('day', 86400), ('hour', 3600), ('minute', 60)):
+        count = round(seconds / size)
+        if count >= 2 or unit == 'minute':
+            return f'{count} {unit}{"s" if count != 1 else ""}'
+
+
+def open_page(url):
+    """Show a website page in the player's browser without blocking the game."""
+    webbrowser.open_new_tab(url)
+
+
 class MatchLobby(Scene):
     controls = {'escape': 'leave'}
 
@@ -24,23 +38,35 @@ class MatchLobby(Scene):
         self._transferred = False
         self._reported_room = False
         self._saved_room = False
+        self._offered_update = False
 
     def on_enter(self):
-        copy_controls = []
+        self._build()
+
+    def _build(self):
+        self.ui.clear()
+        controls = []
         if getattr(self.session, 'online', False):
-            self.copy_button = Button('Copy room code', on_click=self.copy_room, width=280, enabled=False)
-            copy_controls.append(self.copy_button)
+            if self.session.incompatible:
+                controls.append(Button('Open download page', on_click=self.open_download, width=280))
+            else:
+                self.copy_button = Button('Copy room code', on_click=self.copy_room, width=280, enabled=False)
+                controls.append(self.copy_button)
         self.ui.add(Column(Label(self.title, font_size=28),
                            Label(self._status, font_size=20),
                            Label(self._instructions, width=580, wrap=True, font_size=18),
                            Label(lambda: self.session.error, width=580, wrap=True, font_size=15),
-                           *copy_controls,
+                           *controls,
                            Button('Cancel', shortcut='Esc', on_click=self.leave, width=240),
                            width=640, spacing=24, anchor=Anchor.CENTER, style=_PANEL))
 
+    def open_download(self):
+        from saga2d.release import home_page
+        open_page(home_page())
+
     def _status(self):
         if self.session.closed:
-            return 'Could not connect'
+            return 'Update required' if self.session.incompatible else 'Could not connect'
         if getattr(self.session, 'online', False):
             return ('Waiting for your partner' if self.session.state is not None else
                     'Connecting to the online server')
@@ -48,10 +74,13 @@ class MatchLobby(Scene):
 
     def _instructions(self):
         if getattr(self.session, 'online', False):
+            if self.session.incompatible:
+                return 'This version of the game cannot play online any more. Install the current release and try again.'
             if self.session.state is not None:
                 return (f'Room code: {self.session.room}\n'
                         'Copy the code and send it to your friend. They paste it in Multiplayer and choose Join room.\n'
-                        'The match starts when you both connect.')
+                        'The match starts when you both connect. '
+                        f'Your seats are kept for {_duration(self.session.retention)} without both players.')
             if self.session.room:
                 return f'Joining online room {self.session.room}…'
             return 'Creating your online room. You will receive a code to share.'
@@ -68,7 +97,11 @@ class MatchLobby(Scene):
         self.session.poll()
         confirmed = getattr(self.session, 'online', False) and self.session.state is not None
         if getattr(self.session, 'online', False):
-            self.copy_button.enabled = confirmed and not self.session.closed
+            if self.session.incompatible and not self._offered_update:
+                self._offered_update = True
+                self._build()
+            elif not self.session.incompatible:
+                self.copy_button.enabled = confirmed and not self.session.closed
         if confirmed and not self._reported_room:
             print(f'{self.title}: online room {self.session.room}', flush=True)
             self._reported_room = True
@@ -112,10 +145,21 @@ class MatchMenu(Scene):
         self._replace_field = True
 
     def on_enter(self):
+        from saga2d.release import UpdateCheck
+        self.update_check = UpdateCheck(self.game_id)
+        self._shown_update = False
         self.last_room = _last_room(self.game)
         if self.last_room.error:
             self.message = 'Could not read the last online room. You can create or join a new room.'
         self._build_form()
+
+    def update(self, dt):
+        if self.update_check.poll() == 'update' and not self._shown_update:
+            self._shown_update = True
+            self._build_form()
+
+    def open_download(self):
+        open_page(self.update_check.page)
 
     def on_reveal(self):
         self.last_room = _last_room(self.game)
@@ -138,12 +182,19 @@ class MatchMenu(Scene):
                         'To join, copy their code and choose Paste code below.' if self.mode == 'online' else
                         'Play on the same network or a private VPN. Share the host address, port and code.\n'
                         'Click a field and type; Tab moves to the next field.')
+        notice = []
+        if self.mode == 'online' and self.update_check.status == 'update':
+            latest = self.update_check.latest
+            notice.append(Row(Label(f"Update available: {latest['name']} {latest['version']}", width=390, wrap=True,
+                                    font_size=15),
+                              Button('Open download page', on_click=self.open_download, width=170), spacing=20))
         self.ui.add(Column(Label(self.title, font_size=28),
                            Row(Button('Online' + (' · selected' if self.mode == 'online' else ''),
                                       on_click=lambda: self.set_mode('online'), width=280),
                                Button('LAN' + (' · selected' if self.mode == 'lan' else ''),
                                       on_click=lambda: self.set_mode('lan'), width=280), spacing=20),
                            Label(instructions, width=580, wrap=True, font_size=15),
+                           *notice,
                            *rows,
                            Row(Button('Create room' if self.mode == 'online' else 'Host room', on_click=self.host, width=280),
                                Button('Join room', shortcut='Enter', on_click=self.join, width=280), spacing=20),

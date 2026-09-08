@@ -47,7 +47,8 @@ class OnlineClient:
 
     ``ready`` requires both partners, while ``room`` arrives as soon as creation
     succeeds. ``resume_token`` is private: share only the room code. ``close``
-    leaves the seat reserved on the server for its reconnect grace period.
+    leaves the seat reserved on the server for ``retention`` seconds without
+    both players. ``incompatible`` marks a rejection that only an update fixes.
     """
     online = True
 
@@ -62,6 +63,8 @@ class OnlineClient:
         self.ready = False
         self.closed = False
         self.error = ''
+        self.incompatible = False
+        self.retention = None
         self.state = None
         self.revision = 0
         self._hello = {'protocol': PROTOCOL, 'game': game_id,
@@ -121,10 +124,12 @@ class OnlineClient:
                             raise ValueError('Invalid server message.')
                         kind = message.get('type')
                         if kind == 'welcome':
+                            retention = message.get('retention')
                             if (not isinstance(message.get('room'), str)
                                     or not isinstance(message.get('resume_token'), str)
                                     or type(message.get('player')) is not int
-                                    or message['player'] not in (0, 1)):
+                                    or message['player'] not in (0, 1)
+                                    or type(retention) not in (int, float) or not 0 < retention < float('inf')):
                                 raise ValueError('Invalid seat assignment from server.')
                             hello = {'type': 'resume', 'protocol': PROTOCOL,
                                      'game': self._hello['game'], 'room': message['room'],
@@ -207,7 +212,7 @@ class OnlineClient:
                 raise RuntimeError('Online connection worker failed.') from message['exception']
             if kind == 'welcome':
                 self.room, self.resume_token = message['room'], message['resume_token']
-                self.player = message['player']
+                self.player, self.retention = message['player'], message['retention']
                 self.error = ''
             elif kind == 'state':
                 self.state, self.revision = message['state'], message['revision']
@@ -217,6 +222,7 @@ class OnlineClient:
                 if kind == 'disconnected':
                     self.ready = False
                 elif kind == 'reject':
+                    self.incompatible = message.get('reason') == 'incompatible'
                     self.close()
                     break
 
