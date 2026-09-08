@@ -19,9 +19,9 @@ def _last_room(game):
 
 
 def _duration(seconds):
-    for unit, size in (('day', 86400), ('hour', 3600), ('minute', 60)):
+    for unit, size in (('day', 86400), ('hour', 3600), ('minute', 60), ('second', 1)):
         count = round(seconds / size)
-        if count >= 2 or unit == 'minute':
+        if count >= 2 or unit == 'second':
             return f'{count} {unit}{"s" if count != 1 else ""}'
 
 
