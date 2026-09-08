@@ -416,6 +416,12 @@ class PygletBackend:
         self._windowed_size = self.window_size
         self._compute_viewport(self.window.width, self.window.height)
 
+    def get_clipboard_text(self) -> str:
+        return self.window.get_clipboard_text()
+
+    def set_clipboard_text(self, text: str) -> None:
+        self.window.set_clipboard_text(text)
+
     def capture_frame(self) -> Any:
         """PIL image of the frame most recently presented by :meth:`end_frame`."""
         import ctypes

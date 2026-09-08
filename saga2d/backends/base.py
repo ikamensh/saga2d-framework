@@ -128,6 +128,14 @@ class Backend(Protocol):
 
     def capture_frame(self) -> "PILImage.Image": ...
 
+    def get_clipboard_text(self) -> str:
+        """Read system clipboard text, or an empty string when it contains no text."""
+        ...
+
+    def set_clipboard_text(self, text: str) -> None:
+        """Copy text to the system clipboard."""
+        ...
+
     # -- Camera --------------------------------------------------------------
 
     def set_camera(self, x: float, y: float, zoom: float) -> None:

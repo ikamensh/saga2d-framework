@@ -40,6 +40,7 @@ class MockBackend:
         self.fullscreen = False
         self.window_size = (logical_width, logical_height)
         self._windowed_size = self.window_size
+        self._clipboard_text = ""
 
         self.sounds_played: list[dict[str, Any]] = []
         self.sounds_playing: dict[str, dict[str, Any]] = {}
@@ -131,6 +132,12 @@ class MockBackend:
 
     def capture_frame(self) -> Image.Image:
         return Image.new("RGBA", self.window_size, (0, 0, 0, 255))
+
+    def get_clipboard_text(self) -> str:
+        return self._clipboard_text
+
+    def set_clipboard_text(self, text: str) -> None:
+        self._clipboard_text = text
 
     def set_camera(self, x: float, y: float, zoom: float) -> None:
         self.camera = (x, y, zoom)

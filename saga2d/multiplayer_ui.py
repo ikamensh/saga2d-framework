@@ -26,10 +26,15 @@ class MatchLobby(Scene):
         self._saved_room = False
 
     def on_enter(self):
+        copy_controls = []
+        if getattr(self.session, 'online', False):
+            self.copy_button = Button('Copy room code', on_click=self.copy_room, width=280, enabled=False)
+            copy_controls.append(self.copy_button)
         self.ui.add(Column(Label(self.title, font_size=28),
                            Label(self._status, font_size=20),
                            Label(self._instructions, width=580, wrap=True, font_size=18),
                            Label(lambda: self.session.error, width=580, wrap=True, font_size=15),
+                           *copy_controls,
                            Button('Cancel', shortcut='Esc', on_click=self.leave, width=240),
                            width=640, spacing=24, anchor=Anchor.CENTER, style=_PANEL))
 
@@ -45,7 +50,8 @@ class MatchLobby(Scene):
         if getattr(self.session, 'online', False):
             if self.session.state is not None:
                 return (f'Room code: {self.session.room}\n'
-                        'Share this code with your partner. Choose Online, enter the code and Join room.')
+                        'Copy the code and send it to your friend. They paste it in Multiplayer and choose Join room.\n'
+                        'The match starts when you both connect.')
             if self.session.room:
                 return f'Joining online room {self.session.room}…'
             return 'Creating your online room. You will receive a code to share.'
@@ -54,9 +60,15 @@ class MatchLobby(Scene):
                     'Share your LAN or VPN address and this code with your partner.')
         return 'Connecting to the host. Both games must use the same version.'
 
+    def copy_room(self):
+        self.game.backend.set_clipboard_text(self.session.room)
+        self.copy_button.text = 'Copied!'
+
     def update(self, dt):
         self.session.poll()
         confirmed = getattr(self.session, 'online', False) and self.session.state is not None
+        if getattr(self.session, 'online', False):
+            self.copy_button.enabled = confirmed and not self.session.closed
         if confirmed and not self._reported_room:
             print(f'{self.title}: online room {self.session.room}', flush=True)
             self._reported_room = True
@@ -114,14 +126,16 @@ class MatchMenu(Scene):
         names = ('Host address', 'Port', 'Room code')
         rows = []
         for i in ((2,) if self.mode == 'online' else (0, 1, 2)):
-            rows.append(Button(lambda i=i: f'{"> " if i == self.focus else ""}{names[i]}: {self.fields[i] or "(type here)"}',
-                               on_click=lambda i=i: self.select_field(i), width=580))
+            field = Button(lambda i=i: f'{"> " if i == self.focus else ""}{names[i]}: {self.fields[i] or "(type here)"}',
+                           on_click=lambda i=i: self.select_field(i), width=390 if self.mode == 'online' else 580)
+            rows.append(Row(field, Button('Paste code', on_click=self.paste_code, width=170), spacing=20)
+                        if self.mode == 'online' else field)
         rejoin = []
         if (self.mode == 'online' and self.last_room['game_id'] == self.game_id
                 and self.last_room['room'] and self.last_room['resume_token']):
             rejoin.append(Button(f"Rejoin last room · {self.last_room['room']}", on_click=self.rejoin, width=580))
         instructions = ('Create a room and share its code with a friend.\n'
-                        'To join, enter their room code below.' if self.mode == 'online' else
+                        'To join, copy their code and choose Paste code below.' if self.mode == 'online' else
                         'Play on the same network or a private VPN. Share the host address, port and code.\n'
                         'Click a field and type; Tab moves to the next field.')
         self.ui.add(Column(Label(self.title, font_size=28),
@@ -152,7 +166,21 @@ class MatchMenu(Scene):
     def next_field(self):
         self.select_field(2 if self.mode == 'online' else (self.focus + 1) % 3)
 
+    def paste_code(self):
+        code = self.game.backend.get_clipboard_text().strip()
+        if not (code and len(code) <= 12 and code.isascii() and code.isalnum()):
+            self.message = 'Copy just the room code from your friend, then choose Paste code.'
+            return
+        self.fields[2] = code.upper()
+        self.focus = 2
+        self._replace_field = False
+        self.message = ''
+
     def handle_input(self, event):
+        if (self.mode == 'online' and event.type == 'key_press' and event.key == 'v'
+                and (event.ctrl or event.meta)):
+            self.paste_code()
+            return True
         if event.type != 'key_press' or not event.key or event.ctrl or event.meta:
             return False
         if event.key in ('backspace', 'delete'):
