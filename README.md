@@ -156,7 +156,10 @@ pyglet events with frames to look at), `ai_report.py` (difficulties against
 a scripted opening and against each other), `map_report.py` (fairness over
 seeds), `perf_warband.py` (frame times of a 150-unit battle),
 `soak_warband.py` (whole matches on the real backend) and
-`build_warband.py` (a self-tested standalone build).
+`build_warband.py` (versioned standalone builds and Windows installers) and
+`verify_warband_package.py` (installed/extracted executable checks). See the
+[Windows player and build guide](docs/windows-warband.md) and
+[remote AI guide](docs/warband-remote-ai.md).
 
 ## The framework
 
