@@ -127,12 +127,16 @@ and march, each with a passive mechanic and two arts of its own (see
 trees; farms feed the army; a barracks, lumber mill, blacksmith, stables,
 workshop and church open seven units and the upgrades; guard towers hold the
 line.  Three AI difficulties expand, upgrade, raid and attack in growing waves.
-Raze every enemy building and hunt down what is left.  Selection by click
-or drag box, right-click does the sensible thing (move, harvest, attack,
-resume building), a context command card with keycaps, control groups,
-patrol, camera bookmarks, a minimap that pans and orders, alerts, three
-save slots with an autosave, persisted settings, a tutorial strip, a
-codex, and two marches under it all.
+Raze every enemy building and hunt down what is left; an AI with no units
+and no way to recruit surrenders.  Every finished match is scored (victory,
+enemies defeated, forces preserved, research, speed) into a local top ten per
+difficulty, map and player count.  Selection by click or drag box,
+right-click does the sensible thing (move, harvest, attack, resume
+building), a command card of portraits and emblems with keycaps, resource
+and stat symbols that explain themselves on hover, control groups, patrol,
+camera bookmarks, a minimap that pans and orders, alerts, three save slots
+with an autosave, persisted settings, a tutorial strip, a codex, a march per
+race, and the fallen lying where they fell for a while.
 
 | Key | Action | Key | Action |
 |-----|--------|-----|--------|
