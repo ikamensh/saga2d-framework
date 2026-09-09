@@ -17,7 +17,7 @@ os.environ['SAGA2D_SILENT'] = '1'
 
 from PIL import Image as PILImage, ImageDraw
 from saga2d import Anchor, Button, Column, Game, Image, Label, Row, Scene, Style, TextStyle, Theme
-from tools.native_frames import tick
+from saga2d.testing.native_frames import tick
 
 PANEL = Style(padding=24, radius=12, background_color=(27, 39, 58, 255))
 

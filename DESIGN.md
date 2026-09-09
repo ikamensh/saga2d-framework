@@ -297,7 +297,7 @@ independent `tools/demo_settings.py` example.
 
 ## Audio ownership
 
-`saga2d.synth` provides pure sample composition and WAV export. Tribes and
+`sagaforge.synth` provides pure sample composition and WAV export. Tribes and
 Warband had the same tone/noise/envelope/mix code; Shardbound needs original
 assets generated before packaging. Tribes now imports those helpers while
 retaining its compositions and cache. Shardbound uses the same functions
@@ -306,7 +306,7 @@ need no Game or resource lifetime. The framework does not choose cue names,
 music transitions or caching policy. See the independent
 [synthesis example](docs/framework-synth.md).
 
-`saga2d.synth` also carries the instrument-level primitives Warband's orchestra
+`sagaforge.synth` also carries the instrument-level primitives Warband's orchestra
 and Shardbound's voices both need: `sustained` (an ADSR-shaped held tone with
 vibrato and unison detune, read from a wavetable so long pads are cheap),
 `pluck` (Karplus–Strong, solved in the frequency domain so a note costs one
@@ -413,7 +413,7 @@ formula, capture, harvest and city growth, research, turn order, healing,
 elimination, score, JSON serialisation).  It has no saga2d imports, so
 the AI and the tests use it directly.  `tribes/view.py` lays the grid out
 isometrically and reconciles sprites with the model; `tribes/textures.py`
-pre-renders the low-poly blocks and props with `saga2d.render3d`; `tribes/effects.py`
+pre-renders the low-poly blocks and props with `sagaforge.render3d`; `tribes/effects.py`
 holds transient animations; `tribes/sound.py` synthesises audio;
 `tribes/scene.py` and `tribes/title.py` turn input into model calls.
 
@@ -515,7 +515,7 @@ Online room-code entry is the default and explicit LAN keeps the original
 transport. The shared menu accepts JSON creation options so an online creator
 never constructs a local authoritative model.
 
-The deployable `online_server` package composes the existing game matches.
+The deployable `saga2d.server` process hosts whichever game registries it is started with (`--games module:ONLINE`); each game's `multiplayer` module composes its matches into a `GameSpec`.
 Its room loop owns player identity, admission, revisions, bounded input and
 private reconnect credentials. Independent writers coalesce queued snapshots;
 a slow connection cannot stall another match. Only Warband advances at 20 Hz,

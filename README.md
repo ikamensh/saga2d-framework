@@ -71,7 +71,7 @@ active frame rate.
 
 Shardbound's `PlayerInput` verification driver caps native rendering at **30
 FPS**, including screenshot settling loops. Standalone native verification
-scripts use `tools.native_frames.tick(game)` for the same cap. Both retain
+scripts use `saga2d.testing.native_frames.tick(game)` for the same cap. Both retain
 `dt=1 / 60` simulation steps, so these checks can take longer without changing
 saved results. Direct mock/model tests remain unpaced. A frame cap limits
 rendering frequency, while the fuzzer allowance limits CPU work; neither is a
@@ -109,7 +109,7 @@ for the rules and local storage details.
 The game is `tribes/`: `model.py` holds every rule (pure Python, no
 rendering), `mapgen.py` builds connected maps, `ai.py` plays the other
 tribes, `textures.py` pre-renders the isometric blocks and props with
-`saga2d.render3d` (a tiny Pillow software renderer with a configurable camera),
+`sagaforge.render3d` (a tiny Pillow software renderer with a configurable camera),
 `view.py` lays the map out and keeps sprites in step with the model,
 `effects.py` holds the transient animations, `sound.py` synthesises every
 effect and the ambient loop with numpy (cached under `~/.tribes`), and
@@ -154,7 +154,7 @@ orders, harvesting, construction, supply, upgrades, towers, fog and
 elimination; `path.py` is A*; `mapgen.py` lays out and connects the bases
 and audits fairness; `ai.py` runs each computer player from a profile per
 difficulty; `textures.py` paints the ground and renders every prop and unit
-through `saga2d.render3d`'s front camera; `view.py` keeps sprites in step
+through `sagaforge.render3d`'s front camera; `view.py` keeps sprites in step
 with the model and draws the fog, the minimap and the moving water;
 `races.py` gives each race its names, numbers and arts; `sound.py`,
 `combat_sound.py`, `voices.py` and `music.py` synthesise the effects, the
@@ -244,9 +244,9 @@ What you get:
 * **Actions** (`Sequence`, `Parallel`, `MoveTo`, `Delay`, `Do`, `FadeOut`,
   `Remove`, `Repeat`, `PlayAnim`), tweens, timers, particle emitters, frame
   animation, audio (sounds and looping music), JSON save slots.
-* **Shared by both games**: `saga2d.render3d` (a Pillow low-poly renderer
+* **Shared by both games**: `sagaforge.render3d` (a Pillow low-poly renderer
   with a configurable camera), `saga2d.effects` (floating text, pulses,
-  bursts, hit reactions, banners, toasts), `saga2d.synth` (procedural sound
+  bursts, hit reactions, banners, toasts), `sagaforge.synth` (procedural sound
   with a WAV cache and a bank), `saga2d.fonts` (bundled Nunito), dynamic
   images (`assets.update_image` for fog of war and minimaps), and a
   `Minimap` component.

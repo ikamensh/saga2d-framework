@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from saga2d import Game, Scene
-from tools.native_frames import tick
+from saga2d.testing.native_frames import tick
 
 
 class Counter(Scene):

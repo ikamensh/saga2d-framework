@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from saga2d import Camera, Game, Scene
-from tools.native_frames import tick
+from saga2d.testing.native_frames import tick
 
 
 def _display_available() -> bool:

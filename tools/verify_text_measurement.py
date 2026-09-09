@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ['SAGA2D_SILENT'] = '1'
 
 from PIL import ImageChops
-from tools.native_frames import tick
+from saga2d.testing.native_frames import tick
 from saga2d import Anchor, Button, Column, Game, Label, Scene
 
 TEXT = 'The same visible text must measure consistently. A following control stays below every wrapped line.'
