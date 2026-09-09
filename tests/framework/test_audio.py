@@ -173,3 +173,65 @@ def test_silent_audio_policy_reads_both_environment_variables() -> None:
     assert not silent_audio({"SAGA2D_SILENT": "0", "SAGA2D_HEADLESS": " "})
     assert silent_audio({"SAGA2D_SILENT": "1"})
     assert silent_audio({"SAGA2D_HEADLESS": "yes"})
+
+
+def test_crossfade_fades_the_old_track_out_while_the_new_fades_in(audio: AudioManager, backend, tmp_path: Path) -> None:
+    write_wav(tmp_path / "music" / "battle.wav")
+    audio.set_volume("music", 0.5)
+    audio.play_music("theme")
+    audio.play_music("battle", fade=1.0)
+    assert audio.music_name == "battle"
+    old, new = backend.music_players
+    assert old["volume"] == pytest.approx(0.5) and new["volume"] == 0
+    audio.update(0.5)
+    old, new = backend.music_players
+    assert old["volume"] == pytest.approx(0.25) and new["volume"] == pytest.approx(0.25)
+    audio.set_volume("music", 1.0)  # a level change mid-fade keeps both tracks on their curves
+    old, new = backend.music_players
+    assert old["volume"] == pytest.approx(0.5) and new["volume"] == pytest.approx(0.5)
+    audio.update(0.6)
+    (new,) = backend.music_players
+    assert new["volume"] == pytest.approx(1.0) and audio.music_name == "battle"
+    with pytest.raises(ValueError):
+        audio.play_music("theme", fade=-1)
+
+
+def test_stop_music_with_a_fade_releases_the_player_once_silent(audio: AudioManager, backend) -> None:
+    audio.play_music("theme")
+    audio.stop_music(fade=2.0)
+    assert audio.music_name is None and len(backend.music_players) == 1
+    audio.update(1.0)
+    assert backend.music_players[0]["volume"] == pytest.approx(0.5)
+    audio.muted = True
+    assert backend.music_players[0]["volume"] == 0
+    audio.update(1.0)
+    assert backend.music_players == [] and backend.music_playing is None
+    audio.stop_music(fade=1.0)
+    audio.update(1.0)
+
+
+def test_a_track_that_plays_to_its_end_is_forgotten_on_update(audio: AudioManager, backend) -> None:
+    audio.play_music("theme", loop=False)
+    (player_id,) = list(backend._music_players)
+    backend.stop_player(player_id)  # what the backend does when a non-looping source ends
+    assert audio.music_name == "theme"
+    audio.update(1 / 60)
+    assert audio.music_name is None
+
+
+def test_game_tick_advances_music_fades_and_plays_files_by_absolute_path(tmp_path: Path) -> None:
+    elsewhere = tmp_path / "cache" / "music" / "vigil.wav"
+    write_wav(elsewhere)
+    write_wav(tmp_path / "assets" / "music" / "theme.wav")
+    game = Game("fades", backend="mock", asset_path=tmp_path / "assets")
+    try:
+        game.audio.play_music("theme")
+        game.audio.play_music(str(elsewhere), fade=1.0)
+        game.tick(0.5)
+        old, new = game.backend.music_players
+        assert old["volume"] == pytest.approx(0.5) and new["volume"] == pytest.approx(0.5)
+        assert new["handle"] == game.backend.load_music(str(elsewhere))
+        game.tick(0.6)
+        assert len(game.backend.music_players) == 1 and game.audio.music_name == str(elsewhere)
+    finally:
+        game._teardown()

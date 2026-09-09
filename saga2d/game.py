@@ -401,6 +401,8 @@ class Game:
                 self._particle_emitters.discard(emitter)
         self._timer_manager.update(dt)
         self._tween_manager.update(dt)
+        if self._audio is not None:
+            self._audio.update(dt)
         for sprite in list(self._animated_sprites):
             sprite.update_animation(dt)
 

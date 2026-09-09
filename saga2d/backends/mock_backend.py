@@ -222,6 +222,11 @@ class MockBackend:
 
     # -- Audio ---------------------------------------------------------------
 
+    @property
+    def music_players(self) -> list[dict[str, Any]]:
+        """Every music player still held, oldest first, with its current volume."""
+        return [dict(player) for player in self._music_players.values()]
+
     def load_sound(self, path: str) -> str:
         if path not in self._loaded_sounds:
             self._loaded_sounds[path] = self._make_id("sound")

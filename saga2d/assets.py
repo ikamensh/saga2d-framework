@@ -89,7 +89,8 @@ class AssetManager:
         return self._sounds[name]
 
     def music(self, name: str) -> SoundHandle:
-        """A fresh streaming source (streams cannot be shared between players)."""
+        """A fresh streaming source (streams cannot be shared between players).
+        An absolute path with its extension plays a file outside the asset root."""
         if name not in self._music_paths:
             path = self._resolve_audio_path(name, self._base_path / "music", self._MUSIC_EXTENSIONS, "Music")
             self._music_paths[name] = str(path)
