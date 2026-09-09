@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "saga2d"
+version = "0.2.0"
+description = "A lightweight 2D game framework: scenes, GPU rendering, UI, input, audio, saves, online rooms and packaging"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Ilya Kamenshchikov", email = "ilya.kamenshchikov@gmail.com" }]
+dependencies = [
+    "Pillow>=12.1.1",
+    "pyglet>=2.1.13",
+    "websockets>=15,<18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.0.2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["saga2d"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

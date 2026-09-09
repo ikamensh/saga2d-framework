@@ -304,7 +304,7 @@ retaining its compositions and cache. Shardbound uses the same functions
 at build time and ordinary `game.audio` playback at runtime. These functions
 need no Game or resource lifetime. The framework does not choose cue names,
 music transitions or caching policy. See the independent
-[synthesis example](docs/framework-synth.md).
+[synthesis example](../sagaforge/docs/synth.md).
 
 `sagaforge.synth` also carries the instrument-level primitives Warband's orchestra
 and Shardbound's voices both need: `sustained` (an ADSR-shaped held tone with
@@ -402,7 +402,7 @@ regardless of frame rate.  Two movement deadlocks the fuzz found — head-on
 collisions the symmetric separation push could never resolve, and paths
 made stale by a building placed across them — are why walking units
 sidestep to their right and re-plan when their next tile is no longer
-adjacent or passable.  `tools/fuzz_warband.py` plays AI-vs-AI games with
+adjacent or passable.  `warband/tools/fuzz.py` plays AI-vs-AI games with
 world invariants and a stall check, and feeds the scene random input.
 
 ## Tribes as the reference game
