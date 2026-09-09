@@ -120,10 +120,13 @@ model calls.
 
 A top-down map of meadows, woods and lakes under a soft fog of war, in
 summer, winter or wasteland; a base for each of two to four players with a
-gold mine and a wood beside it.  Peasants mine gold and fell trees; farms
-feed the army; a barracks, lumber mill, blacksmith, stables, workshop and
-church open seven units and nine upgrades; guard towers hold the line.
-Three AI difficulties expand, upgrade, raid and attack in growing waves.
+gold mine and a wood beside it.  Four races — Humans, Orcs, Elves and
+Dwarves — share one tech skeleton but differ in names, numbers, look, voice
+and march, each with a passive mechanic and two arts of its own (see
+[docs/warband-races.md](docs/warband-races.md)).  Peasants mine gold and fell
+trees; farms feed the army; a barracks, lumber mill, blacksmith, stables,
+workshop and church open seven units and the upgrades; guard towers hold the
+line.  Three AI difficulties expand, upgrade, raid and attack in growing waves.
 Raze every enemy building and hunt down what is left.  Selection by click
 or drag box, right-click does the sensible thing (move, harvest, attack,
 resume building), a context command card with keycaps, control groups,
@@ -149,8 +152,10 @@ and audits fairness; `ai.py` runs each computer player from a profile per
 difficulty; `textures.py` paints the ground and renders every prop and unit
 through `saga2d.render3d`'s front camera; `view.py` keeps sprites in step
 with the model and draws the fog, the minimap and the moving water;
-`sound.py` synthesises the effects and the marches; `scene.py`, `title.py`
-and `tutorial.py` are the saga2d scenes.  The tools: `fuzz_warband.py`
+`races.py` gives each race its names, numbers and arts; `sound.py`,
+`combat_sound.py`, `voices.py` and `music.py` synthesise the effects, the
+Foley, the race voices and the marches; `scene.py`, `title.py` and
+`tutorial.py` are the saga2d scenes.  The tools: `fuzz_warband.py`
 (AI matches with invariants, monkey input), `verify_warband.py` (real
 pyglet events with frames to look at), `ai_report.py` (difficulties against
 a scripted opening and against each other), `map_report.py` (fairness over
