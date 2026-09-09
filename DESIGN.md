@@ -306,6 +306,14 @@ need no Game or resource lifetime. The framework does not choose cue names,
 music transitions or caching policy. See the independent
 [synthesis example](docs/framework-synth.md).
 
+`saga2d.synth` also carries the instrument-level primitives Warband's orchestra
+and Shardbound's voices both need: `sustained` (an ADSR-shaped held tone with
+vibrato and unison detune, read from a wavetable so long pads are cheap),
+`pluck` (Karplus–Strong, solved in the frequency domain so a note costs one
+FFT), zero-phase `lowpass`/`highpass`/`formant`, an FFT-convolved `reverb`
+whose tail can wrap a loop, `soft_clip` and `loop_add`. Compositions, kits and
+mastering targets stay in the games (see [Warband music](docs/warband-music.md)).
+
 `AudioManager` keeps independent master/music/SFX levels. Changing a level or
 muting updates sounds already playing as well as future sounds, preserving
 each effect's local gain. The backend owns native effect and music players;
@@ -315,8 +323,16 @@ and removes the player from the backend on the next event poll. Game teardown
 stops all effects and its own music; backend shutdown releases any remaining
 players, including music started by another manager.
 
-Tribes' sound bank and Warband's synth bank use their own AudioManagers, while
-Shardbound needs live volume and mute settings. A global backend SFX gain would
+Music changes crossfade: `play_music(name, fade=s)` fades the current track out
+while the new one fades in, `stop_music(fade=s)` fades to silence, and
+`Game.tick` calls `update(dt)` on the game's manager so fades follow the frame
+clock even under a paused overlay. A track that plays to its end is forgotten
+on the next update, so a caller can see that a one-shot finished. A music
+name may be an absolute path, which lets a game's cache under `~/.<game>` play
+through `game.audio` instead of a second manager; Warband's bank does that.
+
+Tribes' sound bank uses its own AudioManager, while Warband's plays through
+`game.audio` and Shardbound needs live volume and mute settings. A global backend SFX gain would
 couple independent banks. Per-manager playback IDs solve that without adding
 an audio graph, a settings policy, or new game-facing methods. Mock recordings
 keep the original `sounds_played` history and expose current `sounds_playing`
