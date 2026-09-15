@@ -32,11 +32,21 @@ _DEFAULT_KEY_BINDINGS: dict[str, tuple[str, ...]] = {
 ZOOM_EASE_RATE = 14.0
 
 
+def _checked_insets(insets: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    if len(insets) != 4 or not all(math.isfinite(v) and v >= 0 for v in insets):
+        raise ValueError(f"insets must be four finite non-negative screen distances, got {insets!r}")
+    return tuple(float(v) for v in insets)
+
+
 class Camera:
     """Parameters:
         viewport_size: ``(width, height)`` of the logical screen.
         world_bounds:  Optional ``(left, top, right, bottom)`` the view is
                        clamped inside.
+        insets:        ``(left, top, right, bottom)`` screen pixels along the
+                       viewport's edges that HUD panels cover: the view may
+                       scroll that far past a world edge, so whatever sits
+                       under a panel can be brought into the clear at any zoom.
         zoom:          Initial zoom (1 = one world unit per logical pixel).
         min_zoom / max_zoom: Clamp range for :attr:`zoom`.
     """
@@ -46,6 +56,7 @@ class Camera:
         viewport_size: tuple[int, int],
         *,
         world_bounds: tuple[float, float, float, float] | None = None,
+        insets: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0),
         zoom: float = 1.0,
         min_zoom: float = 0.25,
         max_zoom: float = 4.0,
@@ -59,6 +70,7 @@ class Camera:
         self._min_zoom = min_zoom
         self._max_zoom = max_zoom
         self._world_bounds = world_bounds
+        self._insets = _checked_insets(insets)
         self._follow_target: Sprite | None = None
         self._edge_margin = 0
         self._edge_speed = 0.0
@@ -120,6 +132,15 @@ class Camera:
             if left > right or top > bottom:
                 raise ValueError(f"world_bounds must satisfy left<=right and top<=bottom, got {value}")
         self._world_bounds = value
+        self._clamp()
+
+    @property
+    def insets(self) -> tuple[float, float, float, float]:
+        return self._insets
+
+    @insets.setter
+    def insets(self, value: tuple[float, float, float, float]) -> None:
+        self._insets = _checked_insets(value)
         self._clamp()
 
     @property
@@ -306,6 +327,9 @@ class Camera:
         if self._world_bounds is None:
             return x, y
         left, top, right, bottom = self._world_bounds
+        inset_left, inset_top, inset_right, inset_bottom = self._insets
+        left, top = left - inset_left / self._zoom, top - inset_top / self._zoom
+        right, bottom = right + inset_right / self._zoom, bottom + inset_bottom / self._zoom
         view_w = self._vw / self._zoom
         view_h = self._vh / self._zoom
         # When the world is smaller than the view, centre it.

@@ -53,3 +53,25 @@ def test_zoom_ease_converges_at_a_fixed_rate_regardless_of_frame_length() -> Non
     for _ in range(6):
         slow.update(1 / 60)
     assert math.isclose(fast.zoom, slow.zoom, rel_tol=1e-6)
+
+
+def test_insets_keep_the_world_reachable_behind_hud_panels() -> None:
+    """A world edge scrolls into the clear past a HUD inset by that many screen pixels, at any zoom."""
+    approx = __import__("pytest").approx
+    camera = Camera((800, 600), world_bounds=(0, 0, 2000, 2000), insets=(0, 100, 0, 150), zoom=1.0, min_zoom=0.5, max_zoom=2.0)
+    camera.scroll(-1e6, -1e6)
+    assert camera.world_to_screen(0, 0) == approx((0, 100))
+    camera.scroll(1e6, 1e6)
+    assert camera.world_to_screen(2000, 2000) == approx((800, 450))
+    camera.zoom = 2.0
+    camera.scroll(-1e6, -1e6)
+    assert camera.world_to_screen(0, 0) == approx((0, 100))
+    camera.zoom = 0.5
+    camera.scroll(1e6, 1e6)
+    assert camera.world_to_screen(2000, 2000) == approx((800, 450))
+
+
+def test_a_world_smaller_than_the_clear_area_is_centred_in_it() -> None:
+    camera = Camera((800, 600), world_bounds=(0, 0, 800, 200), insets=(0, 100, 0, 100))
+    assert camera.world_to_screen(0, 0)[1] == __import__("pytest").approx(200)  # clear band 100..500; the world sits at 200..400
+    assert camera.world_to_screen(0, 200)[1] == __import__("pytest").approx(400)
