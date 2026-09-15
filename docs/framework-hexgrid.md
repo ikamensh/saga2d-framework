@@ -116,4 +116,4 @@ The primitive removes repeated hex math and search bookkeeping without
 prescribing a particular game. It can serve a puzzle board, a route planner,
 or a tactical field. Unit selection, whether a destination is legal, and
 what happens on arrival belong to the caller. See
-[the architecture](../DESIGN.md) and [the Eador client](../eador/README.md).
+[the architecture](../DESIGN.md) and [the Eador client](../../shardbound/eador/README.md).

@@ -312,7 +312,7 @@ vibrato and unison detune, read from a wavetable so long pads are cheap),
 `pluck` (Karplus–Strong, solved in the frequency domain so a note costs one
 FFT), zero-phase `lowpass`/`highpass`/`formant`, an FFT-convolved `reverb`
 whose tail can wrap a loop, `soft_clip` and `loop_add`. Compositions, kits and
-mastering targets stay in the games (see [Warband music](docs/warband-music.md)).
+mastering targets stay in the games (see [Warband music](../warband/docs/warband-music.md)).
 
 `AudioManager` keeps independent master/music/SFX levels. Changing a level or
 muting updates sounds already playing as well as future sounds, preserving
@@ -430,7 +430,7 @@ game's asset builder owns seeded pigment, props and variants; the framework
 has no terrain-art generator. Backdrop, terrain, units, ground effects and
 health markers use ordinary screen layers. Detached battle traces feed
 `battle_effects.py` for both direct orders and enemy playback, with no changes
-to authoritative rules or saves. See the [presentation pass](docs/eador-presentation.md).
+to authoritative rules or saves. See the [presentation pass](../shardbound/docs/eador-presentation.md).
 
 Building a second type of strategy game justified two small additions:
 
@@ -471,7 +471,7 @@ economy, hero, army, spell, turn, combat, faction or victory abstraction.
 Both rule modules run without a window, and only import Saga2D's pure
 `HexGrid` utility. The [cookbook](docs/framework-hexgrid.md) demonstrates that
 primitive without importing either reference game. The
-[research and scope](docs/eador-research.md) explains which Eador systems
+[research and scope](../shardbound/docs/eador-research.md) explains which Eador systems
 this compact implementation preserves and simplifies.
 
 ## Multiplayer transport
@@ -523,4 +523,4 @@ and publishes at 10 Hz while both seats are connected. The catalog validates
 bounded map options and restores each game's JSON state. A private SQLite
 store retains room checkpoints across process restarts and expires disconnected
 rooms. This deployment package imports the games; Saga2D itself still has no
-game rules. See [online play](docs/online-multiplayer.md).
+game rules. See [online play](../tribes/docs/online-multiplayer.md).

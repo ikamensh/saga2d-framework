@@ -1,7 +1,7 @@
 # LAN multiplayer and game integration
 
 For internet play, use the default **Online** mode described in
-[the online multiplayer guide](online-multiplayer.md). The following describes
+[the online multiplayer guide](../../tribes/docs/online-multiplayer.md). The following describes
 the explicit **LAN** mode.
 
 Each title has **M / Multiplayer** (Shardbound calls it **Co-op**). Choose **LAN**, then
