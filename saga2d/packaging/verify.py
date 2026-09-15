@@ -23,6 +23,22 @@ from saga2d.packaging import GamePackage, sha256, write_json
 
 
 @contextmanager
+def authority(spec: GamePackage):
+    """The room server the package under test talks to.
+
+    A game with no online play (``GamePackage.online`` empty) gets no server
+    and an empty endpoint: its ``package_check`` has nothing to point at one
+    for.  Ninefold is the first single-player game in the stack and this is
+    what stopped it verifying a build at all.
+    """
+    if not spec.online:
+        yield ""
+        return
+    with local_server(spec.online) as endpoint:
+        yield endpoint
+
+
+@contextmanager
 def local_server(*games):
     """Run the real room server for ``games`` (``module:ATTRIBUTE`` registry names) on a loopback port."""
     from saga2d.server import MAX_MESSAGE, RoomServer, load_games
@@ -152,7 +168,7 @@ def verify(spec: GamePackage, output: Path, *, native=False, public_server: str 
     evidence = output / "verification"
     evidence.mkdir(exist_ok=True)
     report = {"source_commit": manifest["source_commit"], "version": manifest["version"], "scope": "Loopback authority; isolated profile on the named CI host"}
-    with tempfile.TemporaryDirectory(prefix="extracted-package-") as directory, local_server() as endpoint:
+    with tempfile.TemporaryDirectory(prefix="extracted-package-") as directory, authority(spec) as endpoint:
         extracted = Path(directory)
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(extracted)
