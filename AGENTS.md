@@ -5,10 +5,14 @@ UI toolkit, input, audio, saves and settings, LAN and online matches, a room
 server, a PyInstaller recipe, and a mock backend that makes all of it testable
 without a window. Read `DESIGN.md` before changing the framework.
 
-Part of the Saga stack (`~/saga/`, see `../AGENTS.md`). The games `tribes`,
-`warband` and `shardbound` depend on this checkout as a path dependency, so a
-change here is visible to their suites immediately: after changing public
-behaviour, run the affected game's suite (`cd ../warband && uv run pytest -q`).
+Part of the Saga stack (`~/saga/`, see `../AGENTS.md`). Games pin a PyPI engine
+release; changes here are isolated until a game deliberately upgrades. After
+changing public behaviour, explicitly install this checkout in the affected
+game's environment and run its suite with `uv run --no-sync pytest -q`, then
+restore its released engine. See [releases](docs/releases.md) for the commands,
+version policy and package verification. `__version__` in `saga2d/__init__.py`
+is the single version source. Commit stable release increments; publishing
+to PyPI and pushing release tags require the maintainer's go-ahead.
 Procedural asset generation (sound synthesis, the software 3D renderer) lives
 in `../sagaforge`; the framework does not depend on it.
 

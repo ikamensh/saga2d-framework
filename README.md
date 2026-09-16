@@ -5,12 +5,29 @@ not engine plumbing. It renders sprites and simple shapes on the GPU through
 pyglet, lays out a small UI toolkit, runs a scene stack, hosts online matches
 and packages standalone builds. Game code never touches the backend.
 
-Three games prove it, each in its own repository beside this one:
-[Tribes](../tribes) (turn-based, Polytopia-style), [Warband](../warband)
-(real-time strategy) and [Shardbound](../shardbound) (an Eador-inspired
+Three games prove it, each in its own repository:
+[Tribes](https://github.com/ikamensh/tribes) (turn-based, Polytopia-style), [Warband](https://github.com/ikamensh/warband)
+(real-time strategy) and [Shardbound](https://github.com/ikamensh/shardbound) (an Eador-inspired
 campaign). Procedural assets — sound synthesis and a software low-poly renderer —
-live in [sagaforge](../sagaforge); the hosted server and website in
-[saga-online](../saga-online).
+live in [sagaforge](https://github.com/ikamensh/sagaforge); the hosted server and website in
+[saga-online](https://github.com/ikamensh/saga-online).
+
+## Install
+
+Requires Python 3.12 or newer. Pin the engine in a game so engine development
+cannot change that game's build:
+
+```bash
+uv add 'saga2d==0.2.0'
+# or: python -m pip install 'saga2d==0.2.0'
+```
+
+Commit the game's `pyproject.toml` and lockfile. Upgrade the pin deliberately,
+then run that game's tests before committing the upgrade. See the
+[release guide](https://github.com/ikamensh/saga2d-framework/blob/main/docs/releases.md)
+for compatibility policy, publishing and testing a local engine checkout.
+
+## Develop the engine
 
 ```bash
 uv sync --extra dev
@@ -64,7 +81,7 @@ Game("My Game", resolution=(640, 400)).run(World())
   against the actual font and returns the height for subsequent layout.
 * **Hex boards.** `HexGrid` supplies centers, corners, picking, neighbours,
   weighted movement ranges and shortest paths; the game supplies terrain
-  costs. See the [cookbook](docs/framework-hexgrid.md).
+  costs. See the [cookbook](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-hexgrid.md).
 * **Sprites with a logical size.** `Sprite("name", size=(64, 64))` draws any
   texture at that size, so procedural textures rendered at the display's
   pixel density stay crisp on HiDPI screens.
@@ -76,21 +93,21 @@ Game("My Game", resolution=(640, 400)).run(World())
 * **UI**: reactive `Label`, `Button` with keycap shortcuts, `KeyHints`,
   `Panel`, `Row`, `Column`, `ProgressBar`, `Minimap`, anchors, flow layout,
   wrapped text and a `Theme`. Text is measured by the backend, so layout fits.
-  See [wrapped labels](docs/framework-wrapped-label.md),
-  [measuring a tree](docs/framework-ui-measurement.md) and
-  [button shortcuts](docs/framework-button-shortcuts.md).
+  See [wrapped labels](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-wrapped-label.md),
+  [measuring a tree](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-ui-measurement.md) and
+  [button shortcuts](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-button-shortcuts.md).
 * **Actions**, tweens, timers, particle emitters, frame animation, transient
   effects, audio with `master`/`music`/`sfx` channels and a silent driver,
   JSON save slots and persisted settings.
 * **Multiplayer.** `MatchHost`/`MatchClient` for LAN, `OnlineClient` and the
   shared `MatchMenu`/`MatchLobby` for hosted rooms, and `saga2d.server`, the
   authoritative room server any game registers with through a `GameSpec`.
-  Follow the [counter-room tutorial](docs/framework-match-menu.md) and the
-  [transport notes](docs/multiplayer.md).
+  Follow the [counter-room tutorial](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-match-menu.md) and the
+  [transport notes](https://github.com/ikamensh/saga2d-framework/blob/main/docs/multiplayer.md).
 * **Packaging.** `saga2d.packaging` builds, verifies and installs standalone
   games with PyInstaller from a ten-line `tools/package.py`.
 * **Testing.** A mock backend that records every draw call, `render_scene`
   for offscreen screenshots you can look at, a CPU budget for long checks,
   paced native frames, and a counter test game for the server.
 
-See [DESIGN.md](DESIGN.md) for the architecture and the reasoning behind the cuts.
+See [DESIGN.md](https://github.com/ikamensh/saga2d-framework/blob/main/DESIGN.md) for the architecture and the reasoning behind the cuts.

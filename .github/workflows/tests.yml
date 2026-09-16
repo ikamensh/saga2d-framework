@@ -15,9 +15,25 @@ jobs:
           path: saga2d
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --locked --extra dev
         working-directory: saga2d
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run --locked pytest -q
         working-directory: saga2d
+      - name: Build distributions
+        run: uv build --no-sources
+        working-directory: saga2d
+      - name: Check distribution metadata
+        run: uvx twine check --strict dist/*
+        working-directory: saga2d
+      - name: Exercise the installed wheel
+        working-directory: saga2d
+        run: |
+          uv venv "$RUNNER_TEMP/saga2d-wheel"
+          uv pip install --python "$RUNNER_TEMP/saga2d-wheel/bin/python" dist/*.whl pytest
+          mkdir "$RUNNER_TEMP/saga2d-wheel-check"
+          cd "$RUNNER_TEMP/saga2d-wheel-check"
+          "$RUNNER_TEMP/saga2d-wheel/bin/python" -I "$GITHUB_WORKSPACE/saga2d/tools/check_distribution.py"
