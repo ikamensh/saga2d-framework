@@ -45,6 +45,13 @@ def _quantize(alpha: float) -> int:
     return max(0, min(255, int(alpha) // 16 * 16))
 
 
+def _text_width(scene: Scene, text: str, style: str) -> int:
+    """Width *text* occupies when drawn in the theme's *style*."""
+    theme = scene.game.theme
+    text_style = theme.get_text_style(style)
+    return scene.game.backend.measure_text(text, text_style.font_size, text_style.font or theme.font)[0]
+
+
 def hop(sprite: Sprite | None, home: tuple[float, float], height: float = 9.0, speed: float = 260.0) -> None:
     """Quick bounce of *sprite* up from *home* and back (selection feedback)."""
     if sprite is None or sprite.is_removed:
@@ -321,9 +328,16 @@ class Dissolve(Effect):
 
 
 class Banner(Effect):
-    """Turn banner: slides in from the left, holds, slides out to the right."""
+    """Turn banner: slides in from the left, holds, slides out to the right.
+
+    The band spans the window; the title and its subtitle ride in and out of
+    their own centred position.  They slide only as far as the room the longer
+    of them has beside it, so no frame of the animation puts a letter outside
+    the window, and a string too long to fit at all is ellipsized.
+    """
 
     SLIDE = 0.35
+    MARGIN = 24
 
     def __init__(self, text: str, *, subtitle: str = "", accent: Color = (255, 255, 255, 255), hold: float = 1.2) -> None:
         super().__init__(hold + 2 * self.SLIDE)
@@ -332,29 +346,35 @@ class Banner(Effect):
         self.accent = accent
         self.hold = hold
 
-    def _phase(self, width: int) -> tuple[float, float]:
+    def _phase(self, travel: float) -> tuple[float, float]:
         """``(x offset, opacity)`` for the current moment."""
         e = self.elapsed
         if e < self.SLIDE:
             p = ease_out(e / self.SLIDE)
-            return lerp(-width * 0.6, 0.0, p), p
+            return lerp(-travel, 0.0, p), p
         if e < self.SLIDE + self.hold:
             return 0.0, 1.0
         p = ease_in((e - self.SLIDE - self.hold) / self.SLIDE)
-        return lerp(0.0, width * 0.6, p), 1 - p
+        return lerp(0.0, travel, p), 1 - p
 
     def draw(self, scene: Scene) -> None:
         w, h = scene.game.resolution
-        offset, opacity = self._phase(w)
+        room = w - 2 * self.MARGIN
+        title = scene.fit_text(self.text, room, style="banner")
+        subtitle = scene.fit_text(self.subtitle, room, style="banner_sub") if self.subtitle else ""
+        slack = [(w - _text_width(scene, title, "banner")) / 2]
+        if subtitle:
+            slack.append((w - _text_width(scene, subtitle, "banner_sub")) / 2)
+        offset, opacity = self._phase(min([w * 0.6] + slack))
         alpha = _quantize(255 * opacity)
         band_y, band_h = h * 0.40, 84
         scene.draw_rect(0, band_y, w, band_h, (0, 0, 0, int(175 * opacity)))
         scene.draw_rect(0, band_y, w, 2, (*self.accent[:3], int(180 * opacity)))
         scene.draw_rect(0, band_y + band_h - 2, w, 2, (*self.accent[:3], int(180 * opacity)))
         cx = w / 2 + offset
-        scene.draw_text(self.text, cx, band_y + 34, style="banner", color=(255, 255, 255, alpha), anchor_x="center", anchor_y="center")
-        if self.subtitle:
-            scene.draw_text(self.subtitle, cx, band_y + 66, style="banner_sub", color=(*self.accent[:3], alpha), anchor_x="center", anchor_y="center")
+        scene.draw_text(title, cx, band_y + 34, style="banner", color=(255, 255, 255, alpha), anchor_x="center", anchor_y="center")
+        if subtitle:
+            scene.draw_text(subtitle, cx, band_y + 66, style="banner_sub", color=(*self.accent[:3], alpha), anchor_x="center", anchor_y="center")
 
 
 class Toast(Effect):

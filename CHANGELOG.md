@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — 2026-09-16
+
+- `Banner` keeps its title and subtitle inside the window for every frame of the
+  slide. The wipe used to start 60 % of the window width to the left of centre,
+  which put both strings wholly outside the window over the opening frames —
+  Warband's match intro reported `text does not fit … left by 286px` on a new
+  game. The banner now slides only as far as the room the longer string has
+  beside it, and a string wider than the window is ellipsized to fit.
+
 ## 0.3.1 — 2026-09-16
 
 - Packaging ships every snapshotted package's `assets` folder (`saga2d`,

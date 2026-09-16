@@ -6,6 +6,7 @@ from PIL import Image
 
 from saga2d import Camera, Game, Scene, Sprite
 from saga2d.effects import Banner, Burst, Dissolve, Effects, FloatingText, HitReaction, Pulse, Toast, hop
+from saga2d.testing import assert_text_fits, text_boxes
 
 
 class Stage(Scene):
@@ -86,6 +87,27 @@ def test_hit_reaction_and_dissolve_restore_then_remove_the_sprite(game: Game, ba
     assert sprite.size[0] < 20 and sprite.opacity < 255
     tick(game, 0.3)
     assert sprite.is_removed and sprite.sprite_id not in backend.sprites
+
+
+def test_banner_text_stays_in_the_window_through_the_whole_slide(game: Game, backend) -> None:
+    """The slide used to start 60 % of the window to the left, so the first frames
+    drew the title and its subtitle outside the window entirely."""
+    scene = stage(game)
+    scene.effects.add(Banner("Warband", subtitle="The Humans of Azure against the Elves of Crimson"))
+    for _ in range(int(1.9 * 60) + 1):
+        game.tick(1 / 60)
+        assert_text_fits(game)
+    assert not scene.effects, "the banner should be over"
+
+
+def test_banner_ellipsizes_a_string_wider_than_the_window(game: Game, backend) -> None:
+    width, _ = game.resolution
+    scene = stage(game)
+    scene.effects.add(Banner("Round 1", subtitle="the Dwarves of Crimson, " * 12))
+    tick(game, 0.6)
+    assert_text_fits(game)
+    subtitle = next(box for box in text_boxes(backend) if box.text.startswith("the Dwarves"))
+    assert subtitle.text.endswith("\u2026") and subtitle.left >= Banner.MARGIN and subtitle.right <= width - Banner.MARGIN
 
 
 def test_banner_replaces_a_running_banner_and_toast_lists_its_lines(game: Game, backend) -> None:
