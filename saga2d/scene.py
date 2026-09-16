@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from saga2d.input import normalize_combo
-from saga2d.rendering._text import _layout_paragraph, _validate_paragraph_size
+from saga2d.rendering._text import ANCHOR_X, ANCHOR_Y, _layout_paragraph, _validate_paragraph_size
 from saga2d.rendering.layers import RenderLayer, world_order
 from saga2d.rendering.shapes import draw_box
 
@@ -110,6 +110,7 @@ class Scene:
         self._owned_emitters: set[ParticleEmitter] = set()
         self._key_handlers: dict[str, Callable[..., Any]] = {}
         self._screen_draw_layer = 0
+        self._text_region: tuple[str, float, float, float, float] | None = None
         return self
 
     # -- Lifecycle hooks -------------------------------------------------------
@@ -296,6 +297,7 @@ class Scene:
     ) -> None:
         """Text with a named theme style (``"title"``, ``"hud"``…) or explicit size/colour."""
         font_size, color, font = self._resolve_text_style(style, font_size, color, font)
+        self._check_text_fits(text, x, y, font_size, font, anchor_x, anchor_y, space)
         self.game.backend.draw_text(
             text, x, y, font_size, color, font=font, anchor_x=anchor_x, anchor_y=anchor_y,
             space=space, order=self._order(space, layer, y),
@@ -376,6 +378,47 @@ class Scene:
             return component.get_preferred_size()
         finally:
             component._propagate_game(component, None)
+
+    @contextmanager
+    def text_region(self, x: float, y: float, width: float, height: float, *, name: str = "") -> Iterator[None]:
+        """Declare the box that text drawn inside this scope has to fit in.
+
+        Immediate drawing has no layout to check itself against: a card, a badge
+        or a column is a rectangle only the game knows about, so a label one
+        character too long runs quietly over its own edge and only a screenshot
+        ever catches it.  Naming the rectangle lets the framework catch it
+        instead — as a warning the moment it is drawn, and as
+        :func:`saga2d.testing.assert_text_fits` in a test::
+
+            with scene.text_region(x, y, CARD_W, CARD_H, name="card"):
+                scene.draw_text(card.name, x + CARD_W / 2, y + 12, anchor_x="center")
+
+        Regions nest; the innermost one is the one that must be fitted.  This
+        measures, it does not clip: what overflows still draws, so the warning
+        describes what is on the screen.
+        """
+        previous = self._text_region
+        self._text_region = (name or "region", x, y, width, height)
+        try:
+            yield
+        finally:
+            self._text_region = previous
+
+    def _check_text_fits(self, text: str, x: float, y: float, font_size: int, font: str | None,
+                         anchor_x: str, anchor_y: str, space: Space) -> None:
+        """Compare one drawn string with the region it was drawn into."""
+        game = self.game
+        if game is None or not game.check_text_fit or space != "screen" or not str(text).strip():
+            return
+        width, height = game.backend.measure_text(text, font_size, font)
+        left = x - width * ANCHOR_X[anchor_x]
+        top = y - height * ANCHOR_Y[anchor_y]
+        if self._text_region is not None:
+            name, rx, ry, rw, rh = self._text_region
+        else:
+            name, rx, ry = "the window", 0.0, 0.0
+            rw, rh = game.resolution
+        game._note_text_overflow(str(text), left, top, width, height, name, rx, ry, rw, rh)
 
     @property
     def ui(self) -> _UIRoot:

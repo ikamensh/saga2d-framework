@@ -56,3 +56,10 @@ def _layout_paragraph(text: str, width: float, measure: Callable[[str], tuple[in
         lines.append(line)
     line_height = measure("Mg")[1]
     return _Paragraph(tuple(lines), line_height, line_spacing)
+
+
+#: Where a text's anchor sits inside its measured box, as a fraction of the box.
+#: Both the overflow check and the test helpers measure boxes with these, so a
+#: drawn string and a checked string are the same rectangle.
+ANCHOR_X = {"left": 0.0, "center": 0.5, "right": 1.0}
+ANCHOR_Y = {"top": 0.0, "center": 0.5, "baseline": 0.8, "bottom": 1.0}

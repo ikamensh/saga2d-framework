@@ -131,8 +131,7 @@ class TextBox:
         return f"{self.text!r} at ({self.left:.0f}, {self.top:.0f})–({self.right:.0f}, {self.bottom:.0f})"
 
 
-_ANCHOR_X = {"left": 0.0, "center": 0.5, "right": 1.0}
-_ANCHOR_Y = {"top": 0.0, "center": 0.5, "baseline": 0.8, "bottom": 1.0}
+from saga2d.rendering._text import ANCHOR_X as _ANCHOR_X, ANCHOR_Y as _ANCHOR_Y
 
 
 def text_boxes(backend: Any) -> list[TextBox]:
@@ -181,6 +180,25 @@ def overlapping_texts(target: Any, *, spaces: tuple[str, ...] = ("screen",), sla
             if min(a.right, b.right) - max(a.left, b.left) > slack and min(a.bottom, b.bottom) - max(a.top, b.top) > slack:
                 pairs.append((a, b))
     return pairs
+
+
+def text_overflows(target: Any) -> list[Any]:
+    """Strings drawn outside the rectangle they were drawn into, in the last frame.
+
+    *target* is a :class:`~saga2d.Game`.  A string counts when it leaves the
+    region a scene declared with :meth:`~saga2d.Scene.text_region`, or — where no
+    region was declared — when it leaves the window.  This is the check
+    :func:`overlapping_texts` structurally cannot do: a label that runs off its
+    own card is over nothing at all, so nothing else notices it.
+    """
+    return list(getattr(target, "text_overflows", []))
+
+
+def assert_text_fits(target: Any) -> None:
+    """Fail with every string that ran out of its region; see :func:`text_overflows`."""
+    spills = text_overflows(target)
+    if spills:
+        raise AssertionError("text does not fit:\n" + "\n".join(f"  {spill}" for spill in spills))
 
 
 def assert_no_text_overlap(target: Any, *, spaces: tuple[str, ...] = ("screen",), slack: float = 2.0, top_scene_only: bool = False) -> None:

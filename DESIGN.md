@@ -64,6 +64,19 @@ reuses a pool of pyglet sprites in call order instead of allocating one
 per call per frame (a HUD draws the same portraits every frame), and a
 sprite's appearance setters only reach the backend when the value
 changed (views set `visible`/`opacity` every frame for every unit).
+`Scene.text_region(x, y, w, h, name=...)` names the rectangle that text drawn
+inside the scope has to fit in, and a string that leaves it is reported —
+`_logger.warning` the first time it is drawn, so it is a line in the terminal
+while the game runs, and `saga2d.testing.assert_text_fits(game)` in a test.
+Where no region is declared, screen-space text is measured against the window.
+This is the check the overlap sweep structurally cannot do: a card's label that
+runs off its own card is drawn over nothing at all, so nothing notices it, and
+Ninefold shipped several of them until the region existed. It measures rather
+than clips — what overflows still draws, so the warning describes the screen —
+costs one cached measurement per string, and `SAGA2D_CHECK_TEXT=0` or
+`game.check_text_fit = False` turns it off. UI components lay themselves out and
+are not covered; immediate drawing is what has no layout to check against.
+
 `saga2d.testing.assert_no_text_overlap(game, top_scene_only=True)` fails a
 mock-backed frame in which one text is drawn over another, using the same
 `measure_text` numbers the layout used; a game sweeps every screen through

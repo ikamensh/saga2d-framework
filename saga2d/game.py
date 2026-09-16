@@ -18,6 +18,7 @@ import os
 import sys
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 from weakref import WeakSet
@@ -38,6 +39,52 @@ if TYPE_CHECKING:
     from saga2d.ui.theme import Theme
 
 _logger = logging.getLogger(__name__)
+
+#: A string is allowed to touch its region's edge; a pixel of rounding is not a bug.
+_TEXT_SLACK = 1.0
+
+
+@dataclass(frozen=True)
+class TextOverflow:
+    """One string that did not fit the rectangle it was drawn into."""
+
+    text: str
+    region: str
+    left: float
+    top: float
+    width: float
+    height: float
+    region_left: float
+    region_top: float
+    region_width: float
+    region_height: float
+
+    @property
+    def over(self) -> tuple[float, float, float, float]:
+        """How far it spills past each edge: (left, top, right, bottom); 0 where it fits."""
+        return (max(0.0, self.region_left - self.left),
+                max(0.0, self.region_top - self.top),
+                max(0.0, self.left + self.width - (self.region_left + self.region_width)),
+                max(0.0, self.top + self.height - (self.region_top + self.region_height)))
+
+    def __str__(self) -> str:
+        left, top, right, bottom = self.over
+        spills = ", ".join(f"{name} by {value:.0f}px" for name, value in
+                           (("left", left), ("top", top), ("right", right), ("bottom", bottom)) if value > 0)
+        return (f"{self.text!r} at ({self.left:.0f}, {self.top:.0f}) {self.width:.0f}x{self.height:.0f} "
+                f"runs out of {self.region} ({self.region_left:.0f}, {self.region_top:.0f}) "
+                f"{self.region_width:.0f}x{self.region_height:.0f}: {spills}")
+
+
+def _check_text_by_default() -> bool:
+    """``SAGA2D_CHECK_TEXT=0`` turns the check off; anything else leaves it on.
+
+    It costs one cached text measurement per drawn string, which the label cache
+    has usually done already, so it is on while you play as well as while you
+    test: a label that has outgrown its card should be a line in the terminal the
+    first time it is drawn, not something a screenshot catches a week later.
+    """
+    return os.environ.get("SAGA2D_CHECK_TEXT", "").strip() not in ("0", "false", "no")
 
 
 def _headless() -> bool:
@@ -115,6 +162,10 @@ class Game:
         self._action_sprites: WeakSet[Any] = WeakSet()
         self._particle_emitters: set[Any] = set()  # strong: a fire-and-forget burst must live until its particles die
         self._mouse: tuple[float, float] | None = None
+        #: Strings drawn outside the rectangle they were drawn into, this frame.
+        self.text_overflows: list[TextOverflow] = []
+        self.check_text_fit = _check_text_by_default()
+        self._warned_text: set[str] = set()
 
         self._backend.create_window(self._resolution[0], self._resolution[1], title, fullscreen, visible)
         tween_mod._tween_manager = self._tween_manager
@@ -422,11 +473,28 @@ class Game:
             self._backend.set_camera(0.0, 0.0, 1.0)
 
         base = stack.get_base_scene()
+        self.text_overflows = []
         self._backend.begin_frame(base.background_color if base is not None else None)
         try:
             stack.draw()
         finally:
             self._backend.end_frame()
+
+    def _note_text_overflow(self, text: str, left: float, top: float, width: float, height: float,
+                            region: str, region_left: float, region_top: float,
+                            region_width: float, region_height: float) -> None:
+        """Record — and, the first time, warn about — a string that did not fit."""
+        if (left >= region_left - _TEXT_SLACK and top >= region_top - _TEXT_SLACK
+                and left + width <= region_left + region_width + _TEXT_SLACK
+                and top + height <= region_top + region_height + _TEXT_SLACK):
+            return
+        overflow = TextOverflow(text, region, left, top, width, height,
+                                region_left, region_top, region_width, region_height)
+        self.text_overflows.append(overflow)
+        key = f"{text}|{region}"
+        if key not in self._warned_text:
+            self._warned_text.add(key)
+            _logger.warning("saga2d: text does not fit — %s", overflow)
 
     def _dispatch(self, top: Scene, event: Any) -> None:
         event = with_world_coords(event, top.camera)
