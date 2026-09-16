@@ -47,6 +47,19 @@ def test_layers_order_sprites_and_y_sort_orders_within_a_layer(world: Game, back
     assert order(far) > order(near)
 
 
+def test_a_sprite_with_ground_sorts_by_the_line_it_stands_on(world: Game, backend) -> None:
+    """A unit's canvas is padded under its feet for a lance; it still draws behind the tree it stands behind."""
+    order = lambda s: backend.sprites[s.sprite_id]["order"]  # noqa: E731
+    tree = Sprite("dot", position=(0, 100), size=(40, 40), anchor=SpriteAnchor.BOTTOM_CENTER, y_sort=True)
+    unit = Sprite("dot", position=(0, 90 + 60), size=(40, 100), anchor=SpriteAnchor.BOTTOM_CENTER, y_sort=True, ground=60)  # feet at 90
+    assert order(unit) < order(tree)
+    unit.ground = 0  # now the bottom edge (150) is the line it stands on
+    assert order(unit) > order(tree)
+    unit.y = 100 + 60 - 24  # feet at 76 with its padding back
+    unit.ground = 60
+    assert order(unit) < order(tree)
+
+
 def test_scene_owned_sprites_are_removed_when_the_scene_leaves(world: Game, backend) -> None:
     class S(Scene):
         def on_enter(self) -> None:

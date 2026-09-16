@@ -103,6 +103,15 @@ def test_banner_replaces_a_running_banner_and_toast_lists_its_lines(game: Game, 
     assert len(scene.effects) == 0
 
 
+def test_toasts_up_at_once_hang_one_under_the_other(game: Game, backend) -> None:
+    scene = stage(game)
+    scene.effects.add(Toast("Building lost", ["Your farm was destroyed"], hold=2.0))
+    scene.effects.add(Toast("Under attack", ["Your town hall is under attack"], hold=2.0))
+    tick(game, 0.5)
+    titles = {t["text"]: t["y"] for t in texts(backend) if t["text"] in ("Building lost", "Under attack")}
+    assert titles["Under attack"] > titles["Building lost"] + 40
+
+
 def test_hop_bounces_a_sprite_and_returns_it_home(game: Game) -> None:
     scene = stage(game)
     sprite = scene.add_sprite(Sprite("blank", position=(50, 50), size=(8, 8)))

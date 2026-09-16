@@ -126,8 +126,13 @@ class Effects:
         self._items = [e for e in self._items if not e.update(dt)]
 
     def draw(self, scene: Scene) -> None:
+        below = 0.0  # toasts that are up at once hang one under the other instead of covering each other
         for effect in self._items:
-            if effect.active:
+            if not effect.active:
+                continue
+            if isinstance(effect, Toast):
+                below = effect.draw_below(scene, below)
+            else:
                 effect.draw(scene)
 
     def clear(self) -> None:
@@ -377,6 +382,10 @@ class Toast(Effect):
         return lerp(0.0, box_w + self.MARGIN, ease_in((e - self.SLIDE - self.hold) / self.SLIDE))
 
     def draw(self, scene: Scene) -> None:
+        self.draw_below(scene, 0.0)
+
+    def draw_below(self, scene: Scene, below: float) -> float:
+        """Draw *below* pixels under the toast's own top; returns where the next toast starts."""
         theme = scene.game.theme
         backend = scene.game.backend
         heading, body = theme.get_text_style("heading"), theme.get_text_style("body")
@@ -387,7 +396,7 @@ class Toast(Effect):
         box_h = 2 * self.PAD + heading.font_size + 10 + line_h * len(self.lines)
         w, _ = scene.game.resolution
         x = w - self.MARGIN - box_w + self._offset(box_w)
-        y = self.top
+        y = self.top + below
         scene.draw_rect(x, y, box_w, box_h, (16, 20, 32, 240), border_color=(255, 255, 255, 30), border_width=1, radius=10)
         scene.draw_rect(x + 8, y + 10, 3, box_h - 20, self.accent, radius=1.5)
         tx = x + self.PAD + 8
@@ -396,3 +405,4 @@ class Toast(Effect):
         for line in self.lines:
             scene.draw_text(line, tx, ly + line_h / 2, style="body", anchor_y="center")
             ly += line_h
+        return below + box_h + self.PAD

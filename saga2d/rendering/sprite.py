@@ -9,8 +9,9 @@
 Sprites read the active :class:`~saga2d.game.Game` from a module-level
 reference, so game code never passes the game around.
 
-Draw order is ``layer * LAYER_BAND`` plus, when ``y_sort=True``, the
-sprite's bottom edge — so sprites further down the screen draw in front.
+Draw order is ``layer * LAYER_BAND`` plus, when ``y_sort=True``, the line
+the sprite stands on — its bottom edge, less any ``ground`` its image
+continues below that line — so sprites further down the screen draw in front.
 """
 
 from __future__ import annotations
@@ -50,7 +51,11 @@ class Sprite:
         anchor:    Where *position* sits on the image (default centre).
         layer:     Render layer band.
         space:     ``"world"`` (camera-transformed) or ``"screen"``.
-        y_sort:    Sort against other sprites in the layer by bottom edge.
+        y_sort:    Sort against other sprites in the layer by the line they
+                   stand on: the bottom edge, less ``ground``.
+        ground:    How far the image continues below the line the sprite
+                   stands on — a canvas padded under the feet for a lance or
+                   a lunge, or a building drawn past its footprint's front edge.
         rotation:  Degrees clockwise about the centre.
     """
 
@@ -64,6 +69,7 @@ class Sprite:
         layer: RenderLayer = RenderLayer.UNITS,
         space: Space = "world",
         y_sort: bool = False,
+        ground: float = 0.0,
         opacity: int = 255,
         visible: bool = True,
         tint: tuple[float, float, float] = (1.0, 1.0, 1.0),
@@ -81,6 +87,7 @@ class Sprite:
         self._layer = layer
         self._space: Space = space
         self._y_sort = y_sort
+        self._ground = float(ground)
         self._x = float(position[0])
         self._y = float(position[1])
         if not (math.isfinite(self._x) and math.isfinite(self._y)):
@@ -174,6 +181,16 @@ class Sprite:
         cx, cy = self.center
         w, h = self.size
         return Rect(cx=cx, cy=cy, w=w, h=h)
+
+    @property
+    def ground(self) -> float:
+        """How far the image continues below the line the sprite stands on."""
+        return self._ground
+
+    @ground.setter
+    def ground(self, value: float) -> None:
+        self._ground = float(value)
+        self._update_order()
 
     @property
     def anchor(self) -> SpriteAnchor:
@@ -353,7 +370,7 @@ class Sprite:
 
     def _compute_order(self) -> int:
         if self._y_sort:
-            return world_order(self._layer, self.top_left[1] + self.size[1])
+            return world_order(self._layer, self.top_left[1] + self.size[1] - self._ground)
         return world_order(self._layer)
 
     def _update_order(self) -> None:
