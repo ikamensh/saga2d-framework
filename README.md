@@ -118,3 +118,5 @@ Game("My Game", resolution=(640, 400)).run(World())
 See [DESIGN.md](https://github.com/ikamensh/saga2d-framework/blob/main/DESIGN.md) for the architecture and the reasoning behind the cuts.
 [The September 2026 engine review](docs/engine-review-2026-09.md) prioritizes
 game extractions and proposed improvements beyond the current genres.
+The [engine backlog](BACKLOG.md) tracks actionable tasks, priorities and
+completion criteria, including rendering performance and UI clipping.
