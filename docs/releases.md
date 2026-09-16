@@ -5,6 +5,17 @@ committed. They must not have a default `saga2d` entry in `[tool.uv.sources]`.
 The engine checkout can then change without changing a game's environment.
 Sagaforge and the game repositories may still be editable sibling dependencies.
 
+When moving an existing environment from an editable checkout to the first
+release, force replacement even if both report the same version:
+
+```bash
+uv sync --locked --extra dev --reinstall-package saga2d
+```
+
+Older uv versions can retain the editable installation during a plain sync.
+Check `uv run python -c "import saga2d; print(saga2d.__file__)"`: it must point
+inside the game's `.venv/.../site-packages`, not the sibling engine checkout.
+
 ## Versions and upgrades
 
 `saga2d/__init__.py` is the only version source; Hatch reads `__version__`
