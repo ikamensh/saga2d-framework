@@ -279,6 +279,10 @@ class Scene:
         self, points: list[tuple[float, float]], color: Color, *,
         space: Space = "screen", layer: RenderLayer = RenderLayer.UI_WORLD,
     ) -> None:
+        """A filled polygon.  **Convex only**: the backend fan-triangulates from the
+        first point, so a concave outline fills as its hull and the notch vanishes
+        without an error.  Build a chevron, a star or a crescent out of convex
+        pieces instead of describing its outline in one list."""
         bottom = max(p[1] for p in points) if points else 0.0
         self.game.backend.draw_polygon(points, color, space=space, order=self._order(space, layer, bottom))
 
