@@ -82,8 +82,16 @@ evidence. Do not rebuild or edit the artifacts between verification and upload.
 
 ## Publish
 
-Publishing to PyPI and pushing a release tag are external actions: obtain the
-maintainer's go-ahead for the prepared version and artifacts first.
+Saga2D is AI-owned. The maintainer authorizes agents to prepare and publish
+engine releases to PyPI and push the verified engine commits and release tags
+without asking for approval each time. Follow the preparation, verification,
+artifact integrity and consumer-upgrade steps in this guide. Record any known
+baseline failures separately from regressions introduced by the candidate;
+resolve new regressions before publishing.
+
+This standing authorization is specific to the `saga2d` engine. Publishing
+game binaries or deploying the room server or website still needs separate
+authorization.
 
 Load a PyPI API token into `UV_PUBLISH_TOKEN` through the local credential store;
 never put it in a command argument, source file or GitHub log. Then publish only
