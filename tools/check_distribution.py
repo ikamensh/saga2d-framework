@@ -13,7 +13,7 @@ from PIL import ImageFont
 from websockets.sync.client import connect
 
 import saga2d
-from saga2d import Button, Column, Game, Label, Scene, fonts
+from saga2d import Button, Column, Game, Label, Scene, TextLayout, fonts
 from saga2d.packaging import RECIPE
 from saga2d.testing.online import COUNTER_GAMES, command, handshake, receive, running_server
 
@@ -37,6 +37,7 @@ def check_scene() -> None:
     class CounterScene(Scene):
         def on_enter(self):
             self.count = 0
+            self.ui.enable_focus(activate=("return",))
             self.ui.add(Column(
                 Label(lambda: f"Count: {self.count}"),
                 Button("Add", shortcut="Space", on_click=self.add),
@@ -56,6 +57,14 @@ def check_scene() -> None:
         game.tick(0)
         assert scene.count == 1
         assert "Count: 1" in [item["text"] for item in game.backend.texts]
+        game.backend.inject_key("tab")
+        game.backend.inject_key("return")
+        game.tick(0)
+        assert scene.count == 2 and scene.ui.focused.text == "Add"
+        text = "A paragraph that needs several lines to describe this tiny room."
+        layout = scene.layout_text(text, 160, max_lines=2)
+        assert isinstance(layout, TextLayout) and layout.truncated and len(layout.lines) == 2
+        assert scene.fit_text(text, 160).endswith("…")
     finally:
         game.close()
 

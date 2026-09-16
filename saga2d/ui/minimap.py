@@ -34,6 +34,7 @@ class Minimap(Component):
         width: int, height: int, on_click: OnClick | None = None, frame_color: Color = (255, 255, 255, 220),
         style: Style | None = None, **kwargs: Any,
     ) -> None:
+        kwargs.setdefault("blocks_pointer", True)
         super().__init__(width=width, height=height, style=style, **kwargs)
         self.image = image
         self.world_size = world_size
@@ -41,7 +42,6 @@ class Minimap(Component):
         self.on_click = on_click
         self.frame_color = frame_color
         self.pings: list[list[float]] = []
-        self._dragging = False
 
     def to_world(self, sx: float, sy: float) -> tuple[float, float]:
         x, y, w, h = self.bounds
@@ -62,16 +62,17 @@ class Minimap(Component):
     def on_event(self, event: InputEvent) -> bool:
         inside = self.hit_test(event.x, event.y)
         if event.type == "click" and inside:
-            self._dragging = event.button == "left"
+            if event.button == "left":
+                self.capture_pointer()
             if self.on_click is not None:
                 self.on_click(*self.to_world(event.x, event.y), event.button or "left")
             return True
-        if event.type == "drag" and self._dragging:
+        if event.type == "drag" and self.has_pointer_capture:
             if inside and self.on_click is not None:
                 self.on_click(*self.to_world(event.x, event.y), "left")
             return True
-        if event.type == "release" and self._dragging:
-            self._dragging = False
+        if event.type == "release" and self.has_pointer_capture:
+            self.release_pointer()
             return True
         return False
 

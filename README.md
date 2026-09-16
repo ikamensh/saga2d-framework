@@ -18,8 +18,8 @@ Requires Python 3.12 or newer. Pin the engine in a game so engine development
 cannot change that game's build:
 
 ```bash
-uv add 'saga2d==0.2.0'
-# or: python -m pip install 'saga2d==0.2.0'
+uv add 'saga2d==0.3.0'
+# or: python -m pip install 'saga2d==0.3.0'
 ```
 
 Commit the game's `pyproject.toml` and lockfile. Upgrade the pin deliberately,
@@ -77,8 +77,10 @@ Game("My Game", resolution=(640, 400)).run(World())
   (pan, zoom, shake) on the GPU; `"screen"` is for UI. Sprites default to
   world space; `draw_rect`, `draw_circle`, `draw_line`, `draw_polygon`,
   `draw_text` and `draw_image` take `space=`.
-* **Measured paragraphs.** `Scene.draw_paragraph(text, x, y, width)` wraps
-  against the actual font and returns the height for subsequent layout.
+* **Measured text.** `Scene.layout_text(text, width)` returns wrapped lines and
+  height; `Scene.draw_paragraph` draws the same layout. Both accept `max_lines`,
+  and `Scene.fit_text` fits a single line with ellipsis. See the
+  [text layout cookbook](docs/framework-text-layout.md).
 * **Hex boards.** `HexGrid` supplies centers, corners, picking, neighbours,
   weighted movement ranges and shortest paths; the game supplies terrain
   costs. See the [cookbook](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-hexgrid.md).
@@ -96,6 +98,9 @@ Game("My Game", resolution=(640, 400)).run(World())
   See [wrapped labels](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-wrapped-label.md),
   [measuring a tree](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-ui-measurement.md) and
   [button shortcuts](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-button-shortcuts.md).
+  Opt-in keyboard focus, custom activation and pointer capture work across the
+  same tree; `blocks_pointer=True` keeps HUD clicks out of the world. See
+  [focus and pointer handling](docs/framework-ui-focus.md).
 * **Actions**, tweens, timers, particle emitters, frame animation, transient
   effects, audio with `master`/`music`/`sfx` channels and a silent driver,
   JSON save slots and persisted settings.

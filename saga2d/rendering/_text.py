@@ -1,4 +1,4 @@
-"""Private measured paragraph layout shared by immediate text and retained labels."""
+"""Measured text layout shared by immediate text and retained labels."""
 
 from dataclasses import dataclass
 import math
@@ -6,10 +6,17 @@ from typing import Callable
 
 
 @dataclass(frozen=True)
-class _Paragraph:
+class TextLayout:
+    """A measured paragraph, including blank lines and its occupied height.
+
+    Construct through :meth:`Scene.layout_text`. Measurements belong to the
+    font and display scale at layout time; measure again after either changes.
+    """
+
     lines: tuple[str, ...]
     line_height: float
     line_spacing: float
+    truncated: bool = False
 
     @property
     def height(self) -> float:
@@ -23,11 +30,31 @@ def _validate_paragraph_size(width: float, line_spacing: float) -> None:
         raise ValueError("Paragraph line spacing must be positive and finite")
 
 
+def _validate_max_lines(max_lines: int | None) -> None:
+    if max_lines is not None and (type(max_lines) is not int or max_lines <= 0):
+        raise ValueError("max_lines must be a positive integer or None")
+
+
+def _ellipsize(text: str, width: float, measure: Callable[[str], tuple[int, int]]) -> str:
+    """Append an ellipsis, trimming the prefix only as far as required to fit."""
+    if measure("…")[0] > width:
+        raise ValueError(f"Text width {width} cannot fit an ellipsis")
+    low, high = 0, len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if measure(text[:middle].rstrip() + "…")[0] <= width:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low].rstrip() + "…"
+
+
 def _layout_paragraph(text: str, width: float, measure: Callable[[str], tuple[int, int]],
-                      line_spacing: float = 1.4) -> _Paragraph:
+                      line_spacing: float = 1.4, *, max_lines: int | None = None) -> TextLayout:
     _validate_paragraph_size(width, line_spacing)
+    _validate_max_lines(max_lines)
     if not text:
-        return _Paragraph((), 0, line_spacing)
+        return TextLayout((), 0, line_spacing)
 
     def fits(value: str) -> bool:
         return measure(value)[0] <= width
@@ -55,7 +82,11 @@ def _layout_paragraph(text: str, width: float, measure: Callable[[str], tuple[in
                 line += character
         lines.append(line)
     line_height = measure("Mg")[1]
-    return _Paragraph(tuple(lines), line_height, line_spacing)
+    truncated = max_lines is not None and len(lines) > max_lines
+    if truncated:
+        lines = lines[:max_lines]
+        lines[-1] = _ellipsize(lines[-1], width, measure)
+    return TextLayout(tuple(lines), line_height, line_spacing, truncated)
 
 
 #: Where a text's anchor sits inside its measured box, as a fraction of the box.

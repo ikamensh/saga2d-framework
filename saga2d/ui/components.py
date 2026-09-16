@@ -12,7 +12,7 @@ import math
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from saga2d.input import normalize_combo
-from saga2d.rendering._text import _Paragraph, _layout_paragraph
+from saga2d.rendering._text import TextLayout, _layout_paragraph, _validate_max_lines
 from saga2d.rendering.shapes import draw_box, rounded_rect
 from saga2d.ui.base import Component
 from saga2d.ui.layout import Layout, compute_anchor_position, compute_content_size, compute_flow_layout
@@ -82,6 +82,8 @@ class Label(Component):
         text_style: Named theme style or a :class:`TextStyle`.
         font_size / text_color / font: One-off overrides.
         wrap: Measure and wrap to ``width``; preferred height fits all lines.
+        max_lines: Positive line budget for wrapped text; omitted lines get an
+                   ellipsis. Requires ``wrap=True``.
         align: ``"left"`` (default), ``"center"`` or ``"right"`` inside an
                explicit ``width``.
     """
@@ -96,15 +98,20 @@ class Label(Component):
         font: str | None = None,
         align: str = "left",
         wrap: bool = False,
+        max_lines: int | None = None,
         style: Style | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(style=merge_styles(Style(font=font, font_size=font_size, text_color=text_color), style), **kwargs)
         if wrap and (self._width is None or not math.isfinite(self._width) or self._width <= 0):
             raise ValueError("Wrapped labels require a positive finite width")
+        _validate_max_lines(max_lines)
+        if max_lines is not None and not wrap:
+            raise ValueError("max_lines requires wrap=True")
         self._wrap = wrap
+        self._max_lines = max_lines
         self._paragraph_key = None
-        self._wrapped_paragraph = _Paragraph((), 0, 1.4)
+        self._wrapped_paragraph = TextLayout((), 0, 1.4)
         self._text_style = text_style
         self._align = align
         self._text_rv: ReactiveValue[str] = ReactiveValue(text if text is not None else "", default="", on_change=self._on_text_changed)
@@ -134,16 +141,16 @@ class Label(Component):
             self._text_rv.refresh()
             self._paragraph(self._resolve())
 
-    def _paragraph(self, resolved: ResolvedStyle) -> _Paragraph:
+    def _paragraph(self, resolved: ResolvedStyle) -> TextLayout:
         backend = self._game.backend if self._game is not None else None
         key = (backend, backend.scale_factor if backend is not None else None,
-               self.text, self._width, resolved.font_size, resolved.font)
+               self.text, self._width, resolved.font_size, resolved.font, self._max_lines)
         if key != self._paragraph_key:
             def measure(text):
                 if backend is not None:
                     return backend.measure_text(text, resolved.font_size, resolved.font)
                 return int(len(text) * resolved.font_size * 0.6), int(resolved.font_size * 1.2)
-            self._wrapped_paragraph = _layout_paragraph(self.text, self._width, measure)
+            self._wrapped_paragraph = _layout_paragraph(self.text, self._width, measure, max_lines=self._max_lines)
             self._paragraph_key = key
             self.invalidate_layout()
         return self._wrapped_paragraph
@@ -254,6 +261,8 @@ class Button(Component):
             raise ValueError("an icon-only button requires an icon")
         if not math.isfinite(icon_size) or icon_size <= 0:
             raise ValueError("icon_size must be positive and finite")
+        kwargs.setdefault("focusable", True)
+        kwargs.setdefault("blocks_pointer", True)
         super().__init__(style=style, **kwargs)
         self.icon, self.show_text, self.icon_size = icon, show_text, icon_size
         self._text_rv: ReactiveValue[str] = ReactiveValue(text, on_change=lambda _o, _n: self.invalidate_layout())
@@ -273,7 +282,7 @@ class Button(Component):
 
     @property
     def state(self) -> str:
-        return self._state
+        return "pressed" if self._state == "pressed" else "hovered" if self.hovered or self.focused else "normal"
 
     def _resolve(self, state: str = "normal") -> ResolvedStyle:
         theme = self._game.theme if self._game is not None else Theme()
@@ -307,30 +316,27 @@ class Button(Component):
         return (w, h + 2 * resolved.padding if self._height is None else self._height)
 
     def on_event(self, event: InputEvent) -> bool:
-        if event.type == "move":
-            over = self.hit_test(event.x, event.y)
-            if over and self._state == "normal":
-                self._state = "hovered"
-            elif not over and self._state == "hovered":
-                self._state = "normal"
-            return False  # siblings must see moves to un-hover
         if event.type == "click" and event.button == "left" and self.hit_test(event.x, event.y):
             self._state = "pressed"
-            self._activate()
+            self.capture_pointer()
+            self.activate()
             return True
         if event.type == "release" and self._state == "pressed":
-            self._state = "hovered" if self.hit_test(event.x, event.y) else "normal"
+            self._state = "normal"
             return True
         return False
 
-    def _activate(self) -> None:
+    def on_pointer_cancel(self) -> None:
+        self._state = "normal"
+
+    def on_activate(self) -> None:
         if self.on_click is not None:
             self.on_click()
 
     def on_draw(self) -> None:
         if self._game is None:
             return
-        resolved = self._resolve("disabled" if not self.enabled else self._state)
+        resolved = self._resolve("disabled" if not self.enabled else self.state)
         x, y, w, h = self.bounds
         backend, theme = self._game.backend, self._game.theme
         _draw_component_box(self, resolved)

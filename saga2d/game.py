@@ -252,6 +252,11 @@ class Game:
         return self._input
 
     @property
+    def mouse_position(self) -> tuple[float, float] | None:
+        """Last pointer position in logical screen pixels, or None before any pointer event."""
+        return self._mouse
+
+    @property
     def data_dir(self) -> Path:
         """The parent of the save directory, or ``~/.<title>`` by default."""
         if self._save_dir is not None:
@@ -415,10 +420,14 @@ class Game:
                     self.quit()
                 elif event.type in ('activate', 'deactivate'):
                     self._window_focused = event.type == 'activate'
+                    if not self._window_focused:
+                        for scene in self.scenes:
+                            if scene._ui is not None:
+                                scene._ui._cancel_pointer()
                 elif event.type in ('show', 'hide'):
                     self._window_visible = event.type == 'show'
                 continue
-            if isinstance(event, MouseEvent) and event.type in ("move", "drag"):
+            if isinstance(event, MouseEvent):
                 self._mouse = (float(event.x), float(event.y))
             input_events.append(event)
 

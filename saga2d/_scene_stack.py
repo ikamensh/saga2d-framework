@@ -118,12 +118,16 @@ class SceneStack:
 
     def _leave(self, scene: Scene) -> None:
         try:
+            if scene._ui is not None:
+                scene._ui._cancel_pointer()
             scene.on_exit()
         finally:
             scene._release_resources()
 
     def _apply_push(self, scene: Scene) -> None:
         if self._stack:
+            if self._stack[-1]._ui is not None:
+                self._stack[-1]._ui._cancel_pointer()
             self._stack[-1].on_exit()
         self._enter(scene)
 

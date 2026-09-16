@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Callable, Iterator
 
 from saga2d.input import normalize_combo
-from saga2d.rendering._text import ANCHOR_X, ANCHOR_Y, _layout_paragraph, _validate_paragraph_size
+from saga2d.rendering._text import ANCHOR_X, ANCHOR_Y, TextLayout, _ellipsize, _layout_paragraph, _validate_paragraph_size
 from saga2d.rendering.layers import RenderLayer, world_order
 from saga2d.rendering.shapes import draw_box
 
@@ -316,17 +316,58 @@ class Scene:
             text_style = theme.get_text_style(style) if isinstance(style, str) else style
             font_size = font_size if font_size is not None else text_style.font_size
             color = color if color is not None else text_style.color
-            font = font if font is not None else text_style.font
+            font = font if font is not None else text_style.font or theme.font
         else:
             font_size = font_size if font_size is not None else theme.font_size
             color = color if color is not None else theme.text_color
             font = font if font is not None else theme.font
         return font_size, color, font
 
+    def layout_text(
+        self, text: str, width: float, *,
+        style: str | TextStyle | None = None, font_size: int | None = None,
+        font: str | None = None, line_spacing: float = 1.4,
+        max_lines: int | None = None,
+    ) -> TextLayout:
+        """Measure a paragraph without drawing, using the current drawing font.
+
+        The result supplies ``lines``, measured ``line_height``, ``height`` and
+        ``truncated``. Explicit newlines and blank lines remain; other
+        whitespace collapses to single spaces and long words split between
+        characters. Empty text has no lines and no height. Width and spacing
+        must be positive and finite; an impossible glyph fit raises ValueError.
+        ``max_lines`` is an optional positive integer; omitted lines are marked
+        with a measured ellipsis on the last line and ``truncated=True``. An
+        ellipsis that cannot fit raises ValueError.
+        """
+        font_size, _, font = self._resolve_text_style(style, font_size, None, font)
+        return _layout_paragraph(text, width,
+                                 lambda value: self.game.backend.measure_text(value, font_size, font),
+                                 line_spacing, max_lines=max_lines)
+
+    def fit_text(
+        self, text: str, width: float, *,
+        style: str | TextStyle | None = None, font_size: int | None = None, font: str | None = None,
+    ) -> str:
+        """Fit one line by appending an ellipsis only when the text exceeds width.
+
+        Keeps the longest measured prefix, including partial words, and trims
+        spaces before the ellipsis. Complete text is unchanged. Width must be
+        positive and finite; newlines or an ellipsis that cannot fit raise
+        ValueError. Use :meth:`layout_text` for multiline content.
+        """
+        _validate_paragraph_size(width, 1)
+        if "\n" in text or "\r" in text:
+            raise ValueError("fit_text requires a single line")
+        font_size, _, font = self._resolve_text_style(style, font_size, None, font)
+        measure = lambda value: self.game.backend.measure_text(value, font_size, font)
+        return text if measure(text)[0] <= width else _ellipsize(text, width, measure)
+
     def draw_paragraph(
         self, text: str, x: float, y: float, width: float, *,
         style: str | TextStyle | None = None, font_size: int | None = None,
         color: Color | None = None, font: str | None = None, line_spacing: float = 1.4,
+        max_lines: int | None = None,
         space: Space = "screen", layer: RenderLayer = RenderLayer.UI_WORLD,
     ) -> float:
         """Draw measured, word-wrapped text from top-left and return its height.
@@ -340,14 +381,12 @@ class Scene:
         whitespace collapses to single spaces. Overlong words split between
         characters. Width and spacing must be positive and finite; a width
         too small for one character raises ``ValueError`` before drawing.
-        Empty text consumes no height.
+        Empty text consumes no height. ``max_lines`` limits the paragraph and
+        marks omitted text with a measured ellipsis, as in :meth:`layout_text`.
         """
-        _validate_paragraph_size(width, line_spacing)
-        if not text:
-            return 0.0
         font_size, color, font = self._resolve_text_style(style, font_size, color, font)
-        paragraph = _layout_paragraph(text, width,
-                                      lambda value: self.game.backend.measure_text(value, font_size, font), line_spacing)
+        paragraph = self.layout_text(text, width, style=style, font_size=font_size, font=font,
+                                     line_spacing=line_spacing, max_lines=max_lines)
         for index, line in enumerate(paragraph.lines):
             if line:
                 self.draw_text(line, x, y + index * paragraph.line_height * line_spacing, style=style,

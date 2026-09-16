@@ -25,6 +25,7 @@ from saga2d.multiplayer_ui import MatchLobby, MatchMenu, add_match_arguments, ma
 from saga2d.network import CommandError, MatchClient, MatchHost
 from saga2d.input import InputEvent, InputManager
 from saga2d.rendering import Camera, ParticleEmitter, RenderLayer, Sprite, SpriteAnchor
+from saga2d.rendering._text import TextLayout
 from saga2d.save import SaveError, SaveManager
 from saga2d.scene import Scene
 from saga2d.settings import Settings, SettingsError
@@ -39,5 +40,5 @@ __all__ = [
     "Column", "Component", "Delay", "Do", "Ease", "Event", "FadeIn", "FadeOut", "Game", "HexGrid", "Image", "InputEvent", "InputManager",
     "KeyEvent", "KeyHints", "Label", "Layout", "Minimap", "MouseEvent", "MoveTo", "Panel", "Parallel", "ParticleEmitter", "PlayAnim",
     "ProgressBar", "ReactiveValue", "Rect", "Remove", "RenderLayer", "Repeat", "Row", "SaveError", "SaveManager",
-    "Scene", "Sequence", "Settings", "SettingsError", "Sprite", "SpriteAnchor", "Style", "TextStyle", "Theme", "WindowEvent", "aabb_overlap", "tween",
+    "Scene", "Sequence", "Settings", "SettingsError", "Sprite", "SpriteAnchor", "Style", "TextLayout", "TextStyle", "Theme", "WindowEvent", "aabb_overlap", "tween",
 ]

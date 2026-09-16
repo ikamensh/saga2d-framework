@@ -1,8 +1,29 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-09-16
 
-Text that does not fit the rectangle it was drawn into.
+Shared measured text and opt-in interaction for standard and custom game UI.
+
+- `Scene.layout_text` returns immutable `TextLayout` lines and height without
+  drawing. `Scene.fit_text` fits a single line with a measured ellipsis.
+  `draw_paragraph` and wrapped `Label` accept `max_lines`; all share the same
+  wrapping, long-word splitting and truncation. See [text layout](docs/framework-text-layout.md).
+- `scene.ui.enable_focus` opts into Tab, vertical or spatial keyboard navigation.
+  Custom controls expose `focusable`, `focused`, `hovered` and `on_activate`;
+  games can supply candidate sets while retaining their eligibility rules.
+  Existing explicit button shortcuts take precedence. See [focus and pointer
+  handling](docs/framework-ui-focus.md).
+- `Component(blocks_pointer=True)` owns its click area, including while disabled,
+  so HUD clicks cannot reach the world beneath it. Buttons and minimaps opt in.
+  Pointer capture keeps a drag with its control outside its bounds and cancels
+  on hiding, disabling, removal, a covering scene or window deactivation.
+- `Game.mouse_position` exposes the last pointer position in logical coordinates.
+- Named text styles without an explicit font inherit the theme font consistently
+  for measurement, immediate text and retained labels.
+- `Sprite(ground=...)` offsets y-sorting to the line a sprite stands on when its
+  image has padding below its feet. Simultaneous toast notifications stack.
+
+Text overflow diagnostics:
 
 - `Scene.text_region(x, y, width, height, name=...)` declares the box that text
   drawn inside the scope must fit in. Immediate drawing has no layout to check
@@ -23,7 +44,9 @@ Text that does not fit the rectangle it was drawn into.
 - `Scene.draw_polygon`'s docstring now says it is convex only: the backend
   fan-triangulates, so a concave outline fills as its hull.
 
-No breaking changes; a game on 0.2.0 upgrades by changing its pin.
+No removed public interfaces. Focus is opt-in, leaving existing gameplay keys
+unchanged. Disabled buttons and minimaps now consume clicks in their area;
+motion and wheel events still pass through unless a control handles them.
 
 ## 0.2.0 — 2026-09-16
 

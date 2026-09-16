@@ -263,12 +263,26 @@ and draw below the next scene. The game owns icon artwork and meanings. See the
 preferred height participates in ordinary flow layout. Shardbound's reward
 card descriptions and Warband's width-390 tutorial objective need the next
 control to follow the complete text, including after reactive text or font
-changes. Immediate paragraphs and retained labels share one private layout
-helper. A private preparation hook runs at existing input/draw layout
+changes. Immediate paragraphs and retained labels share one layout helper,
+also exposed as `Scene.layout_text` returning immutable lines and height.
+`max_lines` applies measured ellipsis to the final line; `Scene.fit_text` handles
+a single-line name. Ninefold and Absolution now use this shared implementation
+instead of maintaining wrapping and fitting loops. A private preparation hook runs at existing input/draw layout
 boundaries, including visible paused scenes; games acquire no new lifecycle
 or manual invalidation requirement. Default single-line Labels stay unchanged.
 Width and maximum screen content remain the game's choice. See the independent
 [wrapped-label example](docs/framework-wrapped-label.md).
+
+`scene.ui.enable_focus` opts a scene into keyboard navigation and activation;
+custom controls implement the same `focusable`/`on_activate` interface as buttons.
+The root owns one focus target per scene and resolves live candidates, with
+optional game-supplied eligibility. Absolution keeps its card artwork while
+sharing input; Tribes and Warband focus settings rows and retain their adjustment
+keys. Explicit shortcuts precede focus navigation. `blocks_pointer` declares
+click ownership even for unavailable HUDs; capture routes motion and release to
+the drag owner until release, removal, hiding, disabling, scene cover or window
+deactivation. Layout, focus and pointer dispatch therefore use one tree instead
+of game-maintained hit lists. See [focus and pointer handling](docs/framework-ui-focus.md).
 
 `Scene.measure(component)` returns an unattached tree's preferred size using
 the scene's current theme, font metrics and viewport scale. It removes the
