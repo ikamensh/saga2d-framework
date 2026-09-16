@@ -8,9 +8,17 @@ source = Path(os.environ["SAGA2D_BUILD_SOURCE"])
 info = json.loads((source / "release" / "build-info.json").read_text(encoding="utf-8"))
 packaging = info["packaging"]
 product = info["product"]
+# Every snapshotted package ships its ``assets`` folder beside its code: the
+# engine's fonts, a game's committed art and sound pieces. Modules find it as
+# ``Path(__file__).parent / "assets"`` in the frozen tree exactly as in a checkout.
+datas = [(str(source / "release"), "release")]
+for name in ("saga2d", "sagaforge", packaging["package"]):
+    assets = source / name / "assets"
+    if assets.is_dir():
+        datas.append((str(assets), f"{name}/assets"))
 a = Analysis(
     [str(source / packaging["entry"])], pathex=[str(source)],
-    datas=[(str(source / "saga2d/assets/fonts"), "saga2d/assets/fonts"), (str(source / "release"), "release")],
+    datas=datas,
     hiddenimports=packaging["hiddenimports"],
     excludes=packaging["excludes"],
 )

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 — 2026-09-16
+
+- Packaging ships every snapshotted package's `assets` folder (`saga2d`,
+  `sagaforge`, the game) in the frozen application. Before this the recipe
+  bundled only the engine's fonts, so a game's committed art and sound pieces
+  were missing from its Windows and Mac builds: painted sprites fell back to
+  procedural renders, and a module that counts its pieces at import failed
+  the native package check.
+
 ## 0.3.0 — 2026-09-16
 
 Shared measured text and opt-in interaction for standard and custom game UI.
