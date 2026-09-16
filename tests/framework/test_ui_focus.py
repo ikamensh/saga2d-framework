@@ -207,3 +207,26 @@ def test_button_press_is_cancelled_when_its_callback_opens_a_modal(game, backend
     assert game.scene is menu and menu.button.state == "normal"
     game.pop()
     assert not menu.button.activate(), "A retained reference cannot activate a removed scene's UI"
+
+
+def test_window_focus_loss_cancels_a_press_from_the_same_input_batch(game, backend):
+    """An OS focus event queued beside a click must not leave a pressed control behind."""
+    cancellations = []
+
+    class Control(Button):
+        def on_pointer_cancel(self):
+            cancellations.append("cancel")
+            super().on_pointer_cancel()
+
+    scene = Scene()
+    game.push(scene)
+    button = scene.ui.add(Control("Press", width=100, height=40, anchor=Anchor.TOP_LEFT))
+    scene.ui.enable_focus()
+    backend.inject_click(20, 20)
+    backend.inject_focus(False)
+    game.tick(0)
+    assert not button.has_pointer_capture and button.state != "pressed"
+    assert cancellations == ["cancel"] and scene.ui.focused is button
+    backend.inject_focus(False)
+    game.tick(0)
+    assert cancellations == ["cancel"] and scene.ui.focused is button

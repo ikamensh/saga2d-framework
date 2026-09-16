@@ -414,16 +414,14 @@ class Game:
 
         raw_events: list[Event] = self._backend.poll_events()
         input_events = []
+        lost_window_focus = False
         for event in raw_events:
             if isinstance(event, WindowEvent):
                 if event.type == "close":
                     self.quit()
                 elif event.type in ('activate', 'deactivate'):
                     self._window_focused = event.type == 'activate'
-                    if not self._window_focused:
-                        for scene in self.scenes:
-                            if scene._ui is not None:
-                                scene._ui._cancel_pointer()
+                    lost_window_focus = lost_window_focus or not self._window_focused
                 elif event.type in ('show', 'hide'):
                     self._window_visible = event.type == 'show'
                 continue
@@ -443,6 +441,13 @@ class Game:
                     break
         finally:
             stack.end_phase()
+
+        # A press in this batch can acquire capture after the OS focus event
+        # was collected. Cancel after dispatch so it cannot survive focus loss.
+        if lost_window_focus:
+            for scene in self.scenes:
+                if scene._ui is not None:
+                    scene._ui._cancel_pointer()
 
         stack.begin_phase()
         try:
