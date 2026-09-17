@@ -149,9 +149,9 @@ whose vertex storage is updated in place across frames. An absent order keeps
 a degenerate triangle briefly so pyglet does not discard and reconstruct its
 domain when that layer returns. The idle pool retains at most the peak number
 of simultaneously drawn shape orders; older idle entries are deleted.
-The backend also caches text labels across frames keyed by their content, so a HUD
-with dozens of labels and a few hundred highlight rectangles renders in
-a couple of milliseconds.
+Text slots are keyed by font, physical size, anchors, space and order. Content,
+colour and position update in place. Inactive labels are hidden, with at most
+one peak frame of idle slots retained for returning HUD styles.
 
 Before submitting the batch, the backend hides world groups whose visible
 sprites are wholly outside the camera. Bounds include rotation and a filtering
@@ -159,7 +159,11 @@ margin, and are taken from the current sprite transforms after camera updates.
 Any intersecting sprite or immediate image keeps its entire group visible;
 groups receiving immediate shapes are kept conservatively visible. Nothing
 is removed from its scene or reordered. Screen-space UI and independent text
-groups retain their existing draw path.
+groups retain their existing draw path. Each group tracks its sprites; cached
+visibility is invalidated by sprite changes, immediate draws or camera motion,
+so stationary offscreen scenery is not scanned every frame. Sprite and text
+groups already manage alpha blending; the shape shader group manages it for
+shapes, avoiding redundant GL calls at the parent view level.
 
 Text measurement caches physical glyph dimensions at the rounded raster size;
 logical dimensions are calculated using the current viewport scale at return.

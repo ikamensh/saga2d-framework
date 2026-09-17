@@ -239,6 +239,31 @@ def test_sprite_tint_preserves_opacity_through_movement(tmp_path):
         game.close()
 
 
+def test_shapes_and_images_preserve_alpha_across_layers(tmp_path):
+    """An image's GL state must not turn a subsequent translucent shape opaque."""
+    class Layers(Scene):
+        def on_enter(self):
+            self.game.assets.image_from_pil("blue", Image.new("RGBA", (40, 40), (0, 0, 255, 128)))
+
+        def draw(self):
+            self.draw_rect(10, 10, 40, 40, (255, 0, 0, 128))
+            self.draw_image("blue", 10, 10, 40, 40)
+            with self.screen_layer(1):
+                self.draw_rect(10, 10, 40, 40, (0, 255, 0, 128))
+
+    game = Game("layer alpha", resolution=(200, 120), visible=False, save_dir=tmp_path)
+    try:
+        game.push(Layers())
+        tick(game)
+        frame = game.backend.capture_frame()
+        frame.save(tmp_path / "composite.png")
+        scale = frame.width / game.width
+        actual = frame.getpixel((round(25 * scale), round(25 * scale)))[:3]
+        assert all(abs(a - b) <= 1 for a, b in zip(actual, (32, 128, 64))), actual
+    finally:
+        game.close()
+
+
 def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
     """World groups must reappear at the edge, after pan, and for immediate draws."""
     class Map(Scene):

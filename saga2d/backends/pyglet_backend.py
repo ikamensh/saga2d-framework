@@ -867,11 +867,6 @@ class _ViewGroup(pyglet.graphics.Group):
     def set_state(self) -> None:
         backend = self._backend
         backend._apply_view(backend._world_view if self._space == "world" else backend._screen_view)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-
-    def unset_state(self) -> None:
-        glDisable(GL_BLEND)
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _ViewGroup) and other._order == self._order and other._space == self._space
@@ -900,6 +895,17 @@ class _TextGroup(pyglet.graphics.Group):
 class _ShaderChild(pyglet.graphics.ShaderGroup):
     def __init__(self, program: Any, parent: Any) -> None:
         super().__init__(program, order=0, parent=parent)
+
+    def set_state(self) -> None:
+        super().set_state()
+        # Sprites and text manage their own blending. Only shape drawing needs
+        # this state; repeating it in every view group doubles sprite GL calls.
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
+    def unset_state(self) -> None:
+        glDisable(GL_BLEND)
+        super().unset_state()
 
 
 class _ImageChild(pyglet.graphics.Group):
