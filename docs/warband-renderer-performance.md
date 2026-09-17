@@ -187,8 +187,8 @@ and PyPI receipts are recorded after verifying the exact immutable artifacts.
 Saga2D **0.3.3** is published from commit/tag `9a1a58c` / `v0.3.3`.
 The source distribution builds the wheel; both pass strict metadata checks.
 An isolated installed-wheel scene/socket check passes, and all **14 native
-backend regressions pass against that installed wheel** (Python 3.12, current
-pyglet 2.1.16). The locked engine suite also covers pyglet 2.1.13. A separate
+backend regressions pass against that installed wheel** (Python 3.12,
+pyglet 2.1.16). The locked engine and game suites also use pyglet 2.1.16. A separate
 fresh PyPI installation passes the same distribution check, and PyPI's file
 hashes match the exact verified artifacts:
 
