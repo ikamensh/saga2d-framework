@@ -14,7 +14,8 @@ version policy and package verification. `__version__` in `saga2d/__init__.py`
 is the single version source. Commit stable release increments. Saga2D is
 AI-owned: agents have standing authorization to publish verified engine
 releases to PyPI and push engine commits and release tags, following the
-release guide. Game publishing and hosted deployments remain separate.
+release guide. The stack's standing authorization also covers game publishing
+and hosted deployments; follow the relevant verification and rollout guides.
 Procedural asset generation (sound synthesis, the software 3D renderer) lives
 in `../sagaforge`; the framework does not depend on it.
 
