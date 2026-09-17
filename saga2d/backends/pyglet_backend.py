@@ -125,7 +125,7 @@ class PygletBackend:
         self._text_groups: dict[tuple[Space, int], Any] = {}
         self._shape_program: Any = None
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
-        self._soup_lists: dict[tuple[Space, int], tuple[Any, int]] = {}
+        self._soup_lists: dict[tuple[Space, int], tuple[Any, int, list[float], list[int]]] = {}
         self._peak_soups = 0
         self._frame_images: list[Any] = []  # pooled pyglet sprites for draw_image, reused in call order frame to frame
         self._ctrl_click = False  # a Mac Control+click in progress, reported as the right button
@@ -357,12 +357,15 @@ class PygletBackend:
                 vlist = entry[0]
                 if vlist.count != count:
                     vlist.resize(count)
-                vlist.position[:] = positions
-                vlist.colors[:] = colors
-            self._soup_lists[(space, order)] = (vlist, self._frame)
+                returning = entry[1] != self._frame - 1
+                if returning or entry[2] != positions:
+                    vlist.position[:] = positions
+                if returning or entry[3] != colors:
+                    vlist.colors[:] = colors
+            self._soup_lists[(space, order)] = (vlist, self._frame, positions, colors)
         self._peak_soups = max(self._peak_soups, len(self._soups))
         idle_soups = []
-        for key, (vlist, last_used) in self._soup_lists.items():
+        for key, (vlist, last_used, _, _) in self._soup_lists.items():
             if last_used != self._frame:
                 if last_used == self._frame - 1:
                     # Keep the domain alive without drawing any pixels. With
@@ -373,7 +376,7 @@ class PygletBackend:
         excess = max(0, len(idle_soups) - self._peak_soups)
         if excess:
             for key, _ in sorted(idle_soups, key=lambda entry: entry[1])[:excess]:
-                vlist, _ = self._soup_lists.pop(key)
+                vlist, _, _, _ = self._soup_lists.pop(key)
                 vlist.delete()
         self._peak_labels = max(self._peak_labels, sum(self._label_uses.values()))
         idle_labels = []

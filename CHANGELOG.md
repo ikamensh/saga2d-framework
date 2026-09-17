@@ -13,7 +13,7 @@
   movement and immediate images/shapes restore affected groups before drawing;
   ownership, order and screen-space UI are unchanged.
 - Immediate shape drawing reuses bounded vertex buffers across frames and
-  temporary layer changes. This avoids repeatedly constructing and discarding
+  temporary layer changes, skipping unchanged position/colour uploads. This avoids repeatedly constructing and discarding
   pyglet domains while preserving shape order, transparency and disappearance.
   Recovered independently from the shape portion of `238584d`.
 - Sprite transforms skip unchanged translation and scale uploads, including

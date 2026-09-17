@@ -133,3 +133,18 @@ still cover adding/removing/reordering sprites, immediate images moving between
 groups, shapes disappearing, pan/zoom and shared-group visibility. Require the
 same battle gate; stationary scenery must remain visible without rechecking
 its bounds each frame.
+
+On `5668c80`, dirty-group culling gives late/whole p95 **15.9 / 16.5 ms**.
+Moving blend setup from the parent view group to the shape shader avoids
+duplicating pyglet SpriteGroup state calls; `59b6967` gives **15.6 / 16.2 ms**.
+An analytic native shape/image/shape alpha check passes before and after, and
+the full engine suite passes **403 tests in 25.11 s**. The next bounded change
+skips unchanged shape position/colour uploads; the existing fresh-window
+comparisons cover resizing, colour changes, hiding and return.
+
+Tribes `888cdac`, using its ordinary 19×19 map with fog/HUD and two camera pans,
+compares release 0.3.2 with `59b6967`: 360 unprofiled frames have p50/p95
+**1.79 / 3.48 ms** before and **1.67 / 3.06 ms** after. The world digest is
+identical. Both native map frames were opened; no shared broad performance
+claim is inferred from this small single scene. Evidence is in Tribes'
+`docs/evidence/wb004-engine/`.
