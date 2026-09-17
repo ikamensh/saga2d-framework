@@ -243,6 +243,8 @@ def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
     """World groups must reappear at the edge, after pan, and for immediate draws."""
     class Map(Scene):
         immediate = None
+        image_space = "world"
+        image_layer = RenderLayer.OBJECTS
 
         def on_enter(self):
             self.camera = Camera(self.game.resolution)
@@ -254,7 +256,7 @@ def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
             if self.immediate == "shape":
                 self.draw_rect(10, 10, 20, 20, (0, 255, 0, 255), space="world", layer=RenderLayer.OBJECTS)
             if self.immediate == "image":
-                self.draw_image("green", 10, 10, 20, 20, space="world", layer=RenderLayer.OBJECTS)
+                self.draw_image("green", 10, 10, 20, 20, space=self.image_space, layer=self.image_layer)
 
     game = Game("world culling", resolution=(200, 120), visible=False, save_dir=tmp_path)
     try:
@@ -288,6 +290,14 @@ def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
             assert frame.getpixel((round(20 * scale), round(20 * scale))) == (0, 255, 0)
             scene.immediate = None
             assert capture(f"without-{kind}").getbbox() is None
+        scene.immediate = "image"
+        for space, layer in (("world", RenderLayer.UI_WORLD), ("screen", RenderLayer.OBJECTS),
+                             ("world", RenderLayer.OBJECTS)):
+            scene.image_space, scene.image_layer = space, layer
+            frame = capture(f"image-migrated-{space}-{layer}")
+            assert frame.getpixel((round(20 * scale), round(20 * scale))) == (0, 255, 0)
+        scene.immediate = None
+        assert capture("migrated-image-gone").getbbox() is None
         scene.body.position = (60, 60)
         assert capture("moved-inside").getbbox() is not None
         scene.body.visible = False
@@ -296,6 +306,14 @@ def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
         assert capture("visible-again").getbbox() is not None
         scene.body.remove()
         assert capture("removed").getbbox() is None
+        moving = scene.add_sprite(Sprite("green", position=(40, 40), y_sort=True))
+        assert capture("sorted-before").getbbox() is not None
+        moving.position = (40, 80)
+        frame = capture("sorted-after")
+        assert frame.getpixel((round(40 * scale), round(40 * scale))) == (0, 0, 0)
+        assert frame.getpixel((round(40 * scale), round(80 * scale))) == (0, 255, 0)
+        moving.remove()
+        assert capture("sorted-removed").getbbox() is None
         scene.add_sprite(Sprite("green", position=(50, 50), layer=RenderLayer.OBJECTS))
         assert capture("replaced").getbbox() is not None
         scene.add_sprite(Sprite("red", position=(-100, 50), layer=RenderLayer.OBJECTS))

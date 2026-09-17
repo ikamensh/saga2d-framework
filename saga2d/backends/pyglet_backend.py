@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import math
 import sys
-from itertools import chain, islice
 from typing import Any
 
 import pyglet
@@ -122,6 +121,7 @@ class PygletBackend:
         self._sprite_meta: dict[int, tuple[Space, float, float]] = {}  # space, img_w, img_h
         self._next_sprite_id = 0
         self._view_groups: dict[tuple[Space, int], Any] = {}
+        self._cull_camera: tuple[float, float, float] | None = None
         self._text_groups: dict[tuple[Space, int], Any] = {}
         self._shape_program: Any = None
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
@@ -331,9 +331,12 @@ class PygletBackend:
             r, g, b = (c / 255.0 for c in clear_color[:3])
             gl.glClearColor(r, g, b, 1.0)
         self.window.clear()
+        for key in self._soups:
+            self._view_groups[key]._cull_dirty = True
         self._soups.clear()
         for sprite in self._frame_images[:self._frame_images_used]:
             sprite.visible = False
+            sprite.group.parent._cull_dirty = True
         self._frame_images_used = 0
         self._label_uses.clear()
 
@@ -404,23 +407,32 @@ class PygletBackend:
         bottom = cy + self.logical_height / zoom + margin
         # Immediate geometry can share a group with retained sprites. Keep it
         # conservatively visible; text has independent groups and is unchanged.
-        seen = {self._view_groups[key] for key in self._soups}
-        for sprite in chain(self._sprites.values(), islice(self._frame_images, self._frame_images_used)):
-            group = sprite.group.parent
-            if group._space != "world" or not sprite.visible or group in seen:
-                continue
-            width = abs(sprite.image.width * sprite.scale_x)
-            height = abs(sprite.image.height * sprite.scale_y)
-            if sprite.rotation:
-                angle = math.radians(sprite.rotation)
-                c, s = abs(math.cos(angle)), abs(math.sin(angle))
-                width, height = c * width + s * height, s * width + c * height
-            x, y = sprite.x, -sprite.y
-            if x + width / 2 >= left and x - width / 2 <= right and y + height / 2 >= top and y - height / 2 <= bottom:
-                seen.add(group)
+        shape_groups = {self._view_groups[key] for key in self._soups}
+        camera_changed = self._cull_camera != self.camera
+        self._cull_camera = self.camera
         for group in self._view_groups.values():
-            if group._space == "world" and group.visible != (group in seen):
-                group.visible = group in seen
+            if group._space != "world":
+                continue
+            if not camera_changed and not group._cull_dirty and group not in shape_groups:
+                continue
+            visible = group in shape_groups
+            if not visible:
+                for sprite in group._sprites:
+                    if not sprite.visible:
+                        continue
+                    width = abs(sprite.image.width * sprite.scale_x)
+                    height = abs(sprite.image.height * sprite.scale_y)
+                    if sprite.rotation:
+                        angle = math.radians(sprite.rotation)
+                        c, s = abs(math.cos(angle)), abs(math.sin(angle))
+                        width, height = c * width + s * height, s * width + c * height
+                    x, y = sprite.x, -sprite.y
+                    if x + width / 2 >= left and x - width / 2 <= right and y + height / 2 >= top and y - height / 2 <= bottom:
+                        visible = True
+                        break
+            if group.visible != visible:
+                group.visible = visible
+            group._cull_dirty = False
 
     def poll_events(self) -> list[Event]:
         self.window.dispatch_events()
@@ -575,12 +587,14 @@ class PygletBackend:
         sid = self._next_sprite_id
         self._next_sprite_id += 1
         self._sprites[sid] = sprite
+        sprite.group.parent._add_sprite(sprite)
         self._sprite_meta[sid] = (space, image_handle.width, image_handle.height)
         return sid
 
     def update_sprite(self, sprite_id: int, x: float, y: float, width: float, height: float, *, image=None,
                       opacity: int = 255, visible: bool = True, tint=(1.0, 1.0, 1.0), rotation: float = 0.0) -> None:
         sprite = self._sprites[sprite_id]
+        sprite.group.parent._cull_dirty = True
         space, img_w, img_h = self._sprite_meta[sprite_id]
         if image is not None:
             sprite.image = image
@@ -598,10 +612,15 @@ class PygletBackend:
 
     def set_sprite_order(self, sprite_id: int, order: int) -> None:
         space = self._sprite_meta[sprite_id][0]
-        self._sprites[sprite_id].group = _ImageChild(self._view_group(space, order))
+        sprite = self._sprites[sprite_id]
+        sprite.group.parent._remove_sprite(sprite)
+        sprite.group = _ImageChild(self._view_group(space, order))
+        sprite.group.parent._add_sprite(sprite)
 
     def remove_sprite(self, sprite_id: int) -> None:
-        self._sprites.pop(sprite_id).delete()
+        sprite = self._sprites.pop(sprite_id)
+        sprite.group.parent._remove_sprite(sprite)
+        sprite.delete()
         del self._sprite_meta[sprite_id]
 
     # ------------------------------------------------------------------
@@ -670,11 +689,15 @@ class PygletBackend:
             if sprite.image is not image_handle:
                 sprite.image = image_handle
             if sprite.group != group:
+                sprite.group.parent._remove_sprite(sprite)
                 sprite.group = group
+                group.parent._add_sprite(sprite)
             sprite.visible = True
         else:
             sprite = pyglet.sprite.Sprite(image_handle, batch=self.batch, group=group)
             self._frame_images.append(sprite)
+            group.parent._add_sprite(sprite)
+        group.parent._cull_dirty = True
         self._frame_images_used += 1
         _update_transform(sprite, x + width / 2, self._flip(y + height / 2, space),
                           width / image_handle.width, height / image_handle.height)
@@ -830,6 +853,16 @@ class _ViewGroup(pyglet.graphics.Group):
         super().__init__(order=order)
         self._backend = backend
         self._space = space
+        self._sprites: set[Any] = set()
+        self._cull_dirty = True
+
+    def _add_sprite(self, sprite: Any) -> None:
+        self._sprites.add(sprite)
+        self._cull_dirty = True
+
+    def _remove_sprite(self, sprite: Any) -> None:
+        self._sprites.remove(sprite)
+        self._cull_dirty = True
 
     def set_state(self) -> None:
         backend = self._backend

@@ -124,3 +124,12 @@ Fresh-window pixel comparisons include content and opacity changes, duplicate
 labels, empty text, hiding/return, anchors, layers, camera movement and zoom.
 The translucent overlapping text frame was opened. This proves correctness
 and bounded reuse; repeat battle timing before claiming a speed improvement.
+
+Text reuse on `ef4bc39` leaves whole-run p95 at **16.9 ms** (late 17.1 ms).
+Do not infer a battle speed gain from that allocation fix. The next bounded
+change retains each view group's sprite membership and recalculates camera
+visibility only for changed groups or camera movement. Native acceptance must
+still cover adding/removing/reordering sprites, immediate images moving between
+groups, shapes disappearing, pan/zoom and shared-group visibility. Require the
+same battle gate; stationary scenery must remain visible without rechecking
+its bounds each frame.
