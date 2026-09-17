@@ -545,10 +545,8 @@ class PygletBackend:
             sprite.image = image
             img_w, img_h = image.width, image.height
             self._sprite_meta[sprite_id] = (space, img_w, img_h)
-        sprite.update(
-            x=x + width / 2, y=self._flip(y + height / 2, space), rotation=rotation,
-            scale_x=width / img_w, scale_y=height / img_h,
-        )
+        _update_transform(sprite, x + width / 2, self._flip(y + height / 2, space),
+                          width / img_w, height / img_h, rotation)
         # Each pyglet setter rewrites vertex data through ctypes; a moving unit only changes its position.
         if sprite.opacity != opacity:
             sprite.opacity = opacity
@@ -638,7 +636,8 @@ class PygletBackend:
             sprite = pyglet.sprite.Sprite(image_handle, batch=self.batch, group=group)
             self._frame_images.append(sprite)
         self._frame_images_used += 1
-        sprite.update(x=x + width / 2, y=self._flip(y + height / 2, space), scale_x=width / image_handle.width, scale_y=height / image_handle.height)
+        _update_transform(sprite, x + width / 2, self._flip(y + height / 2, space),
+                          width / image_handle.width, height / image_handle.height)
         alpha = int(opacity * 255)
         if sprite.opacity != alpha:
             sprite.opacity = alpha
@@ -749,6 +748,15 @@ class PygletBackend:
         if player.playing and pyglet.media.get_audio_driver() is not None:
             player.pause()
         player.delete()
+
+
+def _update_transform(sprite: Any, x: float, y: float, scale_x: float, scale_y: float,
+                      rotation: float = 0.0) -> None:
+    """Pyglet rewrites translation/scale buffers for every non-None argument."""
+    sprite.update(x=x if sprite.x != x else None, y=y if sprite.y != y else None,
+                  scale_x=scale_x if sprite.scale_x != scale_x else None,
+                  scale_y=scale_y if sprite.scale_y != scale_y else None,
+                  rotation=rotation)
 
 
 def _image_data(pil_image: Any) -> Any:

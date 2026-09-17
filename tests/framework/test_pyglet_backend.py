@@ -7,7 +7,7 @@ import sys
 import pytest
 from PIL import Image
 
-from saga2d import Camera, Game, Scene
+from saga2d import Camera, Game, Scene, Sprite
 from saga2d.testing.native_frames import tick
 
 
@@ -114,6 +114,44 @@ def test_reused_shapes_match_fresh_frames_through_resize_hide_and_return(tmp_pat
         expected.save(tmp_path / f"{space}-{index}-fresh.png")
         assert actual.size == expected.size
         assert actual.tobytes() == expected.tobytes(), f"Shape pixels changed with drawing history at state {index}"
+
+
+def test_moving_sprite_keeps_its_geometry_when_size_or_image_changes(tmp_path):
+    """Skipping unchanged transform uploads must retain scaling after image swaps."""
+    class Moving(Scene):
+        def on_enter(self):
+            for name, size, color in (("wide", (40, 20), (255, 40, 70, 255)),
+                                      ("tall", (20, 40), (40, 150, 255, 255))):
+                self.game.assets.image_from_pil(name, Image.new("RGBA", size, color))
+            self.body = self.add_sprite(Sprite("wide", position=(80, 70), size=(60, 40), space="screen"))
+
+    states = (((80, 70), (60, 40), "wide", 0),
+              ((120, 80), (60, 40), "wide", 0),
+              ((120, 80), (60, 40), "tall", 30),
+              ((160, 60), (40, 80), "tall", -20),
+              ((80, 70), (60, 40), "wide", 0))
+
+    def capture(sequence):
+        game = Game("sprite geometry", resolution=(320, 180), visible=False, save_dir=tmp_path)
+        try:
+            scene = Moving()
+            game.push(scene)
+            frames = []
+            for position, size, image, rotation in sequence:
+                scene.body.position = position
+                scene.body.size = size
+                scene.body.image = image
+                scene.body.rotation = rotation
+                tick(game)
+                frames.append(game.backend.capture_frame())
+            return frames
+        finally:
+            game.close()
+
+    for index, (state, actual) in enumerate(zip(states, capture(states), strict=True)):
+        expected = capture((state,))[0]
+        actual.save(tmp_path / f"sprite-{index}.png")
+        assert actual.tobytes() == expected.tobytes(), f"Sprite transform depends on prior images at state {index}"
 
 
 class Portraits(Scene):

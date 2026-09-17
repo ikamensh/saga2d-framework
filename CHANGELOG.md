@@ -6,6 +6,9 @@
   temporary layer changes. This avoids repeatedly constructing and discarding
   pyglet domains while preserving shape order, transparency and disappearance.
   Recovered independently from the shape portion of `238584d`.
+- Sprite transforms skip unchanged translation and scale uploads, including
+  retained moving sprites and pooled HUD images. Image-size swaps still
+  recompute the scale and preserve rotation.
 
 ## 0.3.2 — 2026-09-16
 

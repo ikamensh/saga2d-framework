@@ -55,3 +55,14 @@ through geometry resizing, overlapping transparency, camera pan/zoom, hidden
 frames and return after layer churn. The existing text cache and audio path
 are unchanged. Native battle timing and consumer/release acceptance remain
 outstanding; the allocation result alone is not a performance claim.
+
+The first shape-only battle run still misses the gate (late p50 11.4 ms,
+p95 19.5 ms). It fixes the demonstrated allocation churn, but is not sufficient
+to claim faster gameplay. The profile also shows 32,253 sprite synchronizations
+over 120 frames. Pyglet's `Sprite.update` rewrites translation and scale arrays
+for every supplied non-None argument, even when unchanged. The backend now
+passes those arguments only when the desired value changes. A native public
+Sprite journey compares movement, resizing, image-dimension swaps and rotation
+against fresh windows. All eight native backend tests pass and captured shapes,
+empty frames and rotated sprites were inspected. Repeat battle timings with
+the corrected measurement wrapper before accepting a performance claim.
