@@ -1,0 +1,46 @@
+# Renderer follow-up from Warband melee acceptance
+
+Warband `25c1f3c` on Saga2D 0.3.2 misses its existing 150-unit W10
+p95 <16 ms gate. The ordinary native battle at 1280×800 (Retina scale 2,
+Apple M4, macOS 26.6.2) has late p95 33.2 ms with cooperative CPU pacing
+and 17.9 ms with the benchmark's ordinary unpaced loop. The same paced
+comparison with pre-melee view/scene `7655d0e` gives 34.4 ms, with identical
+final simulation state. These are failures, not accepted performance results.
+
+A separate last-120-frame cProfile run shows 9,962 shape vertex-list
+allocations and 120 batch draw-list reconstructions. Profiling is diagnostic
+only; its frame times are not acceptance evidence. Melee trails account for
+0.040 s total and body lunges for 0.007 s under that profile. The existing
+shape-buffer candidate `238584d` directly addresses the measured churn.
+Review and adapt that change independently of its text-slot parent and the
+separate OpenAL lifetime candidate; do not assume the old branch is current.
+
+The temporary Warband timing wrapper also paced the scene's incremental
+image warmer inside early ticks. Correct the wrapper before further timing;
+the late-frame window is after that warmer finishes. Preserve the failed
+measurements with this qualification rather than treating startup sleeps as
+rendering work.
+
+## Acceptance before implementation
+
+- Repeated shape draws and alternating layer orders reuse bounded storage:
+  the native public Scene draw path must not build a new set of discarded
+  renderer cycles on every frame. Use the old candidate's actual allocation
+  regression as the initial red signal, separately from timing.
+- Drawn pixels match fresh windows after shape resizing, recolouring,
+  transparency, overlapping layers, disappearance and return, in world and
+  screen space under camera movement/zoom. Inactive cached geometry must
+  draw nothing. Inspect native output as well as pixel assertions.
+- Keep the backend protocol and draw ordering unchanged. Bound retained idle
+  buffers relative to observed concurrent use; review scene-turnover behavior.
+- Compare the same warmed Warband battle before/after without a profiler or
+  simultaneous expensive work, with explicit pacing and source metadata.
+  Keep all units, terrain, AI, art and effects. Verify its unchanged model
+  fingerprint and native crowded frame. Require the existing W10 gate;
+  report any remaining miss honestly.
+- Exercise a second game's real scene before claiming shared benefit, run
+  engine and affected consumer suites, and complete installed-wheel/release
+  verification before migrating Warband's released engine dependency.
+
+This is a focused S2D-003 investigation needed by WB-004. It does not complete
+the broader S2D-001 branch inventory or S2D-002 scene matrix.
