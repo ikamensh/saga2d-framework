@@ -16,7 +16,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 |---|---|---|---|
 | S2D-001 | First | ready | Review outstanding engine branches and preserve useful work |
 | S2D-002 | First | ready | Establish native renderer baselines and locate bottlenecks |
-| S2D-003 | Next | proposed | Reduce proven text/shape allocation and batching churn |
+| S2D-003 | Next | in progress | Reduce proven text/shape allocation and batching churn |
 | S2D-004 | Next | proposed | Measure large-texture batching, visibility and upload costs |
 | S2D-005 | Next | proposed | Add public nested clipping |
 | S2D-006 | Next | proposed | Build a scrolling content viewport on clipping |
@@ -71,6 +71,12 @@ existing p95 < 16 ms reference gate and record justified budgets for other
 scenes. No universal entity limit, native rewrite or FPS gain is assumed.
 
 ## S2D-003 — Proven text/shape and batch hot spots
+
+Started during WB-004 acceptance on `codex/wb004-render-shapes`.
+[Acceptance and current evidence](docs/warband-renderer-performance.md) cover
+the recovered shape-buffer candidate, unchanged sprite transform uploads and
+a native opacity bug found during that review. The Warband performance gate
+remains open; no release or general renderer-speed claim is accepted yet.
 
 Depends on S2D-001/002. Review text-slot and shape-buffer candidates first.
 Optimize only measured hot paths: changing labels, short-lived layer/order

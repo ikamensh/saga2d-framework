@@ -154,6 +154,32 @@ def test_moving_sprite_keeps_its_geometry_when_size_or_image_changes(tmp_path):
         assert actual.tobytes() == expected.tobytes(), f"Sprite transform depends on prior images at state {index}"
 
 
+def test_sprite_tint_preserves_opacity_through_movement(tmp_path):
+    """Pyglet's RGB colour assignment resets alpha; the backend must send RGBA."""
+    class Fading(Scene):
+        def on_enter(self):
+            self.game.assets.image_from_pil("white", Image.new("RGBA", (20, 20), (255, 255, 255, 255)))
+            self.body = self.add_sprite(Sprite("white", position=(50, 50), space="screen"))
+
+    game = Game("sprite opacity", resolution=(200, 120), visible=False, save_dir=tmp_path)
+    try:
+        scene = Fading()
+        game.push(scene)
+        for alpha in (0, 64, 128, 255):
+            scene.body.tint = (.5, 1, .25)
+            scene.body.opacity = alpha
+            scene.body.position = (60, 50)
+            tick(game)
+            frame = game.backend.capture_frame()
+            frame.save(tmp_path / f"opacity-{alpha}.png")
+            scale = frame.width / game.width
+            actual = frame.getpixel((round(60 * scale), round(50 * scale)))[:3]
+            expected = tuple(round(channel * alpha / 255) for channel in (127, 255, 63))
+            assert all(abs(a - b) <= 1 for a, b in zip(actual, expected)), (alpha, actual, expected)
+    finally:
+        game.close()
+
+
 class Portraits(Scene):
     """Draws a red square at each spot through the immediate draw_image API, like a HUD's portraits."""
 

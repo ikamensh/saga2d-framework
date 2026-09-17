@@ -9,6 +9,9 @@
 - Sprite transforms skip unchanged translation and scale uploads, including
   retained moving sprites and pooled HUD images. Image-size swaps still
   recompute the scale and preserve rotation.
+- Retained sprites preserve opacity when their tint or position changes.
+  Sending RGB to pyglet reset alpha to 255 after each opacity update; the
+  backend now sends one RGBA value, so fades actually reach transparency.
 
 ## 0.3.2 — 2026-09-16
 

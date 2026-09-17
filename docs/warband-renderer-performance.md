@@ -66,3 +66,21 @@ Sprite journey compares movement, resizing, image-dimension swaps and rotation
 against fresh windows. All eight native backend tests pass and captured shapes,
 empty frames and rotated sprites were inspected. Repeat battle timings with
 the corrected measurement wrapper before accepting a performance claim.
+
+The corrected-wrapper comparison remains above the target: released 0.3.2
+has late p50 10.9 / p95 18.4 ms; candidate `829b4cf` has 10.5 / 18.5 ms.
+Whole-run p95 is 17.8 versus 17.1 ms. These small differences are insufficient
+to accept W10. No performance acceptance is inferred from this comparison.
+
+Inspecting the repeated colour uploads exposed a correctness bug: pyglet's RGB
+setter resets alpha to 255. A public native Sprite test failed with rendered
+RGB `(127, 255, 63)` where opacity zero required black. Sending the desired
+RGBA together instead of updating opacity and then RGB makes the test pass
+at 0, 64, 128 and 255 opacity after movement. The quarter-opacity frame was
+opened and inspected. This also removes the two conflicting colour uploads
+on every fading sprite update.
+
+The complete engine suite passes **398 tests in 19.16 s**, including native
+tests on the awake display (`docs/evidence/render-shapes/engine-tests.log`).
+This verifies the current candidate, not the still-open game timing or release
+gates.

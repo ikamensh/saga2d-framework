@@ -548,11 +548,10 @@ class PygletBackend:
         _update_transform(sprite, x + width / 2, self._flip(y + height / 2, space),
                           width / img_w, height / img_h, rotation)
         # Each pyglet setter rewrites vertex data through ctypes; a moving unit only changes its position.
-        if sprite.opacity != opacity:
-            sprite.opacity = opacity
         if sprite.visible != visible:
             sprite.visible = visible
-        color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255))
+        # Pyglet's RGB colour setter resets alpha to 255. Send both together.
+        color = (int(tint[0] * 255), int(tint[1] * 255), int(tint[2] * 255), opacity)
         if sprite.color != color:
             sprite.color = color
 
