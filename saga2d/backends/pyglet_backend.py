@@ -32,7 +32,9 @@ option is set at the top of this module.
 
 from __future__ import annotations
 
+import math
 import sys
+from itertools import chain, islice
 from typing import Any
 
 import pyglet
@@ -373,6 +375,7 @@ class PygletBackend:
             if last_used != self._frame:
                 label.delete()
                 del self._labels[key]
+        self._cull_world_groups()
         gl.glEnable(gl.GL_SCISSOR_TEST)
         gl.glScissor(*self._clip_rect)
         try:
@@ -380,6 +383,33 @@ class PygletBackend:
         finally:
             gl.glDisable(gl.GL_SCISSOR_TEST)
         self.window.flip()
+
+    def _cull_world_groups(self) -> None:
+        """Skip wholly offscreen sprite groups without changing order or ownership."""
+        cx, cy, zoom = self.camera
+        margin = 2 / zoom  # retain the filtered edge at fractional positions/scales
+        left, top = cx - margin, cy - margin
+        right = cx + self.logical_width / zoom + margin
+        bottom = cy + self.logical_height / zoom + margin
+        # Immediate geometry can share a group with retained sprites. Keep it
+        # conservatively visible; text has independent groups and is unchanged.
+        seen = {self._view_groups[key] for key in self._soups}
+        for sprite in chain(self._sprites.values(), islice(self._frame_images, self._frame_images_used)):
+            group = sprite.group.parent
+            if group._space != "world" or not sprite.visible or group in seen:
+                continue
+            width = abs(sprite.image.width * sprite.scale_x)
+            height = abs(sprite.image.height * sprite.scale_y)
+            if sprite.rotation:
+                angle = math.radians(sprite.rotation)
+                c, s = abs(math.cos(angle)), abs(math.sin(angle))
+                width, height = c * width + s * height, s * width + c * height
+            x, y = sprite.x, -sprite.y
+            if x + width / 2 >= left and x - width / 2 <= right and y + height / 2 >= top and y - height / 2 <= bottom:
+                seen.add(group)
+        for group in self._view_groups.values():
+            if group._space == "world" and group.visible != (group in seen):
+                group.visible = group in seen
 
     def poll_events(self) -> list[Event]:
         self.window.dispatch_events()

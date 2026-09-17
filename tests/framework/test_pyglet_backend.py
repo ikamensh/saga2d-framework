@@ -7,7 +7,7 @@ import sys
 import pytest
 from PIL import Image
 
-from saga2d import Camera, Game, Scene, Sprite
+from saga2d import Camera, Game, RenderLayer, Scene, Sprite
 from saga2d.testing.native_frames import tick
 
 
@@ -176,6 +176,76 @@ def test_sprite_tint_preserves_opacity_through_movement(tmp_path):
             actual = frame.getpixel((round(60 * scale), round(50 * scale)))[:3]
             expected = tuple(round(channel * alpha / 255) for channel in (127, 255, 63))
             assert all(abs(a - b) <= 1 for a, b in zip(actual, expected)), (alpha, actual, expected)
+    finally:
+        game.close()
+
+
+def test_world_culling_preserves_rotation_camera_and_mixed_drawing(tmp_path):
+    """World groups must reappear at the edge, after pan, and for immediate draws."""
+    class Map(Scene):
+        immediate = None
+
+        def on_enter(self):
+            self.camera = Camera(self.game.resolution)
+            self.game.assets.image_from_pil("red", Image.new("RGBA", (20, 60), (255, 0, 0, 255)))
+            self.game.assets.image_from_pil("green", Image.new("RGBA", (20, 20), (0, 255, 0, 255)))
+            self.body = self.add_sprite(Sprite("red", position=(-15, 60), layer=RenderLayer.OBJECTS))
+
+        def draw(self):
+            if self.immediate == "shape":
+                self.draw_rect(10, 10, 20, 20, (0, 255, 0, 255), space="world", layer=RenderLayer.OBJECTS)
+            if self.immediate == "image":
+                self.draw_image("green", 10, 10, 20, 20, space="world", layer=RenderLayer.OBJECTS)
+
+    game = Game("world culling", resolution=(200, 120), visible=False, save_dir=tmp_path)
+    try:
+        scene = Map()
+        game.push(scene)
+
+        def capture(name):
+            tick(game)
+            frame = game.backend.capture_frame().convert("RGB")
+            frame.save(tmp_path / f"{name}.png")
+            return frame
+
+        assert capture("outside").getbbox() is None
+        scene.body.rotation = 45
+        assert capture("rotated-edge").getbbox() is not None
+        scene.body.image = "green"
+        assert capture("smaller-image-outside").getbbox() is None
+        scene.body.image = "red"
+        scene.body.rotation = 0
+        scene.camera.scroll(-40, 0)
+        assert capture("panned").getbbox() is not None
+        scene.camera.zoom = 1.5
+        assert capture("zoomed").getbbox() is not None
+        scene.camera.scroll(40, 0)
+        assert capture("outside-again").getbbox() is None
+        scene.camera.zoom = 1
+        for kind in ("shape", "image"):
+            scene.immediate = kind
+            frame = capture(kind)
+            scale = frame.width / game.width
+            assert frame.getpixel((round(20 * scale), round(20 * scale))) == (0, 255, 0)
+            scene.immediate = None
+            assert capture(f"without-{kind}").getbbox() is None
+        scene.body.position = (60, 60)
+        assert capture("moved-inside").getbbox() is not None
+        scene.body.visible = False
+        assert capture("hidden").getbbox() is None
+        scene.body.visible = True
+        assert capture("visible-again").getbbox() is not None
+        scene.body.remove()
+        assert capture("removed").getbbox() is None
+        scene.add_sprite(Sprite("green", position=(50, 50), layer=RenderLayer.OBJECTS))
+        assert capture("replaced").getbbox() is not None
+        scene.add_sprite(Sprite("red", position=(-100, 50), layer=RenderLayer.OBJECTS))
+        frame = capture("shared-group")
+        scale = frame.width / game.width
+        assert frame.getpixel((round(50 * scale), round(50 * scale))) == (0, 255, 0)
+        scene.camera.scroll(-120, 0)
+        frame = capture("shared-group-panned")
+        assert frame.getpixel((round(20 * scale), round(50 * scale))) == (255, 0, 0)
     finally:
         game.close()
 

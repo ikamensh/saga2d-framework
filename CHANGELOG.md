@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- World sprite groups wholly outside the camera are omitted from the draw
+  batch, including rotated sprite extents and a filtering margin. Camera
+  movement and immediate images/shapes restore affected groups before drawing;
+  ownership, order and screen-space UI are unchanged.
 - Immediate shape drawing reuses bounded vertex buffers across frames and
   temporary layer changes. This avoids repeatedly constructing and discarding
   pyglet domains while preserving shape order, transparency and disappearance.

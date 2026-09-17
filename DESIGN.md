@@ -153,6 +153,14 @@ The backend also caches text labels across frames keyed by their content, so a H
 with dozens of labels and a few hundred highlight rectangles renders in
 a couple of milliseconds.
 
+Before submitting the batch, the backend hides world groups whose visible
+sprites are wholly outside the camera. Bounds include rotation and a filtering
+margin, and are taken from the current sprite transforms after camera updates.
+Any intersecting sprite or immediate image keeps its entire group visible;
+groups receiving immediate shapes are kept conservatively visible. Nothing
+is removed from its scene or reordered. Screen-space UI and independent text
+groups retain their existing draw path.
+
 Text measurement caches physical glyph dimensions at the rounded raster size;
 logical dimensions are calculated using the current viewport scale at return.
 Caching the already-divided result would conflate different logical font sizes

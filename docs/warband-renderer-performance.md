@@ -84,3 +84,24 @@ The complete engine suite passes **398 tests in 19.16 s**, including native
 tests on the awake display (`docs/evidence/render-shapes/engine-tests.log`).
 This verifies the current candidate, not the still-open game timing or release
 gates.
+
+## Offscreen group probe
+
+The exact Warband battle supplied 1,398 path requests. A bounded neighbour-grid
+prototype preserved every path and reduced isolated path work by about 10–12%,
+but did not bring the battle under budget. No model/path change was adopted.
+
+A separate rendering-only probe skips world groups when all their visible
+sprites fall outside the camera. Groups containing immediate shapes remain
+visible. Sprite extents include rotation and a filtering margin. On unchanged
+model code and engine `830d69f`, late p95 becomes **15.6 ms**, while whole-run
+p95 remains **16.2 ms**. The final crowded frame is byte-for-byte equal to the
+unculled frame, and was opened. This is promising but not complete acceptance.
+
+Before adopting culling: native checks must cover camera pan/zoom, rotation
+reaching across the viewport edge, visibility and removal, changing images,
+and immediate images/shapes sharing a group with offscreen retained sprites.
+Keep screen-space UI and independent text groups unaffected. Re-run the same
+battle with culling enabled/disabled on the implemented candidate, with both
+late and whole-run percentiles recorded. All rendering and consumer checks
+remain required before a release.
