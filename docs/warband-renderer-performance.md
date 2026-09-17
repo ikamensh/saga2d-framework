@@ -148,3 +148,36 @@ compares release 0.3.2 with `59b6967`: 360 unprofiled frames have p50/p95
 identical. Both native map frames were opened; no shared broad performance
 claim is inferred from this small single scene. Evidence is in Tribes'
 `docs/evidence/wb004-engine/`.
+
+## Accepted battle timing
+
+Candidate `ebd346c` passes the unchanged W10 threshold: **720 frames p50
+9.0 ms / p95 15.58 ms**, with late p50 **8.4 ms / p95 15.1 ms**. The first
+large pathfinding burst still reaches 109 ms; this percentile pass is not a
+claim that startup spikes disappeared. Compare the corrected release baseline
+(whole p95 17.8 ms) under the same 1280×800, Retina-2, unpaced timed loop and
+25%-paced asset warmup. No profiler, simultaneous heavy local job, reduced
+army, disabled AI/fog/HUD, larger atlas or model optimization was used.
+
+The final 144-unit world digest remains
+`51df29e630e6439a147f9115f2b7c47d7feaebddc7b48d02fe96889be6e3baf2`.
+The crowd frame is byte-identical to the culling-only frame and was opened.
+Evidence: Warband `docs/evidence/melee/mixed-unchanged-soups/metadata.json`
+and its adjacent log. The release-version engine suite passes **403 tests in
+25.02 s**, including all 14 native checks. Consumer and distribution checks
+are required below before publishing.
+
+Tribes' small screenshot difference is confined to its pulsing cursor glow: its
+requested opacity now works instead of being reset to opaque by the old RGB
+setter. The scene and model are unchanged; the native frames were inspected.
+
+Final consumers: Warband **1048 passed, 12 skipped** with its unchanged
+simulation fingerprint; Tribes **189 passed**. Its real keyboard/mouse
+victory, leaderboard, restart and storage-error journey passes, with native
+results and leaderboard frames inspected. Final human-sword and dwarf-hammer
+Warband captures pass at normal/near/far zoom with all eight facings; native
+matrices were inspected. Existing tutorial-alert overflow and Tribes' title
+edge warning are retained observations, not renderer regressions addressed here.
+
+Saga2D 0.3.3 is the compatible release prepared for these fixes. Distribution
+and PyPI receipts are recorded after verifying the exact immutable artifacts.

@@ -74,9 +74,11 @@ scenes. No universal entity limit, native rewrite or FPS gain is assumed.
 
 Started during WB-004 acceptance on `codex/wb004-render-shapes`.
 [Acceptance and current evidence](docs/warband-renderer-performance.md) cover
-the recovered shape-buffer candidate, unchanged sprite transform uploads and
-a native opacity bug found during that review. The Warband performance gate
-remains open; no release or general renderer-speed claim is accepted yet.
+recovered shape/text reuse, unchanged uploads, camera culling, redundant GL
+state and a native opacity bug found during that review. Warband now passes
+its full-run gate at p95 15.58 ms (baseline 17.8 ms), with identical crowd
+pixels and simulation state. Consumer/release acceptance is being completed;
+the broader scene matrix and long-run resource audit remain separate work.
 
 Depends on S2D-001/002. Review text-slot and shape-buffer candidates first.
 Optimize only measured hot paths: changing labels, short-lived layer/order

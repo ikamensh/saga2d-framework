@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.3 — 2026-09-17
 
 - Text labels reuse bounded slots by font, size, anchors and layer while their
   content, colour and position change. Hidden slots draw nothing and can return
