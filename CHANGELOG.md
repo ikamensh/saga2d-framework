@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 — 2026-09-17
+
+- The mock backend derives `scale_factor` from the window the way the pyglet
+  backend does, so `inject_resize`, `set_window_size` and `set_fullscreen` in a
+  test rasterise textures at the scale a player's desktop would. Warband's
+  startup matrix reproduces its Windows crash at match start with it: a
+  Medium map's ground images registered at one scale and redrawn at another.
+
 ## 0.3.3 — 2026-09-17
 
 - Text labels reuse bounded slots by font, size, anchors and layer while their

@@ -6,7 +6,9 @@ Tests inspect ``mock.sprites``, ``mock.rects``, ``mock.circles``,
 ``mock.sounds_playing``, ``mock.frame_count`` and feed
 input with ``inject_key`` / ``inject_click`` / ``inject_mouse_move`` /
 ``inject_scroll`` / ``inject_drag``.  Coordinates are recorded as given
-(logical space, no flip, no scaling).
+(logical space, no flip, no scaling); ``scale_factor`` follows the window
+size the way the pyglet backend's does, so textures rasterised for the
+window change with ``inject_resize`` and the display methods.
 """
 
 from __future__ import annotations
@@ -72,6 +74,7 @@ class MockBackend:
         self.fullscreen = fullscreen
         self._windowed_size = (width, height)
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
+        self._fit()
         if visible:
             self.inject_focus(True)
 
@@ -112,15 +115,27 @@ class MockBackend:
             self._windowed_size = self.window_size
         self.fullscreen = fullscreen
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
+        self._fit()
 
     def set_window_size(self, width: int, height: int) -> None:
         self.fullscreen = False
         self.window_size = self._windowed_size = (width, height)
+        self._fit()
 
     def inject_resize(self, width: int, height: int) -> None:
         """Simulate an OS content resize without changing the logical canvas."""
         self.window_size = (width, height)
+        self._fit()
         self._pending_events.append(WindowEvent("resize"))
+
+    def _fit(self) -> None:
+        """The scale the pyglet backend derives for this window: the logical canvas letterboxed into it.
+
+        Games rasterise their textures at ``scale_factor``, so a test that resizes the
+        window exercises the same paths a player's desktop does.
+        """
+        width, height = self.window_size
+        self.scale_factor = min(width / self.logical_width, height / self.logical_height)
 
     def inject_focus(self, focused: bool) -> None:
         """Simulate the window gaining or losing keyboard focus."""

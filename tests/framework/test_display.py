@@ -109,3 +109,22 @@ def test_fullscreen_preview_cancel_restores_the_actual_windowed_size(game):
     assert game.fullscreen and game.windowed_size == (940, 720)
     game.set_fullscreen(False)
     assert game.windowed_size == game.window_size == (940, 720)
+
+
+def test_the_mock_derives_the_texture_scale_from_the_window_like_the_pyglet_backend():
+    """Games rasterise textures at ``backend.scale_factor``; the OS-adjusted window decides it, not the request."""
+    game = Game('Scale', backend='mock', resolution=(1280, 800))
+    try:
+        assert game.backend.scale_factor == 1.0
+        game.backend.inject_resize(1280, 791)  # clipped under a taskbar: the height binds
+        game.tick(1 / 60)
+        assert game.backend.scale_factor == 791 / 800
+        game.set_fullscreen(True)  # 1920×1080 is wider than 16:10, so the height binds again
+        assert game.backend.scale_factor == 1080 / 800
+        game.set_fullscreen(False)
+        assert game.backend.scale_factor == 791 / 800
+        game.set_window_size((2560, 1600))
+        assert game.backend.scale_factor == 2.0
+        assert game.resolution == (1280, 800)
+    finally:
+        game._teardown()

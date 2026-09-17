@@ -28,6 +28,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-012 | Later | proposed | Add focused rendering effects only when a game proves the need |
 | S2D-013 | Later | proposed | Positional/panned audio and owned looping effects |
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
+| S2D-015 | Next | proposed | Fit the window and HUD to high-DPI desktops (Windows 4K) |
 
 ## S2D-001 — Existing branch review
 
@@ -279,3 +280,23 @@ the candidate engine explicitly installed. Restore released game environments
 afterward and follow [the engine release guide](docs/releases.md) for adoption.
 Run at most one expensive job at once. Record evidence from the final revision;
 an old report or a mock-only pass does not establish current native performance.
+
+## S2D-015 — Window fit and HUD scale on high-DPI desktops
+
+Reported 2026-09-17 from a Windows 10 desktop at 3840×2160 (Warband WB-021):
+`Game(resolution=None)` opened a window covering about half of the desktop,
+letterboxed inside its own frame, with the HUD at native pixels and so tiny;
+the first match then crashed on the scale change between the title and the
+match (fixed in Warband, covered by `tests/warband/test_startup.py`).
+Establish on a Windows session with display scaling: the units
+`screen_size()` and the window sizes report under `pyglet.options.dpi_scaling`,
+what `_fit_screen` should ask for, and how the logical canvas and
+`scale_factor` should be chosen so the HUD stays readable on a 4K desktop
+(the games lay out for 1280 wide and up; `scale_factor` ≥ 2 keeps text sharp).
+Consumers: Warband today; every game using `resolution=None` tomorrow.
+
+**Done when:** on a 4K Windows desktop the window uses the desktop, letterboxes
+only for an aspect mismatch and shows a readable HUD; the mock backend's screen
+size can be set so a startup matrix covers such desktops headlessly; the
+native package check captures a frame on a resized window (Warband already
+does). Proposed; no implementation is started.
