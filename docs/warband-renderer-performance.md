@@ -105,3 +105,22 @@ Keep screen-space UI and independent text groups unaffected. Re-run the same
 battle with culling enabled/disabled on the implemented candidate, with both
 late and whole-run percentiles recorded. All rendering and consumer checks
 remain required before a release.
+
+## Implemented culling and text reuse
+
+On `e020089`, the same battle with culling enabled gives late p95 **15.1 ms**
+and whole-run p95 **16.9 ms**. Disabling only that method gives **19.8 / 18.8
+ms** respectively. The final model digest and rendered crowd are unchanged.
+Native culling checks cover camera/rotation, shared groups, immediate draws,
+hiding, removal and return. The whole-run acceptance remains open. A 4096px
+atlas probe gives 15.0 / 16.4 ms while allocating 448 MiB of RGBA atlases; it
+is not adopted on that weak evidence.
+
+The separately recovered text-slot candidate `6ff2670` addresses another
+confirmed lifetime fault: alternating text layers retain **610,989 bytes** of
+discarded renderer cycles in 60 frames before the change. The bounded slot
+implementation passes that regression and all **13 native backend checks**.
+Fresh-window pixel comparisons include content and opacity changes, duplicate
+labels, empty text, hiding/return, anchors, layers, camera movement and zoom.
+The translucent overlapping text frame was opened. This proves correctness
+and bounded reuse; repeat battle timing before claiming a speed improvement.

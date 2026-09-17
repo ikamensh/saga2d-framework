@@ -24,8 +24,9 @@ def _display_available() -> bool:
 pytestmark = pytest.mark.skipif(not _display_available(), reason="needs a display for a hidden pyglet window")
 
 
-def test_repeated_shape_layers_do_not_accumulate_discarded_render_storage(tmp_path):
-    """Returning to two HUD layers reuses storage instead of deferring cycles to GC."""
+@pytest.mark.parametrize("drawing", ["shapes", "text"])
+def test_repeated_layers_do_not_accumulate_discarded_render_storage(tmp_path, drawing):
+    """Returning to HUD layers reuses storage instead of deferring cycles to GC."""
     import gc
 
     class Shapes(Scene):
@@ -33,7 +34,10 @@ def test_repeated_shape_layers_do_not_accumulate_discarded_render_storage(tmp_pa
 
         def draw(self):
             with self.screen_layer(self.layer):
-                self.draw_rect(20, 20, 60, 40, (255, 50, 70, 255))
+                if drawing == "shapes":
+                    self.draw_rect(20, 20, 60, 40, (255, 50, 70, 255))
+                else:
+                    self.draw_text("HP 0123456789", 20, 45, font_size=20, color=(255, 50, 70, 180))
 
     game = Game("shape lifetime", resolution=(320, 120), visible=False, save_dir=tmp_path)
     flags, enabled = gc.get_debug(), gc.isenabled()
@@ -114,6 +118,61 @@ def test_reused_shapes_match_fresh_frames_through_resize_hide_and_return(tmp_pat
         expected.save(tmp_path / f"{space}-{index}-fresh.png")
         assert actual.size == expected.size
         assert actual.tobytes() == expected.tobytes(), f"Shape pixels changed with drawing history at state {index}"
+
+
+@pytest.mark.parametrize("space", ["screen", "world"])
+def test_text_history_matches_fresh_frames_after_recolor_move_hide_and_return(tmp_path, space):
+    """Reusing labels must preserve duplicate draws, anchors, layers and complete disappearance."""
+    from saga2d import fonts
+
+    class Captions(Scene):
+        rows = ()
+
+        def on_enter(self):
+            self.camera = Camera(self.game.resolution)
+
+        def draw(self):
+            for text, x, y, size, color, anchor, layer in self.rows:
+                with self.screen_layer(layer):
+                    self.draw_text(text, x, y, font_size=size, font=fonts.REGULAR,
+                                   color=color, anchor_x=anchor, space=space)
+
+    white, blue = (255, 255, 255, 255), (70, 170, 255, 120)
+    first = (("Old", 20, 50, 24, white, "left", 0),
+             ("Old", 150, 50, 24, white, "left", 0))
+    states = ((1, first), (1.25, (("New", 30, 70, 24, blue, "left", 0),
+                                 ("Top", 45, 65, 18, white, "left", 1))),
+              (.75, ()), (1, first),
+              (.75, (("Return", 290, 80, 32, blue, "right", 0),)),
+              (1, (("Different", 40, 50, 24, blue, "left", 0),)),
+              (1, (("", 40, 50, 24, white, "left", 0),)), (1, first))
+
+    def capture(sequence):
+        game = Game("text history", resolution=(320, 120), visible=False, save_dir=tmp_path)
+        game.audio.set_volume("master", 0)
+        try:
+            fonts.load(game)
+            scene = Captions()
+            game.push(scene)
+            frames = []
+            for zoom, rows in sequence:
+                scene.camera.zoom = zoom
+                scene.camera.scroll(5, 2)
+                scene.rows = rows
+                for _ in range(3):
+                    tick(game)
+                frames.append(game.backend.capture_frame())
+                scene.camera.scroll(-5, -2)
+            return frames
+        finally:
+            game.close()
+
+    history = capture(states)
+    for index, (state, actual) in enumerate(zip(states, history, strict=True)):
+        expected = capture((state,))[0]
+        actual.save(tmp_path / f"text-{space}-{index}.png")
+        assert actual.size == expected.size
+        assert actual.tobytes() == expected.tobytes(), f"Text retained pixels from an earlier frame at state {index}"
 
 
 def test_moving_sprite_keeps_its_geometry_when_size_or_image_changes(tmp_path):

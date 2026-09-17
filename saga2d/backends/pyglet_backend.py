@@ -132,6 +132,7 @@ class PygletBackend:
         self._frame_images_used = 0
         self._labels: dict[tuple[Any, ...], tuple[Any, int]] = {}
         self._label_uses: dict[tuple[Any, ...], int] = {}
+        self._peak_labels = 0
         self._frame = 0
         self._measure_cache: dict[tuple[str, str | None, int], tuple[int, int]] = {}
         self._atlas: Any = None
@@ -371,10 +372,20 @@ class PygletBackend:
             for key, _ in sorted(idle_soups, key=lambda entry: entry[1])[:excess]:
                 vlist, _ = self._soup_lists.pop(key)
                 vlist.delete()
-        for key, (label, last_used) in list(self._labels.items()):
+        self._peak_labels = max(self._peak_labels, sum(self._label_uses.values()))
+        idle_labels = []
+        for key, (label, last_used) in self._labels.items():
             if last_used != self._frame:
+                if last_used == self._frame - 1:
+                    label.visible = False
+                idle_labels.append((key, last_used))
+        # Retain one peak frame of inactive slots, as for shapes. Returning
+        # HUD styles reuse storage; changing sizes/layers cannot grow forever.
+        excess = max(0, len(idle_labels) - self._peak_labels)
+        if excess:
+            for key, _ in sorted(idle_labels, key=lambda entry: entry[1])[:excess]:
+                label, _ = self._labels.pop(key)
                 label.delete()
-                del self._labels[key]
         self._cull_world_groups()
         gl.glEnable(gl.GL_SCISSOR_TEST)
         gl.glScissor(*self._clip_rect)
@@ -683,7 +694,7 @@ class PygletBackend:
                   space: Space = "screen", order: int = 0) -> None:
         px, py = self._to_physical(x, y, space)
         size = self._physical_font_size(font_size, space)
-        base_key = (text, font, size, tuple(color), anchor_x, anchor_y, space, order)
+        base_key = (font, size, anchor_x, anchor_y, space, order)
         use = self._label_uses.get(base_key, 0)
         self._label_uses[base_key] = use + 1
         key = base_key + (use,)
@@ -695,6 +706,12 @@ class PygletBackend:
             )
         else:
             label = entry[0]
+            if label.text != text:
+                label.text = text
+            if label.color != tuple(color):
+                label.color = tuple(color)
+            if not label.visible:
+                label.visible = True
             if (label.x, label.y) != (px, py):
                 label.position = (px, py, 0)
         self._labels[key] = (label, self._frame + 1)

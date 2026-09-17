@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Text labels reuse bounded slots by font, size, anchors and layer while their
+  content, colour and position change. Hidden slots draw nothing and can return
+  without repeated label/domain allocation.
+
 - World sprite groups wholly outside the camera are omitted from the draw
   batch, including rotated sprite extents and a filtering margin. Camera
   movement and immediate images/shapes restore affected groups before drawing;
