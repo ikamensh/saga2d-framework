@@ -24,6 +24,98 @@ def _display_available() -> bool:
 pytestmark = pytest.mark.skipif(not _display_available(), reason="needs a display for a hidden pyglet window")
 
 
+def test_repeated_shape_layers_do_not_accumulate_discarded_render_storage(tmp_path):
+    """Returning to two HUD layers reuses storage instead of deferring cycles to GC."""
+    import gc
+
+    class Shapes(Scene):
+        layer = 0
+
+        def draw(self):
+            with self.screen_layer(self.layer):
+                self.draw_rect(20, 20, 60, 40, (255, 50, 70, 255))
+
+    game = Game("shape lifetime", resolution=(320, 120), visible=False, save_dir=tmp_path)
+    flags, enabled = gc.get_debug(), gc.isenabled()
+    try:
+        scene = Shapes()
+        game.push(scene)
+        for layer in (0, 1, 0, 1):
+            scene.layer = layer
+            tick(game)
+        gc.collect(2)
+        assert not gc.garbage
+        # Deferred collection exposes allocation churn; production GC is unchanged.
+        gc.disable()
+        for index in range(60):
+            scene.layer = index % 2
+            tick(game)
+        gc.set_debug(gc.DEBUG_SAVEALL)
+        gc.collect(2)
+        retained = sum(sys.getsizeof(obj) for obj in gc.garbage)
+        assert retained < 128 * 1024, f"Discarded renderer cycles retain {retained:,} bytes after 60 frames"
+    finally:
+        gc.set_debug(flags)
+        gc.garbage.clear()
+        if enabled:
+            gc.enable()
+        gc.collect(2)
+        game.close()
+
+
+@pytest.mark.parametrize("space", ["screen", "world"])
+def test_reused_shapes_match_fresh_frames_through_resize_hide_and_return(tmp_path, space):
+    """Cached geometry preserves transparency, order and camera transforms without stale pixels."""
+    class Shapes(Scene):
+        rows = ()
+
+        def on_enter(self):
+            self.camera = Camera(self.game.resolution)
+
+        def draw(self):
+            for x, y, width, color, layer in self.rows:
+                with self.screen_layer(layer):
+                    self.draw_rect(x, y, width, 30, color, space=space)
+                    self.draw_circle(x + width, y + 15, width / 3, color, space=space)
+
+    red, blue = (255, 50, 70, 190), (50, 150, 255, 160)
+    first = ((30, 35, 60, red, 0), (60, 45, 80, blue, 0))
+    states = ((1, (0, 0), first),
+              (1.25, (10, 5), ((40, 60, 110, blue, 0), (60, 45, 40, red, 1))),
+              (.75, (20, 10), ()),
+              (1, (0, 0), first),
+              (1, (0, 0), ((20, 50, 40, blue, 4),)),
+              (1, (0, 0), ((100, 35, 60, red, 5),)),
+              (.75, (20, 10), first),
+              (1, (0, 0), ()))
+
+    def capture(sequence):
+        game = Game("shape history", resolution=(320, 180), visible=False, save_dir=tmp_path)
+        try:
+            scene = Shapes()
+            game.push(scene)
+            frames = []
+            for zoom, offset, rows in sequence:
+                scene.camera.zoom = zoom
+                scene.camera.scroll(*offset)
+                scene.rows = rows
+                for _ in range(3):
+                    tick(game)
+                frames.append(game.backend.capture_frame())
+                scene.camera.scroll(-offset[0], -offset[1])
+            return frames
+        finally:
+            game.close()
+
+    history = capture(states)
+    for index, (state, actual) in enumerate(zip(states, history, strict=True)):
+        expected = capture((state,))[0]
+        actual.save(tmp_path / f"{space}-{index}.png")
+        expected.save(tmp_path / f"{space}-{index}-fresh.png")
+        assert actual.size == expected.size
+        assert actual.tobytes() == expected.tobytes(), f"Shape pixels changed with drawing history at state {index}"
+
+
 class Portraits(Scene):
     """Draws a red square at each spot through the immediate draw_image API, like a HUD's portraits."""
 

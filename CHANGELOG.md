@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Immediate shape drawing reuses bounded vertex buffers across frames and
+  temporary layer changes. This avoids repeatedly constructing and discarding
+  pyglet domains while preserving shape order, transparency and disappearance.
+  Recovered independently from the shape portion of `238584d`.
+
 ## 0.3.2 — 2026-09-16
 
 - `Banner` keeps its title and subtitle inside the window for every frame of the

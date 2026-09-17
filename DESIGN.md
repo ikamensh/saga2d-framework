@@ -145,7 +145,11 @@ about changes.  `draw_rect` / `draw_circle` / `draw_line` /
 `draw_polygon` / `draw_text` / `draw_image` are immediate: re-issued
 every frame from `Scene.draw()` or a UI component.  The pyglet backend
 batches all immediate shapes at one order into a single triangle list
-and caches text labels across frames keyed by their content, so a HUD
+whose vertex storage is updated in place across frames. An absent order keeps
+a degenerate triangle briefly so pyglet does not discard and reconstruct its
+domain when that layer returns. The idle pool retains at most the peak number
+of simultaneously drawn shape orders; older idle entries are deleted.
+The backend also caches text labels across frames keyed by their content, so a HUD
 with dozens of labels and a few hundred highlight rectangles renders in
 a couple of milliseconds.
 

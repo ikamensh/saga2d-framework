@@ -44,3 +44,14 @@ rendering work.
 
 This is a focused S2D-003 investigation needed by WB-004. It does not complete
 the broader S2D-001 branch inventory or S2D-002 scene matrix.
+
+## Initial shape candidate
+
+The public native Scene regression on current main failed with **277,854
+bytes** of discarded cycles after 60 alternating shape-layer frames. Adapting
+only the shape changes from `238584d` makes that regression pass. All seven
+native backend checks pass, including a new comparison against fresh windows
+through geometry resizing, overlapping transparency, camera pan/zoom, hidden
+frames and return after layer churn. The existing text cache and audio path
+are unchanged. Native battle timing and consumer/release acceptance remain
+outstanding; the allocation result alone is not a performance claim.

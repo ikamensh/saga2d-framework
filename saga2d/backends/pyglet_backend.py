@@ -123,7 +123,8 @@ class PygletBackend:
         self._text_groups: dict[tuple[Space, int], Any] = {}
         self._shape_program: Any = None
         self._soups: dict[tuple[Space, int], tuple[list[float], list[int]]] = {}
-        self._soup_lists: list[Any] = []
+        self._soup_lists: dict[tuple[Space, int], tuple[Any, int]] = {}
+        self._peak_soups = 0
         self._frame_images: list[Any] = []  # pooled pyglet sprites for draw_image, reused in call order frame to frame
         self._ctrl_click = False  # a Mac Control+click in progress, reported as the right button
         self._frame_images_used = 0
@@ -327,9 +328,6 @@ class PygletBackend:
             r, g, b = (c / 255.0 for c in clear_color[:3])
             gl.glClearColor(r, g, b, 1.0)
         self.window.clear()
-        for vlist in self._soup_lists:
-            vlist.delete()
-        self._soup_lists.clear()
         self._soups.clear()
         for sprite in self._frame_images[:self._frame_images_used]:
             sprite.visible = False
@@ -342,10 +340,35 @@ class PygletBackend:
 
         self._frame += 1
         for (space, order), (positions, colors) in self._soups.items():
-            self._soup_lists.append(self._shape_program.vertex_list(
-                len(positions) // 2, GL_TRIANGLES, batch=self.batch, group=self._shape_group(space, order),
-                position=("f", positions), colors=("Bn", colors),
-            ))
+            entry = self._soup_lists.get((space, order))
+            count = len(positions) // 2
+            if entry is None:
+                vlist = self._shape_program.vertex_list(
+                    count, GL_TRIANGLES, batch=self.batch, group=self._shape_group(space, order),
+                    position=("f", positions), colors=("Bn", colors),
+                )
+            else:
+                vlist = entry[0]
+                if vlist.count != count:
+                    vlist.resize(count)
+                vlist.position[:] = positions
+                vlist.colors[:] = colors
+            self._soup_lists[(space, order)] = (vlist, self._frame)
+        self._peak_soups = max(self._peak_soups, len(self._soups))
+        idle_soups = []
+        for key, (vlist, last_used) in self._soup_lists.items():
+            if last_used != self._frame:
+                if last_used == self._frame - 1:
+                    # Keep the domain alive without drawing any pixels. With
+                    # zero vertices pyglet would immediately prune the domain.
+                    vlist.resize(3)
+                    vlist.position[:] = (0, 0, 0, 0, 0, 0)
+                idle_soups.append((key, last_used))
+        excess = max(0, len(idle_soups) - self._peak_soups)
+        if excess:
+            for key, _ in sorted(idle_soups, key=lambda entry: entry[1])[:excess]:
+                vlist, _ = self._soup_lists.pop(key)
+                vlist.delete()
         for key, (label, last_used) in list(self._labels.items()):
             if last_used != self._frame:
                 label.delete()
