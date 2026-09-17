@@ -181,3 +181,23 @@ edge warning are retained observations, not renderer regressions addressed here.
 
 Saga2D 0.3.3 is the compatible release prepared for these fixes. Distribution
 and PyPI receipts are recorded after verifying the exact immutable artifacts.
+
+## Published engine
+
+Saga2D **0.3.3** is published from commit/tag `9a1a58c` / `v0.3.3`.
+The source distribution builds the wheel; both pass strict metadata checks.
+An isolated installed-wheel scene/socket check passes, and all **14 native
+backend regressions pass against that installed wheel** (Python 3.12, current
+pyglet 2.1.16). The locked engine suite also covers pyglet 2.1.13. A separate
+fresh PyPI installation passes the same distribution check, and PyPI's file
+hashes match the exact verified artifacts:
+
+- Wheel: `4895608a488285f82a6fd060e3423cdd0ee38e8b30a84b434535bdf6217531da`
+- Source: `7ba6d5b027b944acda38c48fd136bc238ab39e7356d06992714d8c0120789497`
+
+[Engine CI 35240239742](https://github.com/ikamensh/saga2d-framework/actions/runs/35240239742)
+passes on the tagged source. Receipts are under `docs/evidence/render-shapes/`
+(`distribution.json`, `pypi-verification.json`, `wheel-native.log`).
+Warband has deliberately upgraded its pin/lock to this release; its hosted
+compatibility and downloaded-client acceptance belong to WB-004's rollout.
+S2D-003's broader resource soak is still open, without a leak/RSS claim.

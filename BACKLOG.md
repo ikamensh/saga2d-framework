@@ -77,8 +77,9 @@ Started during WB-004 acceptance on `codex/wb004-render-shapes`.
 recovered shape/text reuse, unchanged uploads, camera culling, redundant GL
 state and a native opacity bug found during that review. Warband now passes
 its full-run gate at p95 15.58 ms (baseline 17.8 ms), with identical crowd
-pixels and simulation state. Consumer/release acceptance is being completed;
-the broader scene matrix and long-run resource audit remain separate work.
+pixels and simulation state. The verified fixes are published in 0.3.3 (`9a1a58c`, `v0.3.3`);
+the broader scene matrix and long-run resource audit remain open, so this
+engine item is not marked wholly done by the focused WB-004 dependency.
 
 Depends on S2D-001/002. Review text-slot and shape-buffer candidates first.
 Optimize only measured hot paths: changing labels, short-lived layer/order
