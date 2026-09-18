@@ -489,7 +489,18 @@ rejection once raced the close). `tests/framework/test_network.py`:
 `test_a_guest_slower_than_the_match_sees_the_newest_state_not_a_growing_backlog`
 (a guest at two polls a second against a host publishing 150 KB states: dropped
 by the host on the old code, never more than ten ticks behind on the new); the
-suite 414 passed. Reaches games with their next engine upgrade.
+suite 414 passed. Released with S2D-020 and S2D-021 as **Saga2D 0.3.7** on
+2026-09-18 (tag `v0.3.7` at `76cb7cb`; wheel SHA-256
+`31c93847cb9268e8fd22a0a20d9f16e135aec905291dbfde103301715c1c7d21`, sdist
+`c7278aa8abf58e0ec1b6c8773478679f99e173355533efdaecd8433edbbe9452`; the
+installed-distribution check passed from the built wheel and again from PyPI
+in a fresh environment; engine suite 426 passed; Warband main `7f163cf` passes
+its whole suite on the candidate, 1,239 passed). The tagged commit's CI run
+(35365105271) failed only on 0.3.6's new desktop-units test, which imports the
+pyglet backend on a headless runner; `c0ddeaa` skips it there like the other
+native tests and [Tests 35365267852](https://github.com/ikamensh/saga2d-framework/actions/runs/35365267852)
+is green. The shared server moves to 0.3.7 in the rollout the WB-021 session
+runs (Warband pins it there).
 
 ## S2D-020 — Online clients take compressed frames
 
