@@ -29,6 +29,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-013 | Later | proposed | Positional/panned audio and owned looping effects |
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
 | S2D-015 | Next | proposed | Fit the window and HUD to high-DPI desktops (Windows 4K) |
+| S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
 
 ## S2D-001 — Existing branch review
 
@@ -300,3 +301,31 @@ only for an aspect mismatch and shows a readable HUD; the mock backend's screen
 size can be set so a startup matrix covers such desktops headlessly; the
 native package check captures a frame on a resized window (Warband already
 does). Proposed; no implementation is started.
+
+## S2D-016 — Bound the batch's groups and vertex domains
+
+Found 2026-09-18 by Warband's WB-009 (`tools/perf.py`, the 150-unit reference
+battle on the M4 reference Mac, Saga2D 0.3.3, 1280×800): over 720 frames the
+pyglet batch grew from 129 to 347 top groups, 359 to 969 groups and 165 to 489
+vertex domains, and its draw list from 703 to 1474 entries. Every new domain
+builds a `VertexList` class (properties, functions, descriptors: the tracked
+objects grew from 159,691 to 218,012 in twelve seconds, `function +6859`,
+`property +2946`), so the collector's full passes walk more each time: gen2
+pauses went from 17 ms to 41 ms across the run, one every two seconds, which
+is the battle's p99 (26–45 ms frames; the p95 is the world step's path
+planning). The draw list is rebuilt whenever a group changes, so
+`Batch._update_draw_list` (70,804 `visit`s in 120 profiled frames, about
+2.5 ms a frame under the profiler) grows with it too. Warband freezes its
+match out of the collector once warmed up, which cuts a pause to about
+10 ms; the growth itself is the engine's.
+
+Likely cause: y-sorted sprite groups are keyed by `(space, order)` where
+`order` carries the y band (`layers.py`, `Y_SORT_STEP` 8 px), so every band a
+sprite ever crosses gets a group and, per texture and program, a domain that
+is never released. **Done when:** a battle that wanders over the whole map
+keeps a bounded set of groups and domains (bands reused, empty ones released
+or pooled), the tracked-object count of the reference battle stays flat over
+a minute, and the draw list length stays within a small multiple of the
+visible bands; measured with Warband's `tools/perf.py` (`batch:` and
+`tracked objects:` lines) before and after, and the reference gate re-run.
+
