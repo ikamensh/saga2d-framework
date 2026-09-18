@@ -325,6 +325,28 @@ scalings the result is the report: Warband's whole map floats in the middle of
 a 3760×2040 canvas and the HUD is drawn at native pixels, half the size of the
 taskbar's text at 200 %.
 
+**Done 2026-09-18**, commit `6ca9360`, released as **Saga2D 0.3.6** (tag
+`v0.3.6`, wheel SHA-256
+`c7b4139f028a3fc83bed666c05d4bbd52b2267815f240698114e7c01220889b2`; the
+installed-distribution check passed from the built wheel and from PyPI) and
+carried into 0.3.7, which Warband and the shared server run
+([rollout](../saga-online/docs/engine-037-rollout.md)). Every criterion below
+holds. On the real 3840×2160 desktop the engine probe gives canvas 1840×960,
+framebuffer 3680×1920 and `scale_factor` 2.0 at 200 %; 2480×1320 at 1.5 at
+150 %; 2506×1360 in a 3760×2040 window at 1.5 at 100 %. Warband's title, New
+game screen and match were looked at from source on the candidate at each
+scaling and from the published 0.2.26 build at 200 % (Warband's
+`docs/evidence/win4k/`). Found on the way and fixed with it: Windows cascades
+new windows, which hung the fitted window under the taskbar, so a new window
+is centred there (and since `7d508d3`, unreleased, an oversized window keeps
+its title bar on the screen). 422 tests passed on the Mac with the native
+ones; the Mac's windows are as before. The new boundary test imports the
+pyglet backend, which needs a display: the Linux CI run was red until the
+review session added the skip the other native tests use (`c0ddeaa`); I had
+not checked that run after pushing the release. The test boxes that made the
+measurement possible are described in
+[saga-online](../saga-online/docs/windows-test-box.md).
+
 **Acceptance (recorded 2026-09-18 before implementation):**
 
 1. Desktop units. `screen_size`, `window_size`, `windowed_size`,
