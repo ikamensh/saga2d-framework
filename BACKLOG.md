@@ -360,6 +360,27 @@ snake), because the recipe (`packaging/game.spec`, `game.iss`) names no icon.
 A build should carry the engine's own mark unless the game supplies its
 picture; Warband supplies one (WB-026). Consumers: every packaged game.
 
+**Done 2026-09-18**, commits `7f13be7`, `7a7924f`, `aea32d7`; released as
+**Saga2D 0.3.5** (tag `v0.3.5`, wheel SHA-256
+`6374965477152dc76a496ca38cd0b83c74d75111f2797fe2ac23461712557de2`, sdist
+`ec39f66e178beff6ae1b68e57314f855d9b39bbaf6011b3f853d7e0ae1d0eed2`;
+[Tests 35333175476](https://github.com/ikamensh/saga2d-framework/actions/runs/35333175476);
+the installed-distribution check passed from the built wheel and again from
+PyPI in a fresh environment). Every criterion below holds: 413 tests pass
+(nine new in `tests/framework/test_packaging.py`); the default mark and
+Warband's picture looked at in both platform shapes at every stored size on
+light and dark ground; a Warband bundle built from the candidate on the
+reference Mac passed `verify` with the icon check and shows the picture in
+Finder; Warband's native checks on the released engine are green on Windows
+and macOS ([35337133223](https://github.com/ikamensh/warband/actions/runs/35337133223)),
+and the CI-built executable and Inno Setup installer hold all seven images of
+the converted `.ico` byte for byte. Found on the way: `*.png` is git-ignored
+here, which also keeps a file out of the sdist and so out of the wheel; the
+default picture has its own exception in `.gitignore` and the distribution
+check now requires it. Tribes, Shardbound and Ninefold get the engine's mark
+when their mains move to 0.3.5 (the shared server already runs it:
+[saga-online](../saga-online/docs/engine-035-rollout.md)).
+
 **Acceptance (recorded 2026-09-18 before implementation):**
 
 1. `GamePackage.icon` is an optional path to the game's picture: a square
