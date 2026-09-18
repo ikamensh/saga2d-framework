@@ -1,7 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.3.8 — 2026-09-18
 
+- Rooms of more than two seats (S2D-011, for Warband's free-for-all): a
+  `GameSpec` says how many seats a room of a match has (`seats(match)`) and
+  whether a seat must be connected for play to go on (`needed(match, player)`),
+  two seats, every one needed, unless it says otherwise. `join` takes the next
+  free seat; a room is ready when every needed seat is connected and somebody
+  is in it, so a player who is out of the match may leave without pausing the
+  rest. The welcome and every state carry the room's `seats` and how many are
+  `present`; the lobby says "Waiting for players · k of N" for larger rooms.
+- Compatible migration, no protocol bump: a client's hello says how many seats
+  it handles (`seats`, two when absent). A room larger than that is refused as
+  incompatible, with an update message, before a seat is taken; clients from
+  before this release keep playing in rooms of two and ignore the new fields.
+  `OnlineClient` handles four (`saga2d.online.SEATS`) and keeps `seats` and
+  `present`.
+- `saga2d.testing.online` registers `counter-seats-v1`, a counter of two to
+  four seats whose players can drop out.
 - The centring of a new window under Windows (0.3.6) keeps a window larger
   than its screen from starting with its title bar above the screen's top:
   a fixed 1280×800 game on a 1366×768 laptop opened at y −16.
