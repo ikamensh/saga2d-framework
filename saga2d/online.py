@@ -110,9 +110,10 @@ class OnlineClient:
 
     async def _session(self, hello):
         self._pause_orders()
+        # Compressed frames: a real-time state is 100 KB of JSON ten times a second, and deflate takes it to an eighth.
         async with connect(self.endpoint, open_timeout=10, close_timeout=1,
                            ping_interval=5, ping_timeout=10, max_size=MAX_STATE,
-                           max_queue=4, compression=None, proxy=None) as connection:
+                           max_queue=4, compression='deflate', proxy=None) as connection:
             await connection.send(json.dumps(hello, allow_nan=False))
             receive = asyncio.create_task(connection.recv())
             try:

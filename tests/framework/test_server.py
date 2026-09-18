@@ -294,3 +294,29 @@ def test_suspended_campaigns_leave_memory_and_resume_days_later_even_after_resta
             late.send(json.dumps({'type': 'resume', 'protocol': 1, 'game': campaign,
                                   'room': seat['room'], 'resume_token': seat['resume_token']}))
             assert 'not found' in receive(late, 'reject')['error']
+
+
+def test_a_realtime_room_publishes_on_its_clock_not_on_every_order(server_url):
+    """A seat may send twenty orders a second.  Each one used to publish the whole state to both seats at once, so
+    a busy seat tripled what the room cost the server and the other seat's link; the next tick's state, at most
+    50 ms later, carries the orders just as well.  Turn-based rooms have no clock and still answer at once."""
+    game = 'counter-realtime-v1'
+    with connect(server_url, proxy=None) as host, connect(server_url, proxy=None) as guest:
+        room = handshake(host, game=game)
+        handshake(guest, 'join', game=game, room=room['room'])
+        receive(guest, predicate=lambda message: message['ready'])
+        started = receive(host, predicate=lambda message: message['ready'])
+        for _ in range(30):
+            command(guest, {'action': 'add'})
+        states = [started]
+        while states[-1]['state']['counts'][1] < 30:
+            states.append(receive(host))
+        ticks = states[-1]['state']['ticks'] - started['state']['ticks']
+        published = states[-1]['revision'] - started['revision']  # every publication is a revision, read or replaced unread
+        assert published <= ticks + 1, f'{published} states built for 30 orders in {ticks} ticks'
+    with connect(server_url, proxy=None) as host, connect(server_url, proxy=None) as guest:
+        room = handshake(host, game=GAME)
+        handshake(guest, 'join', game=GAME, room=room['room'])
+        receive(host, predicate=lambda message: message['ready'])
+        command(guest, {'action': 'add'})
+        assert receive(host, predicate=lambda message: message['state']['counts'] == [0, 1])

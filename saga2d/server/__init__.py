@@ -141,6 +141,7 @@ class Room:
     disconnected_at: float = field(default_factory=time.monotonic)
     ticks: int = 0
     checkpointed_at: float = 0.
+    unpublished: bool = False  # a realtime room took an order since its last state went out
 
     @property
     def ready(self):
@@ -148,6 +149,7 @@ class Room:
 
     def publish(self):
         self.revision += 1
+        self.unpublished = False
         for player, peer in enumerate(self.peers):
             if peer is not None:
                 peer.send({'type': 'state', 'player': player, 'revision': self.revision,
@@ -282,7 +284,12 @@ class RoomServer:
         if revision is not None and (type(revision) is not int or revision != room.revision):
             raise CommandError('The match changed. Please try that order again.')
         room.match.apply(player, message['command'])
-        room.publish()
+        if self.games[room.game].realtime:
+            # The room's next tick, at most 50 ms away, tells both seats: a state per order would let a seat's
+            # twenty orders a second triple what the room costs the server and the other seat's link.
+            room.unpublished = True
+        else:
+            room.publish()
         self.checkpoint(room, force=not self.games[room.game].realtime)
 
     async def handle(self, websocket):
@@ -372,7 +379,7 @@ class RoomServer:
                     elif self.games[room.game].realtime:
                         room.match.step()
                         room.ticks += 1
-                        if room.ticks % 2 == 0:
+                        if room.ticks % 2 == 0 or room.unpublished:
                             room.publish()
                         self.checkpoint(room)
                 except Exception:

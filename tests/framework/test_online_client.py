@@ -133,3 +133,37 @@ def test_connection_break_resumes_same_seat_and_authoritative_turn(server_url):
         worker.join(timeout=5)
         listener.close()
         assert not worker.is_alive()
+
+
+def test_the_client_asks_for_compressed_frames_and_reads_a_large_state_through_them():
+    """A real-time game's state is 100 KB of JSON ten times a second.  The room server has always offered
+    permessage-deflate (it shrinks such a state eight times over); the client used to decline it."""
+    import json
+    from websockets.exceptions import ConnectionClosed
+    from websockets.sync.server import serve
+
+    state = {'ballast': 'The quick brown fox. ' * 5000}
+    seen = {}
+
+    def room(websocket):
+        seen['offer'] = websocket.request.headers.get('Sec-WebSocket-Extensions', '')
+        seen['agreed'] = [extension.name for extension in websocket.protocol.extensions]
+        websocket.recv()
+        websocket.send(json.dumps({'type': 'welcome', 'room': 'abc', 'resume_token': 't', 'player': 0, 'retention': 900}))
+        websocket.send(json.dumps({'type': 'state', 'player': 0, 'revision': 1, 'ready': False, 'state': state}))
+        try:
+            websocket.recv()  # until the client hangs up
+        except ConnectionClosed:
+            pass
+
+    with serve(room, '127.0.0.1', 0) as server:
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.socket.getsockname()[1]
+        client = OnlineClient('counter-v1', endpoint=f'ws://127.0.0.1:{port}')
+        try:
+            pump(client, until=lambda: client.state is not None)
+            assert 'permessage-deflate' in seen['offer'] and seen['agreed'] == ['permessage-deflate']
+            assert client.state == state
+        finally:
+            client.close()
+        server.shutdown()

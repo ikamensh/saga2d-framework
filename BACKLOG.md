@@ -32,6 +32,8 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
 | S2D-017 | Next | ready | Cut the per-frame cost of the y-sorted batch and the shape soups in a crowded scene |
 | S2D-019 | Next | done | LAN matches: a guest slower than the match gets the newest state, not a growing backlog |
+| S2D-020 | Next | done | Online clients take compressed frames: a real-time state is an eighth of its bytes on the wire |
+| S2D-021 | Next | done | A realtime room publishes on its clock, not on every order |
 
 ## S2D-001 — Existing branch review
 
@@ -475,3 +477,35 @@ rejection once raced the close). `tests/framework/test_network.py`:
 (a guest at two polls a second against a host publishing 150 KB states: dropped
 by the host on the old code, never more than ten ticks behind on the new); the
 suite 414 passed. Reaches games with their next engine upgrade.
+
+## S2D-020 — Online clients take compressed frames
+
+Found 2026-09-18 by the Warband code review. `OnlineClient` connected with
+`compression=None`, declining the permessage-deflate the room server has always
+offered. A Warband state is 70 to 140 KB of JSON ten times a second, so each
+seat of a match drew 6 to 11 Mbit/s from the public server for as long as it
+lasted, and a room cost the server's uplink twice that. The same state deflates
+to about 10 KB with the library's settings (window 12 bits, memory level 5) in
+under half a millisecond.
+
+**Done 2026-09-18** on branch `review`: the client asks for `deflate`; the
+server needs no change. `tests/framework/test_online_client.py`:
+`test_the_client_asks_for_compressed_frames_and_reads_a_large_state_through_them`
+(a room that records the handshake: no offer on the old code). Reaches players
+with the games' next engine upgrade; an older client keeps working
+uncompressed.
+
+## S2D-021 — A realtime room publishes on its clock
+
+Found 2026-09-18 by the same review. `RoomServer.apply` published the whole
+state to both seats after every accepted order. For a turn-based room that is
+the protocol; a realtime room publishes every other tick anyway, a seat may
+send twenty orders a second, and every publication builds and encodes the
+game's snapshot once per seat: one busy seat tripled what its room cost the
+single-threaded server (thirty states built for thirty orders within one tick
+in the test) and what the other seat had to download.
+
+**Done 2026-09-18** on branch `review`: an order marks a realtime room
+unpublished and its next tick, at most 50 ms later, publishes; turn-based
+rooms still answer at once. `tests/framework/test_server.py`:
+`test_a_realtime_room_publishes_on_its_clock_not_on_every_order`.
