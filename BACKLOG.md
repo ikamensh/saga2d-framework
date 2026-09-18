@@ -351,3 +351,38 @@ bars are pushed without a Python call per triangle, and the reference battle's
 median frame drops by the measured amount with the frame-pacing and Warband
 gates re-run before a release; the game side keeps its own draw calls.
 
+
+## S2D-018 — Built games carry an icon
+
+Asked for 2026-09-18: the Windows executable, its installer and the Mac app
+bundle of every game show PyInstaller's default picture (the Python-coloured
+snake), because the recipe (`packaging/game.spec`, `game.iss`) names no icon.
+A build should carry the engine's own mark unless the game supplies its
+picture; Warband supplies one (WB-026). Consumers: every packaged game.
+
+**Acceptance (recorded 2026-09-18 before implementation):**
+
+1. `GamePackage.icon` is an optional path to the game's picture: a square
+   PNG, 1024 px or larger, painted to the edges. A game that names none gets
+   the engine's mark, `saga2d/packaging/icon.png`, committed together with
+   the script that draws it (`tools/make_icon.py`) and shipped in the wheel.
+2. A picture that is not square or is smaller than 1024 px stops the build
+   with an error that names the file and its size; no silent rescue.
+3. Windows: the executable carries the picture as its first icon group in
+   the sizes 16, 24, 32, 48, 64, 128 and 256 (Explorer, the taskbar and the
+   pyglet window read that group), and the installer shows it as well;
+   shortcuts take it from the executable.
+4. macOS: the bundle holds an `.icns` that `CFBundleIconFile` names, shaped to
+   the platform's rounded square with its margin, so the same edge-to-edge
+   picture suits both systems.
+5. The build manifest records the picture's and the converted file's SHA256;
+   `verify` fails a build whose executable (Windows) or bundle (macOS) does
+   not carry exactly the converted icon.
+6. Tests without PyInstaller: the conversion's sizes, the Mac shape's
+   transparent corners, both refusals, the manifest record, the verify check
+   on a fixture; the wheel check (`tools/check_distribution.py`) finds the
+   default picture in the installed distribution.
+7. Looked at: the default mark at 16, 32, 64, 256 and 1024 px on light and
+   dark ground; a bundle built from the candidate engine on the reference Mac
+   with its Finder thumbnail; Warband's native checks on Windows and macOS
+   green on the released engine.
