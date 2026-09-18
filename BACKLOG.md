@@ -24,7 +24,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-008 | Next | proposed | Explicit asset replacement and bounded resource lifetime |
 | S2D-009 | Next | proposed | Extend installed-wheel native regression coverage |
 | S2D-010 | Later | proposed | Make simulation/publication timing explicit and measurable |
-| S2D-011 | Later | proposed | Generalize room seats for Warband online FFA |
+| S2D-011 | Next | in progress | Generalize room seats for Warband online FFA |
 | S2D-012 | Later | proposed | Add focused rendering effects only when a game proves the need |
 | S2D-013 | Later | proposed | Positional/panned audio and owned looping effects |
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
@@ -211,6 +211,42 @@ behavior for existing games. Decide protocol migration explicitly.
 **Done when:** real three-/four-client journeys cover full rooms, disconnected
 seats, rejoin, restart recovery and departure, with all existing two-player
 consumer journeys passing. Spectators and rollback are separate requirements.
+
+**Started 2026-09-18** for Warband WB-012 (Ilya: the online items "later is
+now"), branch `room-seats` (worktree `../saga2d-seats`).
+
+**Acceptance (recorded 2026-09-18 before implementation):**
+
+1. A game's registration says how many seats a room of a match has
+   (`GameSpec.seats(match)`, two unless it says otherwise) and whether a seat
+   must be connected for play to go on (`GameSpec.needed(match, player)`,
+   every seat unless it says otherwise). `join` takes the next free seat and
+   is refused when every seat is claimed; `resume` finds any seat's token;
+   checkpoints, suspension and restart keep every seat's token.
+2. A room is ready when every needed seat is connected and at least one seat
+   is: a player who is out of the match may leave without pausing the rest,
+   may come back, and a room nobody is in still expires.
+3. Protocol migration, compatible, no protocol bump. A client's hello says how
+   many seats it handles (`seats`, two when absent; the old client refuses a
+   welcome to any seat but 0 or 1). Creating, joining or resuming a room with
+   more seats than that is refused as incompatible, with an update message,
+   before any seat is taken. Two-seat rooms behave as before for old and new
+   clients. The welcome and every state carry the room's `seats` and how many
+   are `present`; the old client ignores both.
+4. The online client sends its capability and keeps `seats` and `present`;
+   the shared lobby says "Waiting for players · k of N" for rooms of more than
+   two and keeps its two-seat wording otherwise.
+5. Proof: the counter test game gains a flavour of two to four seats
+   (`counter-seats-v1`, seats from its options). Real three- and four-client
+   journeys against the production server process cover a full room, a
+   refused extra join, a disconnected needed seat pausing the room, rejoin, a
+   restart that keeps every seat's token, and a seat no longer needed leaving
+   without pausing. An old client's hello is refused from a four-seat room
+   and accepted into a two-seat one. Every existing server, client and lobby
+   test passes unchanged.
+6. Released as Saga2D 0.3.8 by [the release guide](docs/releases.md); Tribes,
+   Shardbound and Warband pin it with their suites green before the server
+   rollout that hosts it.
 
 ## S2D-012 — Small rendering-effect additions
 
