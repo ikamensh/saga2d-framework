@@ -30,6 +30,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
 | S2D-015 | Next | proposed | Fit the window and HUD to high-DPI desktops (Windows 4K) |
 | S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
+| S2D-017 | Next | ready | Cut the per-frame cost of the y-sorted batch and the shape soups in a crowded scene |
 
 ## S2D-001 — Existing branch review
 
@@ -328,4 +329,25 @@ or pooled), the tracked-object count of the reference battle stays flat over
 a minute, and the draw list length stays within a small multiple of the
 visible bands; measured with Warband's `tools/perf.py` (`batch:` and
 `tracked objects:` lines) before and after, and the reference gate re-run.
+
+## S2D-017 — Per-frame cost of the y-sorted batch and the shape soups
+
+Measured 2026-09-18 with Warband's WB-009 (`tools/perf.py`, the 150-unit
+reference battle, M4 reference Mac, Saga2D 0.3.3, 1280×800, unpaced): a
+median frame is 9.3 ms, of which `end_frame` is 4.5 ms (`batch.draw` 2.6,
+`window.flip` 1.2, the soups and labels the rest), `view.sync` 1.55, the
+scene's draw 1.1 and the UI's 0.9; frames with a world step are 12.6 ms at
+p50 and 19.3 at p95, so the late p95 is 16.7–18.1 ms across the reference,
+four-player, pan-zoom and deaths scenarios against the 16 ms gate. In the
+renderer: pyglet's `Batch._update_draw_list` runs whenever the y-sort moved a
+sprite between groups, which in a battle is every frame (70,804 `visit`s in
+120 profiled frames, about 2.5 ms a frame under the profiler; S2D-016 makes
+the walk longer as groups accumulate); the immediate-mode shapes go through
+`_push_triangles` in Python (113,849 calls in 120 frames: 950 triangles a
+frame, most of them the 127 `draw_box` health bars over the wounded), about
+1 ms a frame. **Done when:** a y-sort change no longer rebuilds the whole draw
+list every frame (or the rebuild is bounded to the touched groups), boxes and
+bars are pushed without a Python call per triangle, and the reference battle's
+median frame drops by the measured amount with the frame-pacing and Warband
+gates re-run before a release; the game side keeps its own draw calls.
 
