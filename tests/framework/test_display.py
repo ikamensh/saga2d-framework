@@ -4,6 +4,7 @@ import pytest
 
 from saga2d import Anchor, Button, Game, Scene
 from saga2d.backends.mock_backend import MockBackend
+from tests.framework.test_pyglet_backend import _display_available
 
 
 def test_window_and_fullscreen_changes_preserve_the_playable_canvas():
@@ -192,6 +193,7 @@ class ScaledWindow:
     height = property(lambda self: self.size[1])
 
 
+@pytest.mark.skipif(not _display_available(), reason="importing the pyglet backend opens a display connection (none on a headless CI runner)")
 def test_the_pyglet_backend_speaks_desktop_units_on_a_scaled_windows_desktop(monkeypatch):
     """Measured on 3840×2160 at 200 %: pyglet says 3680×1920 px and scale 2; the game must see 1840×960 units."""
     from saga2d.backends.pyglet_backend import PygletBackend
