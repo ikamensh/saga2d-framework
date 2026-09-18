@@ -378,6 +378,19 @@ a minute, and the draw list length stays within a small multiple of the
 visible bands; measured with Warband's `tools/perf.py` (`batch:` and
 `tracked objects:` lines) before and after, and the reference gate re-run.
 
+**Measured again 2026-09-18** (150 y-sorted sprites wandering over 3,000
+world units of height, six images, hidden native window, 900 frames): the
+view groups level off at the number of bands the sprites can stand in (373 of
+375), with three batch groups and one vertex domain each (1,119 and 373), and
+stay there; tracked objects level off with them. So the growth is bounded by
+bands × textures, not endless, and what it costs is structural: pyglet gives
+every group its own vertex domain, so every occupied band is a VAO, a buffer
+and a draw call of its own, and an emptied band keeps its three groups because
+`Batch._update_draw_list` only prunes groups it visits, which the culled ones
+never are. Releasing empty bands would trim memory, not the per-frame cost;
+that needs the y-sorted layer drawn from one ordered buffer instead of a group
+per band (S2D-017's territory).
+
 ## S2D-017 — Per-frame cost of the y-sorted batch and the shape soups
 
 Measured 2026-09-18 with Warband's WB-009 (`tools/perf.py`, the 150-unit
