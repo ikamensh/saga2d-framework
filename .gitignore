@@ -11,5 +11,6 @@ dist/
 .claude/*
 !.claude/launch.json
 *.png
+!saga2d/packaging/icon.png
 *.gif
 docs/evidence/
