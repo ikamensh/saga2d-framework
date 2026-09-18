@@ -301,7 +301,52 @@ Consumers: Warband today; every game using `resolution=None` tomorrow.
 only for an aspect mismatch and shows a readable HUD; the mock backend's screen
 size can be set so a startup matrix covers such desktops headlessly; the
 native package check captures a frame on a resized window (Warband already
-does). Proposed; no implementation is started.
+does).
+
+**Measured 2026-09-18** on a Windows Server 2022 test box over RDP, pyglet
+2.1.16 (`dpi_scaling` "platform"), Saga2D 0.3.5, the published Warband build
+(frames and reports under Warband's `docs/evidence/win4k/`):
+
+| Desktop | DPI-unaware screen | pyglet screen | `screen.get_scale()` | a 1280×800 window | `Game(resolution=None)` |
+|---|---|---|---|---|---|
+| 1408×1252 at 100 % | 1408×1252 | 1408×1252 | 1.0 | 1280×800 px | canvas and window 1328×1132, `scale_factor` 1.0 |
+| 3840×2160 at 100 % | 3840×2160 | 3840×2160 | 1.0 | 1280×800 px | canvas and window 3760×2040, `scale_factor` 1.0 |
+| 3840×2160 at 200 % | 1920×1080 | 3840×2160 | 2.0 | 1280×800 px, a quarter of its intended area | canvas and window 3760×2040, `scale_factor` 1.0 |
+
+pyglet reports physical pixels on Windows and takes window sizes in physical
+pixels, with the desktop's scale beside them; the backend ignores that scale
+(`screen_size` promises logical units and returns pixels; `create_window`
+opens a fixed-resolution game at half size on a 200 % desktop), and
+`_fit_screen` turns whatever the screen measures into the canvas. At both 4K
+scalings the result is the report: Warband's whole map floats in the middle of
+a 3760×2040 canvas and the HUD is drawn at native pixels, half the size of the
+taskbar's text at 200 %.
+
+**Acceptance (recorded 2026-09-18 before implementation):**
+
+1. Desktop units. `screen_size`, `window_size`, `windowed_size`,
+   `set_window_size` and the size a fixed-resolution game opens at are in the
+   desktop's own units on every platform: points on macOS as today, physical
+   pixels divided by the desktop's scale on Windows and X11. `scale_factor`
+   then carries the desktop's scale: a 1280×800 game on a 200 % desktop opens
+   2560×1600 px with `scale_factor` 2.0.
+2. `Game(resolution=None)` on 3840×2160 at 200 % gives a canvas of about
+   1840×960 at `scale_factor` 2.0, its window inside the work area; at 150 %
+   about 2480×1320 at 1.5.
+3. A large desktop at a small scale does not become a huge canvas: the fitted
+   canvas is at most 1440 units high, reached by raising the scale in quarter
+   steps, so 3840×2160 at 100 % gives about 2506×1360 at 1.5, while 2560×1440
+   and 1920×1080 at 100 % keep scale 1.0 and today's canvas.
+4. The mock backend's screen and desktop scale can be set, and its
+   `scale_factor` follows them as the real backend's does, so a game's startup
+   matrix can name these desktops headlessly; macOS behaviour is unchanged
+   (the existing display tests and a native run on the reference Mac).
+5. Looked at on the real desktops above (100 %, 150 %, 200 % at 3840×2160, a
+   headless RDP session on the test box): the engine probe's numbers and
+   Warband's title and match frames from a build on the candidate engine: the
+   window uses the desktop, the HUD is readable, the map no longer floats.
+6. Released; Warband's startup matrix, native checks and the shared server
+   follow by the engine-upgrade procedure.
 
 ## S2D-016 — Bound the batch's groups and vertex domains
 
