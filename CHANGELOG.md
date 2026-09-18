@@ -17,6 +17,9 @@
   hang-up is raised. A guest rendering slowly now sees the newest state a
   little late, where it used to fall behind without bound until the host
   dropped it.
+- A `Toast`'s words are checked against its own box, not the window: the box
+  slides in from beyond the edge, so every toast was reported as text that
+  does not fit on its first frames.
 
 ## 0.3.6 — 2026-09-18
 

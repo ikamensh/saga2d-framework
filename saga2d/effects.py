@@ -420,9 +420,10 @@ class Toast(Effect):
         scene.draw_rect(x, y, box_w, box_h, (16, 20, 32, 240), border_color=(255, 255, 255, 30), border_width=1, radius=10)
         scene.draw_rect(x + 8, y + 10, 3, box_h - 20, self.accent, radius=1.5)
         tx = x + self.PAD + 8
-        scene.draw_text(self.title, tx, y + self.PAD + heading.font_size / 2, style="heading", anchor_y="center")
-        ly = y + self.PAD + heading.font_size + 10
-        for line in self.lines:
-            scene.draw_text(line, tx, ly + line_h / 2, style="body", anchor_y="center")
-            ly += line_h
+        with scene.text_region(x, y, box_w, box_h, name="toast"):  # the words belong in the box, wherever its slide has it
+            scene.draw_text(self.title, tx, y + self.PAD + heading.font_size / 2, style="heading", anchor_y="center")
+            ly = y + self.PAD + heading.font_size + 10
+            for line in self.lines:
+                scene.draw_text(line, tx, ly + line_h / 2, style="body", anchor_y="center")
+                ly += line_h
         return below + box_h + self.PAD

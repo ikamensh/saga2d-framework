@@ -142,3 +142,13 @@ def test_hop_bounces_a_sprite_and_returns_it_home(game: Game) -> None:
     assert sprite.y < 50
     tick(game, 0.5)
     assert sprite.position == (50, 50)
+
+
+def test_a_toast_sliding_in_is_not_text_that_does_not_fit(game: Game, backend) -> None:
+    """The toast's words belong in its box, and the box comes in from beyond the window's edge: measured against
+    the window, every toast was reported as overflowing on its first frames (a warning per title in a game's log)."""
+    scene = stage(game)
+    scene.effects.add(Toast("Under attack!", ["Press Space to look"], hold=1.0))
+    for _ in range(12):  # the slide, frame by frame
+        game.tick(1 / 60)
+        assert_text_fits(game)
