@@ -24,7 +24,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-008 | Next | proposed | Explicit asset replacement and bounded resource lifetime |
 | S2D-009 | Next | proposed | Extend installed-wheel native regression coverage |
 | S2D-010 | Later | proposed | Make simulation/publication timing explicit and measurable |
-| S2D-011 | Next | in progress | Generalize room seats for Warband online FFA |
+| S2D-011 | Next | done | Generalize room seats for Warband online FFA |
 | S2D-012 | Later | proposed | Add focused rendering effects only when a game proves the need |
 | S2D-013 | Later | proposed | Positional/panned audio and owned looping effects |
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
@@ -261,6 +261,16 @@ from PyPI. The cohort holds on 0.3.8: Tribes `server-saga2d-0.3.8`
 recorded node IDs, and 1,078 pass; Warband main `4e092a0` passes 1,369 with
 WB-012. The server rollout that hosts it is Saga Online's
 `docs/wb012-rollout.md`.
+
+**Done and live 2026-09-18.** The shared server runs 0.3.8 (bundle
+`3bf61237…`, Saga Online's `docs/wb012-rollout.md` at `0688e92`): a
+three-seat Warband room on the public server filled in order, started with 3
+of 3, and refused a client from before 0.3.8 with the update message; the
+server's smoke, which speaks such a client's hello, still plays rooms of two
+for all three games; Warband 0.2.34 brings three and four humans into one
+room (WB-012). A later journey (`11adf41`) adds that a room whose players are
+all out plays on while they watch and expires once they leave; it fails
+against a room that forgets somebody must be present.
 
 ## S2D-012 — Small rendering-effect additions
 
