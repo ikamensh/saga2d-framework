@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.5 — 2026-09-18
+
+- Built games carry an icon instead of PyInstaller's default picture.
+  `GamePackage.icon` names the game's square PNG (1024 px or more, painted to
+  the edges); a game that names none gets the engine's mark
+  (`saga2d/packaging/icon.png`). The build shapes the picture for the platform
+  (the Mac grid's rounded square with its margin and shadow, a rounded full
+  canvas on Windows), writes the `.ico` that the executable and the Inno Setup
+  installer embed or the `.icns` the bundle names in `CFBundleIconFile`,
+  records both files in the build manifest and copies the converted icon
+  beside it. `verify` fails an executable or a bundle that does not carry
+  exactly that file. A picture that is not square or is too small stops the
+  build. Upgrade note: `game.iss` now requires the `SetupIcon` define, which
+  `saga2d.packaging.build` supplies.
+
 ## 0.3.4 — 2026-09-17
 
 - The mock backend derives `scale_factor` from the window the way the pyglet

@@ -110,7 +110,10 @@ Game("My Game", resolution=(640, 400)).run(World())
   Follow the [counter-room tutorial](https://github.com/ikamensh/saga2d-framework/blob/main/docs/framework-match-menu.md) and the
   [transport notes](https://github.com/ikamensh/saga2d-framework/blob/main/docs/multiplayer.md).
 * **Packaging.** `saga2d.packaging` builds, verifies and installs standalone
-  games with PyInstaller from a ten-line `tools/package.py`.
+  games with PyInstaller from a ten-line `tools/package.py`. Name a square
+  1024 px picture as `GamePackage(icon=...)` and the Windows executable, its
+  installer and the Mac bundle carry it in each platform's shape; without one
+  they carry the engine's mark.
 * **Testing.** A mock backend that records every draw call, `render_scene`
   for offscreen screenshots you can look at, a CPU budget for long checks,
   paced native frames, and a counter test game for the server.
