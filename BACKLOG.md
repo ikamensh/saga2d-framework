@@ -31,6 +31,7 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-015 | Next | proposed | Fit the window and HUD to high-DPI desktops (Windows 4K) |
 | S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
 | S2D-017 | Next | ready | Cut the per-frame cost of the y-sorted batch and the shape soups in a crowded scene |
+| S2D-019 | Next | done | LAN matches: a guest slower than the match gets the newest state, not a growing backlog |
 
 ## S2D-001 — Existing branch review
 
@@ -452,3 +453,25 @@ when their mains move to 0.3.5 (the shared server already runs it:
    dark ground; a bundle built from the candidate engine on the reference Mac
    with its Finder thumbnail; Warband's native checks on Windows and macOS
    green on the released engine.
+
+## S2D-019 — A LAN guest slower than the match
+
+Found 2026-09-18 by the Warband code review. `network._Peer.poll` sent and
+received one chunk per call (at most 64 KB in), and `MatchHost.publish` queued
+every state behind the last. A real-time game publishes ten states a second
+whatever the guest's frame rate (Warband: 100 to 140 KB each, so 1.0 to 1.4 MB
+a second), which a guest polling at under about twenty frames a second could
+never read: it fell further behind with every frame, its picture of the match
+seconds old and ageing, until the host's 16 MB queue overflowed and the host
+dropped it with "Connection cannot keep up with the match". Consumers: every
+game's LAN mode; Warband's is the one with states this large.
+
+**Done 2026-09-18** on branch `review`: a poll sends and reads all the socket
+takes and holds now; a state still waiting whole at the end of the queue is
+replaced by the newer one (control messages are never dropped or reordered);
+what a peer said before it hung up is read before the hang-up is raised (a
+rejection once raced the close). `tests/framework/test_network.py`:
+`test_a_guest_slower_than_the_match_sees_the_newest_state_not_a_growing_backlog`
+(a guest at two polls a second against a host publishing 150 KB states: dropped
+by the host on the old code, never more than ten ticks behind on the new); the
+suite 414 passed. Reaches games with their next engine upgrade.

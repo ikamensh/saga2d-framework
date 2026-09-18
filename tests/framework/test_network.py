@@ -130,3 +130,35 @@ def test_entering_a_match_removes_lobby_and_title_resources(game):
     finally:
         client.close()
         host.close()
+
+
+def test_a_guest_slower_than_the_match_sees_the_newest_state_not_a_growing_backlog():
+    """A real-time host publishes ten large states a second whatever the guest's frame rate.
+
+    The guest once read at most 64 KB per poll and the host queued every state behind the last,
+    so a guest rendering slowly fell further behind with every frame until the host's queue
+    overflowed and dropped it.  A poll now reads all there is, and a state still waiting to be
+    sent is replaced by the newer one.
+    """
+    ballast = 'x' * 150_000  # a Warband snapshot is 100 to 140 KB
+    tick = [0]
+    host = MatchHost('rts-v1', lambda player, command: None, lambda player: {'tick': tick[0], 'ballast': ballast},
+                     address=('127.0.0.1', 0), token='test')
+    client = MatchClient('rts-v1', host.address, token='test')
+    try:
+        pump(host, client, lambda: client.ready and host.ready)
+        behind = []
+        for _ in range(60):  # six seconds of match for a guest at two frames a second
+            for _ in range(5):
+                tick[0] += 1
+                host.publish()
+                host.poll()
+            client.poll()
+            assert host.ready, f'the host dropped its guest: {host.error}'
+            behind.append(tick[0] - client.state['tick'])
+        assert max(behind[10:]) <= 10, f'the guest fell behind without bound: {behind}'
+        assert len(host.peer.outgoing) < 4 * len(ballast), 'the host queues states the guest will never need'
+        pump(host, client, lambda: client.state['tick'] == tick[0])  # and once the match pauses it has the last word
+    finally:
+        client.close()
+        host.close()

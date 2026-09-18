@@ -34,29 +34,41 @@ class _Peer:
         self.outgoing = bytearray()
         self.last_received = time.monotonic()
         self.last_sent = self.last_received
+        self._waiting_state = None  # where in ``outgoing`` a state begins that is queued last and has not begun to leave
 
     def send(self, message):
+        """Queue *message*.  A state replaces a state still waiting whole at the end of the queue: a peer slower
+        than the match needs the newest one, not every one since it last kept up."""
         data = json.dumps(message, separators=(',', ':'), allow_nan=False).encode()
+        is_state = message.get('type') == 'state'
+        if is_state and self._waiting_state is not None:
+            del self.outgoing[self._waiting_state:]
         if len(data) > _MAX_FRAME or len(self.outgoing) + len(data) + 4 > _MAX_QUEUE:
             raise ConnectionError('Connection cannot keep up with the match.')
+        self._waiting_state = len(self.outgoing) if is_state else None
         self.outgoing.extend(struct.pack('!I', len(data)))
         self.outgoing.extend(data)
 
     def poll(self):
-        if self.outgoing:
+        """Send and receive all the socket takes and holds now: one chunk per call tied the link's speed to the frame rate."""
+        while self.outgoing:
             try:
                 sent = self.sock.send(self.outgoing)
-                del self.outgoing[:sent]
-                self.last_sent = time.monotonic()
             except BlockingIOError:
-                pass
-        try:
-            data = self.sock.recv(65536)
-        except BlockingIOError:
-            data = None
-        if data == b'':
-            raise ConnectionError('The other player disconnected.')
-        if data:
+                break
+            del self.outgoing[:sent]
+            self.last_sent = time.monotonic()
+            if self._waiting_state is not None:
+                self._waiting_state = self._waiting_state - sent if sent <= self._waiting_state else None  # it has begun to leave
+        closed = False
+        while len(self.incoming) < _MAX_QUEUE:
+            try:
+                data = self.sock.recv(262144)
+            except BlockingIOError:
+                break
+            if data == b'':
+                closed = True  # what the peer said before it hung up (a rejection, say) is still to be read
+                break
             self.last_received = time.monotonic()
             self.incoming.extend(data)
         messages = []
@@ -76,6 +88,8 @@ class _Peer:
             if not isinstance(message, dict):
                 raise ConnectionError('Network messages must be objects.')
             messages.append(message)
+        if closed and not messages:
+            raise ConnectionError('The other player disconnected.')
         if time.monotonic() - self.last_received > 15:
             raise ConnectionError('Connection timed out.')
         if time.monotonic() - self.last_sent > 3 and not self.outgoing:
