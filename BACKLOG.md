@@ -248,6 +248,20 @@ now"), branch `room-seats` (worktree `../saga2d-seats`).
    Shardbound and Warband pin it with their suites green before the server
    rollout that hosts it.
 
+**Released 2026-09-18 as Saga2D 0.3.8** (`c63eb7e`, release commit `9e0e2d5`,
+tag `v0.3.8`): criteria 1 to 5 hold. `tests/framework/test_room_seats.py` runs
+five real journeys against the server process: four seats filling in order
+with a fifth refused; a needed seat pausing and a dropped one not; a restart
+with every token; old clients refused from larger rooms and at home in rooms
+of two; the online client and the lobby in a room of three. The suite passes
+416 tests unchanged. The wheel (`0f79d1c7…`) and sdist (`333987cb…`) passed
+`twine check --strict`, the installed-distribution check, and a fresh install
+from PyPI. The cohort holds on 0.3.8: Tribes `server-saga2d-0.3.8`
+(`4c13383`) passes 189 tests; Shardbound's (`b2cdcbe`) fails exactly its 19
+recorded node IDs, and 1,078 pass; Warband main `4e092a0` passes 1,369 with
+WB-012. The server rollout that hosts it is Saga Online's
+`docs/wb012-rollout.md`.
+
 ## S2D-012 — Small rendering-effect additions
 
 There is no public blend-mode, shader/material or offscreen-target interface.
