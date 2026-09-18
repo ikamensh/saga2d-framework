@@ -1,6 +1,9 @@
 """Display changes preserve the game's logical canvas and its input/UI state."""
 
+import pytest
+
 from saga2d import Anchor, Button, Game, Scene
+from saga2d.backends.mock_backend import MockBackend
 
 
 def test_window_and_fullscreen_changes_preserve_the_playable_canvas():
@@ -128,3 +131,78 @@ def test_the_mock_derives_the_texture_scale_from_the_window_like_the_pyglet_back
         assert game.resolution == (1280, 800)
     finally:
         game._teardown()
+
+
+def test_a_fixed_resolution_game_opens_at_the_desktops_scale():
+    """On a 200 % desktop a 1280×800 game is 1280×800 desktop units: twice the pixels, textures rasterised at 2."""
+    game = Game('Scaled', backend=MockBackend(screen=(1920, 1080), desktop_scale=2.0), resolution=(1280, 800))
+    try:
+        assert game.window_size == (1280, 800) and game.backend.scale_factor == 2.0
+        game.set_window_size((960, 600))
+        assert game.window_size == (960, 600) and game.backend.scale_factor == 1.5
+        game.set_fullscreen(True)
+        assert game.window_size == (1920, 1080) and game.backend.scale_factor == 2.0 * 1080 / 800
+    finally:
+        game._teardown()
+
+
+@pytest.mark.parametrize("screen, scale, canvas, factor", [
+    ((1920, 1080), 1.0, (1840, 960), 1.0),    # 1920×1080 at 100 %, as it always was
+    ((2560, 1440), 1.0, (2480, 1320), 1.0),   # 2560×1440 at 100 %
+    ((1920, 1080), 2.0, (1840, 960), 2.0),    # 3840×2160 at 200 %: the desktop's units are half its pixels
+    ((2560, 1440), 1.5, (2480, 1320), 1.5),   # 3840×2160 at 150 %
+    ((3840, 2160), 1.0, (2506, 1360), 1.5),   # 3840×2160 at 100 %: no wall-sized canvas with a HUD for ants
+    ((5120, 2880), 1.0, (2520, 1380), 2.0),   # 5120×2880 at 100 %
+])
+def test_a_fitted_game_gets_a_canvas_made_for_the_desktop(screen, scale, canvas, factor):
+    """``resolution=None`` fits the window to the desktop and keeps the canvas in the range layouts are made for."""
+    game = Game('Fit', resolution=None, backend=MockBackend(screen=screen, desktop_scale=scale))
+    try:
+        assert game.resolution == canvas
+        assert game.window_size == (screen[0] - 80, screen[1] - 120)
+        assert game.backend.scale_factor == pytest.approx(factor, abs=0.001)
+    finally:
+        game._teardown()
+
+
+def test_a_fitted_fullscreen_game_covers_the_screen_with_the_same_canvas_rule():
+    game = Game('Fit', resolution=None, backend=MockBackend(screen=(3840, 2160)), fullscreen=True)
+    try:
+        assert game.resolution == (2560, 1440) and game.window_size == (3840, 2160)
+        assert game.backend.scale_factor == 1.5
+    finally:
+        game._teardown()
+
+
+class ScaledWindow:
+    """What pyglet hands the backend on a Windows desktop at 200 %: sizes in physical pixels, the scale beside them."""
+    scale = 2.0
+    fullscreen = False
+
+    def __init__(self):
+        self.size = (3680, 1920)
+
+    def get_size(self):
+        return self.size
+
+    def set_size(self, width, height):
+        self.size = (width, height)
+
+    width = property(lambda self: self.size[0])
+    height = property(lambda self: self.size[1])
+
+
+def test_the_pyglet_backend_speaks_desktop_units_on_a_scaled_windows_desktop(monkeypatch):
+    """Measured on 3840×2160 at 200 %: pyglet says 3680×1920 px and scale 2; the game must see 1840×960 units."""
+    from saga2d.backends.pyglet_backend import PygletBackend
+
+    monkeypatch.setattr("sys.platform", "win32")
+    backend = PygletBackend()
+    backend.window = ScaledWindow()
+    monkeypatch.setattr(backend, "_compute_viewport", lambda width, height: None)  # needs a GL context
+    assert backend.window_size == (1840, 960)
+    backend.set_window_size(1280, 800)
+    assert backend.window.size == (2560, 1600) and backend.window_size == (1280, 800)
+    monkeypatch.setattr("sys.platform", "darwin")  # Cocoa takes points as they are
+    backend.set_window_size(1280, 800)
+    assert backend.window.size == (1280, 800)

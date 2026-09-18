@@ -21,10 +21,15 @@ from saga2d.backends.base import Color, Event, KeyEvent, MouseEvent, Space, Wind
 
 
 class MockBackend:
-    def __init__(self, logical_width: int = 1920, logical_height: int = 1080) -> None:
+    def __init__(self, logical_width: int = 1920, logical_height: int = 1080, *,
+                 screen: tuple[int, int] = (1920, 1080), desktop_scale: float = 1.0) -> None:
         self.logical_width = logical_width
         self.logical_height = logical_height
         self.scale_factor: float = 1.0
+        #: The desktop a test runs on: its size in desktop units and the pixels per unit
+        #: (3840×2160 at 200 % is ``screen=(1920, 1080), desktop_scale=2.0``).
+        self.screen = screen
+        self.desktop_scale = desktop_scale
 
         self.sprites: dict[str, dict[str, Any]] = {}
         self.texts: list[dict[str, Any]] = []
@@ -66,13 +71,14 @@ class MockBackend:
     # -- Lifecycle -----------------------------------------------------------
 
     def screen_size(self) -> tuple[int, int]:
-        return (1920, 1080)
+        return self.screen
 
-    def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True) -> None:
+    def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True,
+                      window_size: tuple[int, int] | None = None) -> None:
         self.logical_width = width
         self.logical_height = height
         self.fullscreen = fullscreen
-        self._windowed_size = (width, height)
+        self._windowed_size = window_size or (width, height)
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
         self._fit()
         if visible:
@@ -135,7 +141,7 @@ class MockBackend:
         window exercises the same paths a player's desktop does.
         """
         width, height = self.window_size
-        self.scale_factor = min(width / self.logical_width, height / self.logical_height)
+        self.scale_factor = self.desktop_scale * min(width / self.logical_width, height / self.logical_height)
 
     def inject_focus(self, focused: bool) -> None:
         """Simulate the window gaining or losing keyboard focus."""

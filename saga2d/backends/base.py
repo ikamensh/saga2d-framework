@@ -88,12 +88,20 @@ class Backend(Protocol):
     # -- Lifecycle -----------------------------------------------------------
 
     def screen_size(self) -> tuple[int, int]:
-        """Size of the primary display in logical units."""
+        """Size of the primary display in desktop units.
+
+        Desktop units are what the OS sizes windows in for the player: points on macOS, physical
+        pixels divided by the display scale on Windows and X11.  Every window size in this
+        interface is in them; ``scale_factor`` carries the pixels per unit of the canvas.
+        """
         ...
 
     def create_window(
         self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True,
-    ) -> None: ...
+        window_size: tuple[int, int] | None = None,
+    ) -> None:
+        """Open a window showing a ``width`` × ``height`` canvas; ``window_size`` when the window is not canvas-sized."""
+        ...
 
     def begin_frame(self, clear_color: Color | None = None) -> None: ...
 

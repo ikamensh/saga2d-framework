@@ -27,11 +27,26 @@ Game('My game', resolution=(1280, 800)).run(Play())
 | `game.set_window_size((w, h))` | Leave fullscreen if needed, then select this windowed size |
 
 `game.resolution`, `width` and `height` continue to describe the fixed logical
-canvas. Window sizes exclude title bars/borders and the additional backing
-pixels of a Retina surface. On the verified Retina host, a `960 × 600` window
-has a `1920 × 1200` framebuffer; both render the same `1280 × 800` game canvas.
-The backend handles native coordinate conversion. Game input still receives
-logical screen coordinates and camera-transformed world coordinates.
+canvas. Window sizes are in **desktop units**: what the OS sizes windows in for
+the player, so points on macOS and physical pixels divided by the display
+scale on Windows and X11. They exclude title bars/borders and the additional
+backing pixels of a scaled surface. On the verified Retina host, a `960 × 600`
+window has a `1920 × 1200` framebuffer; on a verified Windows desktop at 200 %
+a `1280 × 800` game opens `2560 × 1600` pixels large with `scale_factor` 2.0.
+Both render the same game canvas. The backend handles native coordinate
+conversion. Game input still receives logical screen coordinates and
+camera-transformed world coordinates.
+
+`Game(resolution=None)` fits the desktop: the window is the screen less a
+margin for the title bar and the taskbar (the whole screen in fullscreen), and
+the canvas is that window in desktop units, so a 3840 × 2160 desktop at 200 %
+plays on a 1840 × 960 canvas at `scale_factor` 2.0. A desktop larger than
+layouts are made for does not become a wall-sized canvas: above
+`MAX_FITTED_HEIGHT` (1440 units) the canvas is the window divided by a zoom
+raised in quarter steps, so 3840 × 2160 at 100 % plays on 2506 × 1360 at 1.5.
+A new window is centred on its screen under Windows, which would otherwise
+cascade it under the taskbar. In tests, `MockBackend(screen=(1920, 1080),
+desktop_scale=2.0)` is that desktop; pass it as `Game(backend=...)`.
 
 The native window is now resizable, so dragging its OS border also works.
 Toggling fullscreen after an OS resize restores that actual size. The OS may

@@ -42,6 +42,8 @@ _logger = logging.getLogger(__name__)
 
 #: A string is allowed to touch its region's edge; a pixel of rounding is not a bug.
 _TEXT_SLACK = 1.0
+#: The tallest canvas ``resolution=None`` chooses, in desktop units; layouts are made for 720 to about this.
+MAX_FITTED_HEIGHT = 1440
 
 
 @dataclass(frozen=True)
@@ -138,8 +140,9 @@ class Game:
         else:
             raise ValueError(f"Unknown backend {backend!r}. Pass 'mock', 'pyglet', or a backend instance.")
 
+        window_size = None
         if resolution is None:
-            resolution = self._fit_screen(fullscreen)
+            resolution, window_size = self._fit_screen(fullscreen)
         self._title = title
         self._resolution = (int(resolution[0]), int(resolution[1]))
         self._save_dir = Path(save_dir) if save_dir is not None else None
@@ -167,13 +170,21 @@ class Game:
         self.check_text_fit = _check_text_by_default()
         self._warned_text: set[str] = set()
 
-        self._backend.create_window(self._resolution[0], self._resolution[1], title, fullscreen, visible)
+        self._backend.create_window(self._resolution[0], self._resolution[1], title, fullscreen, visible, window_size)
         tween_mod._tween_manager = self._tween_manager
         sprite_mod._current_game = self
 
-    def _fit_screen(self, fullscreen: bool) -> tuple[int, int]:
+    def _fit_screen(self, fullscreen: bool) -> tuple[tuple[int, int], tuple[int, int]]:
+        """The canvas and the window for ``resolution=None``: the window fits the desktop, the canvas stays in range.
+
+        A desktop larger than layouts are made for (3840×2160 at 100 %) would turn into a wall-sized
+        canvas with a tiny HUD; its canvas is the window divided by a zoom raised in quarter steps
+        until the canvas is at most ``MAX_FITTED_HEIGHT`` units high.
+        """
         w, h = self._backend.screen_size()
-        return (w, h) if fullscreen else (w - 80, h - 120)
+        window = (w, h) if fullscreen else (w - 80, h - 120)
+        zoom = max(1.0, math.ceil(window[1] / MAX_FITTED_HEIGHT * 4) / 4)
+        return (int(window[0] / zoom), int(window[1] / zoom)), window
 
     # -- Subsystems ------------------------------------------------------------
 

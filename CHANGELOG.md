@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.6 — 2026-09-18
+
+- Window sizes are in desktop units on every platform. On Windows and X11
+  pyglet reports physical pixels with the display's scale beside them; the
+  backend ignored the scale, so on a 3840×2160 desktop at 200 % a 1280×800
+  game opened at a quarter of its intended area and `Game(resolution=None)`
+  made a 3760×2040 canvas with the HUD at native pixels (Warband's report,
+  measured on a real desktop at 100 %, 150 % and 200 %). `screen_size`,
+  `window_size`, `windowed_size`, `set_window_size` and the size a window opens
+  at now divide or multiply by that scale at the pyglet boundary (macOS already
+  worked in points and is unchanged), and `scale_factor` carries the desktop's
+  scale: 2.0 on that desktop, for a 1840×960 canvas.
+- `Game(resolution=None)` keeps the fitted canvas at most `MAX_FITTED_HEIGHT`
+  (1440) units high by raising the scale in quarter steps: 3840×2160 at 100 %
+  gives 2506×1360 at 1.5 instead of a wall-sized canvas; 2560×1440 and smaller
+  desktops are as before. Its margin and canvas are in desktop units, so the
+  window clears the title bar and the taskbar at every scale.
+- Under Windows a new window is centred on its screen instead of taking the
+  next cascade position, which hung a fitted window under the taskbar.
+- `MockBackend(screen=..., desktop_scale=...)` names the desktop a test runs
+  on, and the mock's `scale_factor` follows it as the real backend's does.
+  `Backend.create_window` takes an optional `window_size` for a window that is
+  not canvas-sized; a custom backend must accept it.
+
 ## 0.3.5 — 2026-09-18
 
 - Built games carry an icon instead of PyInstaller's default picture.

@@ -206,24 +206,44 @@ class PygletBackend:
     # Lifecycle
     # ------------------------------------------------------------------
 
+    def _pixels_per_unit(self) -> float:
+        """pyglet's window pixels per desktop unit.
+
+        pyglet sizes Windows and X11 windows in physical pixels and reports the display's scale
+        beside them (200 % is 2.0): a desktop unit there is ``scale`` pixels.  Cocoa takes points,
+        which already are desktop units.
+        """
+        if sys.platform == "darwin":
+            return 1.0
+        if self.window is not None:
+            return float(self.window.scale)
+        return float(pyglet.display.get_display().get_default_screen().get_scale())
+
+    def _pixels(self, width: int, height: int) -> tuple[int, int]:
+        scale = self._pixels_per_unit()
+        return round(width * scale), round(height * scale)
+
     def screen_size(self) -> tuple[int, int]:
         screen = pyglet.display.get_display().get_default_screen()
-        return screen.width, screen.height
+        scale = self._pixels_per_unit()
+        return round(screen.width / scale), round(screen.height / scale)
 
-    def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True) -> None:
+    def create_window(self, width: int, height: int, title: str, fullscreen: bool, visible: bool = True,
+                      window_size: tuple[int, int] | None = None) -> None:
         from pyglet.math import Mat4
 
         self.logical_width = width
         self.logical_height = height
+        pixel_width, pixel_height = self._pixels(*(window_size or (width, height)))
         try:
             config = pyglet.gl.Config(sample_buffers=1, samples=4, double_buffer=True)
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, resizable=True,
+                width=pixel_width, height=pixel_height, caption=title, resizable=True,
                 vsync=True, visible=False, config=config,
             )
         except pyglet.window.NoSuchConfigException:
             self.window = pyglet.window.Window(
-                width=width, height=height, caption=title, resizable=True, vsync=True, visible=False,
+                width=pixel_width, height=pixel_height, caption=title, resizable=True, vsync=True, visible=False,
             )
         self.batch = pyglet.graphics.Batch()
         self._identity = Mat4()
@@ -231,6 +251,12 @@ class PygletBackend:
         self._shape_program = pyglet.gl.current_context.create_program(
             (_SHAPE_VERTEX_SRC, "vertex"), (_SHAPE_FRAGMENT_SRC, "fragment"),
         )
+        if sys.platform == "win32":
+            # Windows opens each new window a step further down its cascade, which hangs a window made to fit
+            # the desktop under the taskbar.  Centred, the fit's margin covers the title bar and the taskbar.
+            screen = self.window.screen
+            self.window.set_location(screen.x + (screen.width - self.window.width) // 2,
+                                     screen.y + (screen.height - self.window.height) // 2)
         self._compute_viewport(self.window.width, self.window.height)
         self._register_handlers()
         self._windowed_size = self.window_size
@@ -472,7 +498,8 @@ class PygletBackend:
         # mismatch inside this adapter; do not change rendering/input units.
         if sys.platform == "darwin" and pyglet.options.dpi_scaling in ("platform", "scaled"):
             return round(width / self.window.scale), round(height / self.window.scale)
-        return width, height
+        scale = self._pixels_per_unit()
+        return round(width / scale), round(height / scale)
 
     @property
     def windowed_size(self) -> tuple[int, int]:
@@ -485,10 +512,12 @@ class PygletBackend:
             self._windowed_size = self.window_size
             self.window.set_fullscreen(True)
         else:
-            self.window.set_fullscreen(False, width=self._windowed_size[0], height=self._windowed_size[1])
+            width, height = self._pixels(*self._windowed_size)
+            self.window.set_fullscreen(False, width=width, height=height)
         self._compute_viewport(self.window.width, self.window.height)
 
     def set_window_size(self, width: int, height: int) -> None:
+        width, height = self._pixels(width, height)
         if self.fullscreen:
             self.window.set_fullscreen(False, width=width, height=height)
         else:
