@@ -1,4 +1,4 @@
-"""Verify a built game: manifest integrity, a loopback room server and the shipped executable's own checks.
+"""Verify a built game: manifest integrity, its icon, a loopback room server and the shipped executable's own checks.
 
 The application process runs outside the checkout with an isolated profile and
 no Python on PATH.  A native rendering receipt is separate from the mandatory
@@ -19,7 +19,7 @@ import tempfile
 import threading
 import zipfile
 
-from saga2d.packaging import GamePackage, sha256, write_json
+from saga2d.packaging import GamePackage, icon, sha256, write_json
 
 
 @contextmanager
@@ -167,6 +167,11 @@ def verify(spec: GamePackage, output: Path, *, native=False, public_server: str 
         raise ValueError("Public-server acceptance requires the Windows installer artifact")
     evidence = output / "verification"
     evidence.mkdir(exist_ok=True)
+    converted = manifest["packaging"]["icon"] and output / manifest["packaging"]["icon"]  # none on Linux
+    if converted:
+        assert sha256(converted) == manifest["source_sha256"][converted.name], converted
+        if converted.suffix == ".icns":
+            icon.carried(output / f"{product}.app", converted)
     report = {"source_commit": manifest["source_commit"], "version": manifest["version"], "scope": "Loopback authority; isolated profile on the named CI host"}
     with tempfile.TemporaryDirectory(prefix="extracted-package-") as directory, authority(spec) as endpoint:
         extracted = Path(directory)
@@ -175,6 +180,8 @@ def verify(spec: GamePackage, output: Path, *, native=False, public_server: str 
         executable = extracted / product / (f"{product}.exe" if os.name == "nt" else product)
         if os.name != "nt":
             executable.chmod(executable.stat().st_mode | 0o111)
+        elif converted:
+            icon.carried(executable, converted)
         report["portable"] = executable_smoke(executable, endpoint, evidence / "portable.json", manifest)
         if installers:
             if os.name != "nt":
@@ -190,6 +197,8 @@ def verify(spec: GamePackage, output: Path, *, native=False, public_server: str 
                                 f"/DIR={installed}", f"/LOG={evidence / 'install.log'}"], check=True, timeout=120)
                 assert shortcut.is_file(), shortcut
                 executable = installed / f"{product}.exe"
+                if converted:
+                    icon.carried(executable, converted)
                 report["installed"] = executable_smoke(executable, endpoint, evidence / "installed.json", manifest)
                 if public_server is not None:
                     report["public_server"] = {"endpoint": public_server,

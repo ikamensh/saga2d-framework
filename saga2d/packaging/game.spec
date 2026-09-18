@@ -23,8 +23,12 @@ a = Analysis(
     excludes=packaging["excludes"],
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=product, debug=False, strip=False, upx=False, console=False)
+# The build wrote the platform's icon beside this recipe: an .ico inside the
+# Windows executable, an .icns in the Mac bundle, nothing elsewhere.
+icon = str(source / packaging["icon"]) if packaging["icon"] else None
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=product, debug=False, strip=False, upx=False, console=False,
+          icon=icon if sys.platform == "win32" else None)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name=product)
 if sys.platform == "darwin":
-    app = BUNDLE(coll, name=f"{product}.app", bundle_identifier=packaging["bundle_id"],
+    app = BUNDLE(coll, name=f"{product}.app", bundle_identifier=packaging["bundle_id"], icon=icon,
                  version=info["version"].partition("-")[0], info_plist={"NSHighResolutionCapable": True})

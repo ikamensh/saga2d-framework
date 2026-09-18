@@ -8,7 +8,8 @@ commands through a ten-line ``tools/package.py``::
     uv run --extra package python tools/package.py install
 
 ``build`` freezes a snapshot of the installed ``saga2d``, ``sagaforge`` and game
-packages with this module's PyInstaller recipe; ``verify`` (``saga2d.packaging.verify``)
+packages with this module's PyInstaller recipe, under the game's icon or the
+engine's mark (``saga2d.packaging.icon``); ``verify`` (``saga2d.packaging.verify``)
 runs the shipped executable against a real room server; ``install`` puts the
 Mac app bundle into /Applications after both self-tests pass.
 """
@@ -29,6 +30,8 @@ import subprocess
 import sys
 import sysconfig
 
+from saga2d.packaging import icon
+
 PYTHON = "3.13.2"
 RUNTIME = ("numpy", "Pillow", "pyglet", "websockets")
 TOOLS = ("pyinstaller", "pyinstaller-hooks-contrib")
@@ -48,6 +51,7 @@ class GamePackage:
     documents: dict[str, str]  # release document name -> path relative to root
     root: Path                # the game repository: git identity, LICENSE, uv.lock, docs
     check: Path               # the game's package_check.py with smoke() and native_smoke()
+    icon: Path | None = None  # a square PNG of 1024 px or more, painted to the edges; the engine's mark without one
 
 
 def version(value: str) -> str:
@@ -110,6 +114,8 @@ def snapshot(spec: GamePackage, version: str) -> tuple[Path, dict]:
     shutil.copyfile(spec.check, source / "package_check.py")
     for name in ("game.spec", "game.iss"):
         shutil.copyfile(RECIPE / name, source / name)
+    shutil.copyfile(spec.icon or icon.DEFAULT, source / "icon.png")
+    converted = icon.write(source / "icon.png", source, platform.system())
     release = source / "release"
     release.mkdir()
     documents = {"LICENSE": "LICENSE", **spec.documents, "uv.lock": "uv.lock"}
@@ -125,7 +131,7 @@ def snapshot(spec: GamePackage, version: str) -> tuple[Path, dict]:
         "source_sha256": {path.relative_to(source).as_posix(): sha256(path) for path in sorted(source.rglob("*")) if path.is_file()},
         "packaging": {"package": spec.package, "entry": "entry.py", "bundle_id": spec.bundle_id,
                       "hiddenimports": [*spec.hiddenimports, f"{spec.package}.__main__", "package_check"],
-                      "excludes": ["pytest", "tkinter"]},
+                      "excludes": ["pytest", "tkinter"], "icon": converted.name if converted else None},
         "runtime_verified": False,
     }
     write_json(release / "build-info.json", info)
@@ -149,6 +155,8 @@ def build(spec: GamePackage, version: str, *, output: Path | None = None, instal
                     "--workpath", str(source.parent / "pyinstaller"), str(source / "game.spec")], cwd=root,
                    env={**os.environ, "SAGA2D_BUILD_SOURCE": str(source)}, check=True)
     product = spec.product
+    if info["packaging"]["icon"]:
+        shutil.copyfile(source / info["packaging"]["icon"], output / info["packaging"]["icon"])
     target = "windows-x64" if platform.system() == "Windows" else f"{platform.system().lower()}-{platform.machine().lower()}"
     archive = Path(shutil.make_archive(str(output / f"{product}-{version}-{target}-portable"), "zip", output, product))
     artifacts = [archive]
@@ -162,7 +170,8 @@ def build(spec: GamePackage, version: str, *, output: Path | None = None, instal
             raise FileNotFoundError("Install Inno Setup or pass --iscc with the path to ISCC.exe")
         subprocess.run([str(compiler), f"/DAppName={product}", f"/DAppId={spec.installer_id}",
                         f"/DAppVersion={version}", f"/DAppNumericVersion={version.partition('-')[0]}.0",
-                        f"/DSourceDir={output / product}", f"/DOutputDir={output}", str(source / "game.iss")], check=True)
+                        f"/DSourceDir={output / product}", f"/DOutputDir={output}", f"/DSetupIcon={source / 'icon.ico'}",
+                        str(source / "game.iss")], check=True)
         artifacts.append(output / f"{product}-{version}-windows-x64-setup.exe")
     info["artifacts"] = [{"file": path.name, "bytes": path.stat().st_size, "sha256": sha256(path)} for path in artifacts]
     write_json(output / "build-manifest.json", info)

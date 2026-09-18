@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #error AppVersion, AppName and AppId are supplied by saga2d.packaging.build
+  #error AppVersion, AppName, AppId and SetupIcon are supplied by saga2d.packaging.build
 #endif
 
 [Setup]
@@ -21,6 +21,7 @@ OutputBaseFilename={#AppName}-{#AppVersion}-windows-x64-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#SetupIcon}
 UninstallDisplayIcon={app}\{#AppName}.exe
 CloseApplications=yes
 RestartApplications=no

@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import os
+import plistlib
 
+from PIL import Image
 import pytest
 
-from saga2d.packaging import GamePackage, version
+from saga2d.packaging import GamePackage, icon, version
 from saga2d.packaging.verify import isolated_environment, mesa_test_context, verify
 
 RECIPE = Path(__file__).resolve().parents[2] / "saga2d" / "packaging"
@@ -21,7 +23,7 @@ def package(root: Path) -> GamePackage:
 
 def test_recipe_ships_its_spec_installer_script_and_entry():
     """The build copies these by name; a missing file must fail before PyInstaller runs."""
-    for name in ("game.spec", "game.iss", "entry.py"):
+    for name in ("game.spec", "game.iss", "entry.py", "icon.png"):
         assert (RECIPE / name).is_file(), name
     assert '"__PACKAGE__"' in (RECIPE / "entry.py").read_text(encoding="utf-8")
 
@@ -79,3 +81,92 @@ def test_mesa_context_is_temporary_and_preserves_the_shipping_executable(tmp_pat
             raise RuntimeError("native failure")
     assert list(installed.iterdir()) == [executable]
     assert executable.read_bytes() == b"shipping executable"
+
+
+# -- The icon a build carries ----------------------------------------------------------
+
+
+def picture(path: Path, size=(1024, 1024)) -> Path:
+    Image.new("RGBA", size, (200, 40, 40, 255)).save(path)
+    return path
+
+
+def test_the_engine_ships_a_default_picture_that_its_own_rules_accept():
+    """A game that names no icon is built with the engine's mark, so the mark must pass the same refusals."""
+    assert icon.load(icon.DEFAULT).size[0] >= icon.SIDE
+
+
+@pytest.mark.parametrize("size", ((1024, 1000), (512, 512)))
+def test_a_picture_that_is_not_square_or_too_small_stops_the_build(tmp_path, size):
+    """The error names the file and what it measured; nothing is stretched or padded to fit."""
+    source = picture(tmp_path / "icon.png", size)
+    with pytest.raises(ValueError, match=f"icon.png is {size[0]}x{size[1]}"):
+        icon.write(source, tmp_path, "Windows")
+
+
+def test_the_windows_icon_holds_every_size_the_shell_asks_for(tmp_path):
+    """Explorer, the taskbar and the window pick a stored size each; a missing one gets a blurry stand-in."""
+    written = icon.write(picture(tmp_path / "icon.png"), tmp_path, "Windows")
+    with Image.open(written) as stored:
+        assert stored.info["sizes"] == {(size, size) for size in icon.ICO_SIZES}
+    assert len(icon.ico_images(written.read_bytes())) == len(icon.ICO_SIZES)
+
+
+def test_an_edge_to_edge_picture_gets_each_platforms_outline():
+    """The Mac grid leaves a clear margin around a rounded square; Windows keeps the canvas and rounds the corners."""
+    full = Image.new("RGBA", (2048, 2048), (200, 40, 40, 255))
+    for system, margin in (("Darwin", True), ("Windows", False)):
+        alpha = icon.shaped(full, system).getchannel("A")
+        assert alpha.size == (icon.SIDE, icon.SIDE)
+        assert alpha.getpixel((icon.SIDE // 2, icon.SIDE // 2)) == 255
+        assert alpha.getpixel((2, 2)) == 0, system
+        assert (alpha.getpixel((icon.SIDE // 2, 40)) < 255) is margin, system
+
+
+def test_other_systems_get_no_icon_file(tmp_path):
+    """An ELF executable holds no icon; the build records none rather than writing an unused file."""
+    assert icon.write(picture(tmp_path / "icon.png"), tmp_path, "Linux") is None
+    assert [path.name for path in tmp_path.iterdir()] == ["icon.png"]
+
+
+def test_an_executable_carries_the_icon_only_with_every_stored_image(tmp_path):
+    """What the resource writer copies into the executable is each image of the .ico, byte for byte."""
+    written = icon.write(picture(tmp_path / "icon.png"), tmp_path, "Windows")
+    images = icon.ico_images(written.read_bytes())
+    executable = tmp_path / "Demo.exe"
+    executable.write_bytes(b"MZ" + b"".join(b"\0" * 64 + image for image in images))
+    icon.carried(executable, written)
+    executable.write_bytes(b"MZ" + b"".join(b"\0" * 64 + image for image in images[1:]))
+    with pytest.raises(AssertionError, match=r"does not carry images \[0\]"):
+        icon.carried(executable, written)
+
+
+def bundle_build(tmp_path: Path, shipped: bytes) -> Path:
+    """A finished Mac build directory whose bundle holds ``shipped`` as its icon."""
+    converted = icon.write(picture(tmp_path / "icon.png"), tmp_path, "Darwin")
+    archive = tmp_path / "Demo-portable.zip"
+    archive.write_bytes(b"fixture")
+    resources = tmp_path / "Demo.app" / "Contents" / "Resources"
+    resources.mkdir(parents=True)
+    (resources / "icon.icns").write_bytes(shipped or converted.read_bytes())
+    (resources.parent / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIconFile": "icon.icns"}))
+    manifest = {"product": "Demo", "packaging": {"icon": converted.name},
+                "source_sha256": {converted.name: hashlib.sha256(converted.read_bytes()).hexdigest()},
+                "artifacts": [{"file": archive.name, "bytes": archive.stat().st_size,
+                               "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}]}
+    (tmp_path / "build-manifest.json").write_text(json.dumps(manifest))
+    return tmp_path
+
+
+def test_verify_fails_a_bundle_that_shows_another_icon(tmp_path):
+    """The packager's default picture in the bundle is exactly the defect this guards against."""
+    with pytest.raises(AssertionError, match="icon.icns differs"):
+        verify(package(tmp_path), bundle_build(tmp_path, b"icns of the packager's snake"))
+
+
+def test_verify_fails_an_icon_that_changed_after_the_build(tmp_path):
+    """The converted file beside the manifest must be the one the manifest recorded."""
+    output = bundle_build(tmp_path, b"")
+    (output / "icon.icns").write_bytes(b"replaced")
+    with pytest.raises(AssertionError, match="icon.icns"):
+        verify(package(tmp_path), output)

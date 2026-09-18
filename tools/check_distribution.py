@@ -14,7 +14,7 @@ from websockets.sync.client import connect
 
 import saga2d
 from saga2d import Button, Column, Game, Label, Scene, TextLayout, fonts
-from saga2d.packaging import RECIPE
+from saga2d.packaging import RECIPE, icon
 from saga2d.testing.online import COUNTER_GAMES, command, handshake, receive, running_server
 
 
@@ -30,6 +30,7 @@ def check_installation() -> None:
     assert "SIL OPEN FONT LICENSE" in (fonts.FONT_DIR / "OFL.txt").read_text(encoding="utf-8")
     for filename in ("game.spec", "game.iss", "entry.py"):
         assert (RECIPE / filename).read_text(encoding="utf-8"), filename
+    assert icon.load(icon.DEFAULT).size[0] >= icon.SIDE, "The wheel must ship the default icon picture"
 
 
 def check_scene() -> None:
