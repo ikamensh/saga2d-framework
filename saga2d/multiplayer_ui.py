@@ -69,8 +69,11 @@ class MatchLobby(Scene):
         if self.session.closed:
             return 'Update required' if self.session.incompatible else 'Could not connect'
         if getattr(self.session, 'online', False):
-            return ('Waiting for your partner' if self.session.state is not None else
-                    'Connecting to the online server')
+            if self.session.state is None:
+                return 'Connecting to the online server'
+            if self.session.seats > 2:
+                return f'Waiting for players · {self.session.present} of {self.session.seats}'
+            return 'Waiting for your partner'
         return 'Waiting for partner' if isinstance(self.session, MatchHost) else 'Joining match'
 
     def _instructions(self):
@@ -78,6 +81,11 @@ class MatchLobby(Scene):
             if self.session.incompatible:
                 return 'This version of the game cannot play online any more. Install the current release and try again.'
             if self.session.state is not None:
+                if self.session.seats > 2:
+                    return (f'Room code: {self.session.room}\n'
+                            'Send your friends the invite link, or the code to paste in Multiplayer before Join room.\n'
+                            f'The match starts when all {self.session.seats} of you connect. '
+                            f'Your seats are kept for {_duration(self.session.retention)} without every player.')
                 return (f'Room code: {self.session.room}\n'
                         'Send your friend the invite link, or the code to paste in Multiplayer before Join room.\n'
                         'The match starts when you both connect. '

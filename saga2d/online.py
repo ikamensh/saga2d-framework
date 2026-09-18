@@ -21,6 +21,8 @@ from websockets.exceptions import WebSocketException
 from saga2d.network import CommandError
 
 PROTOCOL = 1
+#: The most seats a room this client can play in has; the server refuses larger rooms with an update message.
+SEATS = 4
 MAX_STATE = 8 * 1024 * 1024
 MAX_COMMAND = 16 * 1024
 DEFAULT_SERVER_URL = 'wss://games.tachyon-ai.eu/play'
@@ -43,12 +45,13 @@ def _endpoint(value):
 
 
 class OnlineClient:
-    """Create, join, or resume a room; both players use the same client interface.
+    """Create, join, or resume a room; every player uses the same client interface.
 
-    ``ready`` requires both partners, while ``room`` arrives as soon as creation
-    succeeds. ``resume_token`` is private: share only the room code. ``close``
-    leaves the seat reserved on the server for ``retention`` seconds without
-    both players. ``incompatible`` marks a rejection that only an update fixes.
+    ``ready`` requires every player the match needs, while ``room`` arrives as
+    soon as creation succeeds; ``seats`` is the room's size and ``present`` how
+    many are in it. ``resume_token`` is private: share only the room code.
+    ``close`` leaves the seat reserved on the server for ``retention`` seconds
+    without the others. ``incompatible`` marks a rejection that only an update fixes.
     """
     online = True
 
@@ -60,6 +63,7 @@ class OnlineClient:
         if self.resume_token and not self.room:
             raise ValueError('A room code is required to resume a seat.')
         self.player = 0 if not room else 1
+        self.seats, self.present = 2, 0
         self.ready = False
         self.closed = False
         self.error = ''
@@ -67,7 +71,7 @@ class OnlineClient:
         self.retention = None
         self.state = None
         self.revision = 0
-        self._hello = {'protocol': PROTOCOL, 'game': game_id,
+        self._hello = {'protocol': PROTOCOL, 'game': game_id, 'seats': SEATS,
                        'type': 'resume' if resume_token else 'join' if room else 'create'}
         if room:
             self._hello['room'] = self.room
@@ -126,13 +130,15 @@ class OnlineClient:
                         kind = message.get('type')
                         if kind == 'welcome':
                             retention = message.get('retention')
+                            seats = message.setdefault('seats', 2)  # servers from before larger rooms say nothing
                             if (not isinstance(message.get('room'), str)
                                     or not isinstance(message.get('resume_token'), str)
+                                    or type(seats) is not int or not 2 <= seats <= SEATS
                                     or type(message.get('player')) is not int
-                                    or message['player'] not in (0, 1)
+                                    or message['player'] not in range(seats)
                                     or type(retention) not in (int, float) or not 0 < retention < float('inf')):
                                 raise ValueError('Invalid seat assignment from server.')
-                            hello = {'type': 'resume', 'protocol': PROTOCOL,
+                            hello = {'type': 'resume', 'protocol': PROTOCOL, 'seats': SEATS,
                                      'game': self._hello['game'], 'room': message['room'],
                                      'resume_token': message['resume_token']}
                             self._resume = hello
@@ -213,11 +219,12 @@ class OnlineClient:
                 raise RuntimeError('Online connection worker failed.') from message['exception']
             if kind == 'welcome':
                 self.room, self.resume_token = message['room'], message['resume_token']
-                self.player, self.retention = message['player'], message['retention']
+                self.player, self.retention, self.seats = message['player'], message['retention'], message['seats']
                 self.error = ''
             elif kind == 'state':
                 self.state, self.revision = message['state'], message['revision']
                 self.ready = message['ready']
+                self.present = message.get('present', self.present)
             elif kind in ('error', 'reject', 'disconnected'):
                 self.error = message['error']
                 if kind == 'disconnected':

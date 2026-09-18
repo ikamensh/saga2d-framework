@@ -1,8 +1,8 @@
 """Test support for online play: a tiny hosted game and helpers that drive a real server process.
 
-``GAMES`` registers three flavours of a two-seat counter with ``saga2d.server``
-(plain, realtime and campaign), enough to exercise every server policy without
-a reference game.  ``running_server`` starts the production entry point on an
+``GAMES`` registers flavours of a counter with ``saga2d.server`` (plain,
+realtime and campaign with two seats, and one of two to four seats whose players
+can drop out), enough to exercise every server policy without a reference game.  ``running_server`` starts the production entry point on an
 OS-assigned loopback port; ``handshake``/``receive``/``command`` speak the
 protocol over a ``websockets`` sync connection.
 """
@@ -22,15 +22,20 @@ from saga2d.server.games import GameSpec, option_int, option_keys, option_seed
 
 
 class Counter:
-    """A valid order adds one to the sender's count; realtime rooms also count server ticks."""
+    """A valid order adds one to the sender's count; realtime rooms also count server ticks.  In the seated
+    flavour a player may also ``drop``: out of the count, no longer needed in the room."""
 
-    def __init__(self, seed=0, start=0):
+    def __init__(self, seed=0, start=0, seats=2):
         self.seed = seed
-        self.counts = [start, start]
+        self.counts = [start] * seats
+        self.out = [False] * seats
         self.ticks = 0
 
     def apply(self, player, command):
-        if command != {'action': 'add'}:
+        if command == {'action': 'drop'} and len(self.counts) > 2:
+            self.out[player] = True
+            return
+        if command != {'action': 'add'} or self.out[player]:
             raise CommandError('Choose add.')
         self.counts[player] += 1
 
@@ -46,13 +51,18 @@ def _create(options):
     return Counter(option_seed(options, 0), option_int(options, 'start', 0, 0, 1000))
 
 
+def _create_seated(options):
+    option_keys(options, {'seed', 'seats'})
+    return Counter(option_seed(options, 0), seats=option_int(options, 'seats', 3, 2, 4))
+
+
 def _checkpoint(match):
-    return {'seed': match.seed, 'counts': list(match.counts), 'ticks': match.ticks}
+    return {'seed': match.seed, 'counts': list(match.counts), 'out': list(match.out), 'ticks': match.ticks}
 
 
 def _restore(snapshot):
-    match = Counter(snapshot['seed'])
-    match.counts, match.ticks = list(snapshot['counts']), snapshot['ticks']
+    match = Counter(snapshot['seed'], seats=len(snapshot['counts']))
+    match.counts, match.out, match.ticks = list(snapshot['counts']), list(snapshot['out']), snapshot['ticks']
     return match
 
 
@@ -60,6 +70,8 @@ GAMES = {
     'counter-v1': GameSpec(_create, _checkpoint, _restore),
     'counter-realtime-v1': GameSpec(_create, _checkpoint, _restore, realtime=True),
     'counter-campaign-v1': GameSpec(_create, _checkpoint, _restore, campaign=True),
+    'counter-seats-v1': GameSpec(_create_seated, _checkpoint, _restore, realtime=True,
+                                 seats=lambda match: len(match.counts), needed=lambda match, player: not match.out[player]),
 }
 COUNTER_GAMES = 'saga2d.testing.online:GAMES'
 

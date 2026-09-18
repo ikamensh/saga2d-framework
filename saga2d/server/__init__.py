@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http import HTTPStatus
 import json
@@ -135,29 +136,40 @@ class Room:
     game: str
     match: object
     code: str
-    tokens: list = field(default_factory=lambda: [secrets.token_urlsafe(32), None])
-    peers: list = field(default_factory=lambda: [None, None])
+    tokens: list = field(default_factory=lambda: [secrets.token_urlsafe(32), None])  # one per seat
+    needed: Callable = lambda match, player: True  # whether a seat must be connected for play to go on
+    peers: list = field(default_factory=list)
     revision: int = 0
     disconnected_at: float = field(default_factory=time.monotonic)
     ticks: int = 0
     checkpointed_at: float = 0.
     unpublished: bool = False  # a realtime room took an order since its last state went out
 
+    def __post_init__(self):
+        self.peers = [None] * len(self.tokens)
+
+    @property
+    def present(self):
+        return sum(peer is not None and not peer.closing for peer in self.peers)
+
     @property
     def ready(self):
-        return all(peer is not None and not peer.closing for peer in self.peers)
+        """Every needed seat connected, and somebody in the room: a room of players who are all out still empties."""
+        return self.present > 0 and all(peer is not None and not peer.closing
+                                        for player, peer in enumerate(self.peers) if self.needed(self.match, player))
 
     def publish(self):
         self.revision += 1
         self.unpublished = False
+        ready, present = self.ready, self.present
         for player, peer in enumerate(self.peers):
             if peer is not None:
-                peer.send({'type': 'state', 'player': player, 'revision': self.revision,
-                           'ready': self.ready, 'state': self.match.snapshot(player)})
+                peer.send({'type': 'state', 'player': player, 'revision': self.revision, 'ready': ready,
+                           'seats': len(self.peers), 'present': present, 'state': self.match.snapshot(player)})
 
 
 class RoomServer:
-    """Matches expire after ``room_ttl`` without both players; campaigns are retained
+    """Matches expire after ``room_ttl`` without every needed player; campaigns are retained
     for ``campaign_ttl`` and leave memory after ``room_ttl`` until a seat returns."""
     def __init__(self, games, *, max_rooms=64, max_connections=128, room_ttl=900, campaign_ttl=7 * 86400,
                  state_dir=None, trusted_proxy=False):
@@ -185,8 +197,9 @@ class RoomServer:
         return self.campaign_ttl if self.games[game].campaign else self.room_ttl
 
     def restore(self, saved):
-        room = Room(saved['game'], self.games[saved['game']].restore(saved['state']), saved['code'],
-                    tokens=saved['tokens'], revision=saved['revision'])
+        spec = self.games[saved['game']]
+        room = Room(saved['game'], spec.restore(saved['state']), saved['code'], tokens=saved['tokens'],
+                    needed=spec.needed, revision=saved['revision'])
         remaining = saved['expires_at'] - time.time()
         room.disconnected_at = time.monotonic() - (self.retention(room.game) - remaining)
         return room
@@ -232,6 +245,13 @@ class RoomServer:
         game, kind = message.get('game'), message.get('type')
         if game not in self.games:
             raise IncompatibleClient('Unknown game version. Update your game client.')
+        handles = message.get('seats', 2)  # clients from before rooms of more than two seats say nothing
+        if type(handles) is not int or handles < 2:
+            raise CommandError('Invalid seat capability.')
+
+        def fits(seats):
+            if seats > handles:
+                raise IncompatibleClient(f'This match has {seats} seats. Update your game client to play it.')
         if kind == 'create':
             if len(self.rooms) >= self.max_rooms:
                 raise CommandError('The server is full. Please try again later.')
@@ -242,20 +262,26 @@ class RoomServer:
             if len(recent) >= 4:
                 raise CommandError('Too many new rooms. Please wait a minute.')
             recent.append(now)
-            match = self.games[game].create(message.get('options', {}))
+            spec = self.games[game]
+            match = spec.create(message.get('options', {}))
+            seats = spec.seats(match)
+            fits(seats)
             while True:
                 code = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(12))
                 if code not in self.rooms:
                     break
-            room = Room(game, match, code)
+            room = Room(game, match, code, tokens=[secrets.token_urlsafe(32)] + [None] * (seats - 1), needed=spec.needed)
             self.rooms[code] = room
             return room, 0
         room = self.find_room(message.get('room'), game)
+        fits(len(room.tokens))
         if kind == 'join':
-            if room.tokens[1] is not None:
-                raise CommandError('Both seats are claimed. Reconnect using your saved seat.')
-            room.tokens[1] = secrets.token_urlsafe(32)
-            return room, 1
+            player = next((seat for seat, token in enumerate(room.tokens) if token is None), None)
+            if player is None:
+                raise CommandError(('Both seats are claimed.' if len(room.tokens) == 2 else 'Every seat is claimed.')
+                                   + ' Reconnect using your saved seat.')
+            room.tokens[player] = secrets.token_urlsafe(32)
+            return room, player
         if kind == 'resume':
             token = message.get('resume_token')
             if isinstance(token, str):
@@ -279,7 +305,7 @@ class RoomServer:
         if message.get('type') != 'command' or not isinstance(message.get('command'), dict):
             raise CommandError('Expected a game command.')
         if not room.ready:
-            raise CommandError('Waiting for the other player.')
+            raise CommandError('Waiting for the other player.' if len(room.peers) == 2 else 'Waiting for the other players.')
         revision = message.get('revision')
         if revision is not None and (type(revision) is not int or revision != room.revision):
             raise CommandError('The match changed. Please try that order again.')
@@ -313,7 +339,7 @@ class RoomServer:
             message = decode(await asyncio.wait_for(websocket.recv(), timeout=10))
             room, player = self.enter(message, address)
             peer.send({'type': 'welcome', 'room': room.code, 'resume_token': room.tokens[player],
-                       'player': player, 'protocol': PROTOCOL, 'game': room.game,
+                       'player': player, 'seats': len(room.tokens), 'protocol': PROTOCOL, 'game': room.game,
                        'retention': self.retention(room.game)})
             room.peers[player] = peer
             room.publish()

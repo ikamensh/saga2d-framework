@@ -17,14 +17,21 @@ class GameSpec:
     ``apply(player, command)`` and ``snapshot(player)``; ``checkpoint`` serialises
     the match's complete authority and ``restore`` rebuilds it from that JSON.
     A ``realtime`` match also has ``step()``, which the server calls every 50 ms
-    while both seats are present.  A ``campaign`` keeps its seats for the
+    while the room is ready.  A ``campaign`` keeps its seats for the
     server's campaign retention and is suspended to storage between visits.
+
+    ``seats`` says how many seats a room of a match has; ``needed`` whether seat
+    *player* must be connected for play to go on.  A room is ready when every
+    needed seat is, so a player who is out of the match may leave without
+    pausing the others.  Two seats, every one needed, unless the game says otherwise.
     """
     create: Callable[[dict], Any]
     checkpoint: Callable[[Any], dict]
     restore: Callable[[dict], Any]
     realtime: bool = False
     campaign: bool = False
+    seats: Callable[[Any], int] = lambda match: 2
+    needed: Callable[[Any, int], bool] = lambda match, player: True
 
 
 def option_keys(options: Any, allowed: set[str]) -> dict:
