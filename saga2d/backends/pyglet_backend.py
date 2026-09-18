@@ -254,9 +254,11 @@ class PygletBackend:
         if sys.platform == "win32":
             # Windows opens each new window a step further down its cascade, which hangs a window made to fit
             # the desktop under the taskbar.  Centred, the fit's margin covers the title bar and the taskbar.
+            # A window larger than its screen keeps its title bar on it (the location is the content's corner).
             screen = self.window.screen
-            self.window.set_location(screen.x + (screen.width - self.window.width) // 2,
-                                     screen.y + (screen.height - self.window.height) // 2)
+            title_bar = round(32 * self._pixels_per_unit())
+            self.window.set_location(screen.x + max(0, (screen.width - self.window.width) // 2),
+                                     screen.y + max(title_bar, (screen.height - self.window.height) // 2))
         self._compute_viewport(self.window.width, self.window.height)
         self._register_handlers()
         self._windowed_size = self.window_size

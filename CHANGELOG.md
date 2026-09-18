@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The centring of a new window under Windows (0.3.6) keeps a window larger
+  than its screen from starting with its title bar above the screen's top:
+  a fixed 1280×800 game on a 1366×768 laptop opened at y −16.
+
 ## 0.3.7 — 2026-09-18
 
 - Online clients take compressed frames (`OnlineClient` asks for
