@@ -69,6 +69,22 @@ def test_a_needed_seat_that_leaves_pauses_the_room_and_one_out_of_the_match_does
             assert receive(first, predicate=lambda message: message['state']['ticks'] > ticks + 5)['ready']
 
 
+def test_a_room_whose_players_are_all_out_plays_on_while_they_watch_and_expires_once_they_leave():
+    with running_server(COUNTER_GAMES, arguments=('--room-ttl', '.5')) as (url, process):
+        with seated(url, 3) as (sockets, seats):
+            receive(sockets[0], predicate=lambda message: message['ready'])
+            for socket in sockets:
+                command(socket, {'action': 'drop'})
+            time.sleep(.2)
+            ticks = receive(sockets[0])['state']['ticks']
+            watched = receive(sockets[0], predicate=lambda message: message['state']['ticks'] > ticks + 15)
+            assert watched['ready'] and watched['present'] == 3, "players who are all out lost their room while in it"
+        time.sleep(1)  # everyone has left: the idle clock runs out after --room-ttl
+        with connect(url, proxy=None) as late:
+            gone = refusal(late, 'resume', game=SEATED, room=seats[0]['room'], resume_token=seats[0]['resume_token'], seats=4)
+            assert 'Room not found' in gone['error']
+
+
 def test_a_restart_keeps_every_seats_token(tmp_path):
     with running_server(COUNTER_GAMES, arguments=('--state-dir', tmp_path)) as (url, process):
         with seated(url, 3) as (sockets, seats):
