@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.7 — 2026-09-18
+
+- Online clients take compressed frames (`OnlineClient` asks for
+  permessage-deflate, which the room server has always offered): a real-time
+  game's state, 70 to 140 KB of JSON ten times a second in Warband, is about
+  an eighth of that on the wire. Older clients keep working uncompressed.
+- A realtime room publishes on its clock: an accepted order marks the room and
+  its next tick (at most 50 ms later) publishes, instead of building and
+  encoding the whole state for both seats on every order. Turn-based rooms
+  still answer every order at once.
+- LAN matches: a poll sends and reads all the socket takes and holds (it moved
+  one chunk each way, 64 KB in, which tied the link's speed to the frame
+  rate), a state still waiting whole in the host's queue is replaced by the
+  newer one, and what a peer said before hanging up is read before the
+  hang-up is raised. A guest rendering slowly now sees the newest state a
+  little late, where it used to fall behind without bound until the host
+  dropped it.
+
 ## 0.3.6 — 2026-09-18
 
 - Window sizes are in desktop units on every platform. On Windows and X11
