@@ -6,9 +6,15 @@ Game rules and art stay in the games. The [Warband backlog](../warband/BACKLOG.m
 is the immediate consumer. Follow [DESIGN.md](DESIGN.md): add a primitive for a
 concrete game need, with two independent consumers the strongest justification.
 
-Keep IDs stable and record `in progress` plus branch when starting, then `done`
-plus commit and evidence when finished. `Proposed` needs its bounded consumer
-case established; `deferred` needs a new product need before implementation.
+Keep IDs stable and record `in progress` plus branch when starting. Once an
+item is done and merged into main, delete its row and section; git history
+keeps the record.
+
+Done and removed 2026-09-19: S2D-018 (0.3.5), S2D-015 (0.3.6), S2D-019 to
+S2D-021 (0.3.7) and S2D-011 (0.3.8, live). Their acceptance and evidence are in
+[the backlog at `453b932`](https://github.com/ikamensh/saga2d-framework/blob/453b9327026d76fb79d2facdd02a49406b5b63c7/BACKLOG.md).
+
+`Proposed` needs its bounded consumer case established; `deferred` needs a new product need before implementation.
 Text layout/fitting and focus/pointer ownership from the earlier review already
 exist on current main; extend/adopt them rather than rebuilding them.
 
@@ -24,16 +30,11 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-008 | Next | proposed | Explicit asset replacement and bounded resource lifetime |
 | S2D-009 | Next | proposed | Extend installed-wheel native regression coverage |
 | S2D-010 | Later | proposed | Make simulation/publication timing explicit and measurable |
-| S2D-011 | Next | done | Generalize room seats for Warband online FFA |
 | S2D-012 | Later | proposed | Add focused rendering effects only when a game proves the need |
 | S2D-013 | Later | proposed | Positional/panned audio and owned looping effects |
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
-| S2D-015 | Next | proposed | Fit the window and HUD to high-DPI desktops (Windows 4K) |
 | S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
 | S2D-017 | Next | ready | Cut the per-frame cost of the y-sorted batch and the shape soups in a crowded scene |
-| S2D-019 | Next | done | LAN matches: a guest slower than the match gets the newest state, not a growing backlog |
-| S2D-020 | Next | done | Online clients take compressed frames: a real-time state is an eighth of its bytes on the wire |
-| S2D-021 | Next | done | A realtime room publishes on its clock, not on every order |
 
 ## S2D-001 — Existing branch review
 
@@ -200,78 +201,6 @@ is measured. Record the first bounded performance fix separately. A shared
 fixed-step clock, match-session ownership and bounded event journal remain
 distinct extractions from the existing review, not one networking rewrite.
 
-## S2D-011 — N-player room contract
-
-Warband's proposed online FFA (WB-012) is the concrete consumer. Current
-[Room](saga2d/server/__init__.py) has two peers/seats; parameterize capacity
-through game registration, then update joining, ready/start, private seat
-tokens, reconnect, persistence and the shared lobby. Retain correct two-seat
-behavior for existing games. Decide protocol migration explicitly.
-
-**Done when:** real three-/four-client journeys cover full rooms, disconnected
-seats, rejoin, restart recovery and departure, with all existing two-player
-consumer journeys passing. Spectators and rollback are separate requirements.
-
-**Started 2026-09-18** for Warband WB-012 (Ilya: the online items "later is
-now"), branch `room-seats` (worktree `../saga2d-seats`).
-
-**Acceptance (recorded 2026-09-18 before implementation):**
-
-1. A game's registration says how many seats a room of a match has
-   (`GameSpec.seats(match)`, two unless it says otherwise) and whether a seat
-   must be connected for play to go on (`GameSpec.needed(match, player)`,
-   every seat unless it says otherwise). `join` takes the next free seat and
-   is refused when every seat is claimed; `resume` finds any seat's token;
-   checkpoints, suspension and restart keep every seat's token.
-2. A room is ready when every needed seat is connected and at least one seat
-   is: a player who is out of the match may leave without pausing the rest,
-   may come back, and a room nobody is in still expires.
-3. Protocol migration, compatible, no protocol bump. A client's hello says how
-   many seats it handles (`seats`, two when absent; the old client refuses a
-   welcome to any seat but 0 or 1). Creating, joining or resuming a room with
-   more seats than that is refused as incompatible, with an update message,
-   before any seat is taken. Two-seat rooms behave as before for old and new
-   clients. The welcome and every state carry the room's `seats` and how many
-   are `present`; the old client ignores both.
-4. The online client sends its capability and keeps `seats` and `present`;
-   the shared lobby says "Waiting for players · k of N" for rooms of more than
-   two and keeps its two-seat wording otherwise.
-5. Proof: the counter test game gains a flavour of two to four seats
-   (`counter-seats-v1`, seats from its options). Real three- and four-client
-   journeys against the production server process cover a full room, a
-   refused extra join, a disconnected needed seat pausing the room, rejoin, a
-   restart that keeps every seat's token, and a seat no longer needed leaving
-   without pausing. An old client's hello is refused from a four-seat room
-   and accepted into a two-seat one. Every existing server, client and lobby
-   test passes unchanged.
-6. Released as Saga2D 0.3.8 by [the release guide](docs/releases.md); Tribes,
-   Shardbound and Warband pin it with their suites green before the server
-   rollout that hosts it.
-
-**Released 2026-09-18 as Saga2D 0.3.8** (`c63eb7e`, release commit `9e0e2d5`,
-tag `v0.3.8`): criteria 1 to 5 hold. `tests/framework/test_room_seats.py` runs
-five real journeys against the server process: four seats filling in order
-with a fifth refused; a needed seat pausing and a dropped one not; a restart
-with every token; old clients refused from larger rooms and at home in rooms
-of two; the online client and the lobby in a room of three. The suite passes
-416 tests unchanged. The wheel (`0f79d1c7…`) and sdist (`333987cb…`) passed
-`twine check --strict`, the installed-distribution check, and a fresh install
-from PyPI. The cohort holds on 0.3.8: Tribes `server-saga2d-0.3.8`
-(`4c13383`) passes 189 tests; Shardbound's (`b2cdcbe`) fails exactly its 19
-recorded node IDs, and 1,078 pass; Warband main `4e092a0` passes 1,369 with
-WB-012. The server rollout that hosts it is Saga Online's
-`docs/wb012-rollout.md`.
-
-**Done and live 2026-09-18.** The shared server runs 0.3.8 (bundle
-`3bf61237…`, Saga Online's `docs/wb012-rollout.md` at `0688e92`): a
-three-seat Warband room on the public server filled in order, started with 3
-of 3, and refused a client from before 0.3.8 with the update message; the
-server's smoke, which speaks such a client's hello, still plays rooms of two
-for all three games; Warband 0.2.34 brings three and four humans into one
-room (WB-012). A later journey (`11adf41`) adds that a room whose players are
-all out plays on while they watch and expires once they leave; it fails
-against a room that forgets somebody must be present.
-
 ## S2D-012 — Small rendering-effect additions
 
 There is no public blend-mode, shader/material or offscreen-target interface.
@@ -346,93 +275,6 @@ afterward and follow [the engine release guide](docs/releases.md) for adoption.
 Run at most one expensive job at once. Record evidence from the final revision;
 an old report or a mock-only pass does not establish current native performance.
 
-## S2D-015 — Window fit and HUD scale on high-DPI desktops
-
-Reported 2026-09-17 from a Windows 10 desktop at 3840×2160 (Warband WB-021):
-`Game(resolution=None)` opened a window covering about half of the desktop,
-letterboxed inside its own frame, with the HUD at native pixels and so tiny;
-the first match then crashed on the scale change between the title and the
-match (fixed in Warband, covered by `tests/warband/test_startup.py`).
-Establish on a Windows session with display scaling: the units
-`screen_size()` and the window sizes report under `pyglet.options.dpi_scaling`,
-what `_fit_screen` should ask for, and how the logical canvas and
-`scale_factor` should be chosen so the HUD stays readable on a 4K desktop
-(the games lay out for 1280 wide and up; `scale_factor` ≥ 2 keeps text sharp).
-Consumers: Warband today; every game using `resolution=None` tomorrow.
-
-**Done when:** on a 4K Windows desktop the window uses the desktop, letterboxes
-only for an aspect mismatch and shows a readable HUD; the mock backend's screen
-size can be set so a startup matrix covers such desktops headlessly; the
-native package check captures a frame on a resized window (Warband already
-does).
-
-**Measured 2026-09-18** on a Windows Server 2022 test box over RDP, pyglet
-2.1.16 (`dpi_scaling` "platform"), Saga2D 0.3.5, the published Warband build
-(frames and reports under Warband's `docs/evidence/win4k/`):
-
-| Desktop | DPI-unaware screen | pyglet screen | `screen.get_scale()` | a 1280×800 window | `Game(resolution=None)` |
-|---|---|---|---|---|---|
-| 1408×1252 at 100 % | 1408×1252 | 1408×1252 | 1.0 | 1280×800 px | canvas and window 1328×1132, `scale_factor` 1.0 |
-| 3840×2160 at 100 % | 3840×2160 | 3840×2160 | 1.0 | 1280×800 px | canvas and window 3760×2040, `scale_factor` 1.0 |
-| 3840×2160 at 200 % | 1920×1080 | 3840×2160 | 2.0 | 1280×800 px, a quarter of its intended area | canvas and window 3760×2040, `scale_factor` 1.0 |
-
-pyglet reports physical pixels on Windows and takes window sizes in physical
-pixels, with the desktop's scale beside them; the backend ignores that scale
-(`screen_size` promises logical units and returns pixels; `create_window`
-opens a fixed-resolution game at half size on a 200 % desktop), and
-`_fit_screen` turns whatever the screen measures into the canvas. At both 4K
-scalings the result is the report: Warband's whole map floats in the middle of
-a 3760×2040 canvas and the HUD is drawn at native pixels, half the size of the
-taskbar's text at 200 %.
-
-**Done 2026-09-18**, commit `6ca9360`, released as **Saga2D 0.3.6** (tag
-`v0.3.6`, wheel SHA-256
-`c7b4139f028a3fc83bed666c05d4bbd52b2267815f240698114e7c01220889b2`; the
-installed-distribution check passed from the built wheel and from PyPI) and
-carried into 0.3.7, which Warband and the shared server run
-([rollout](../saga-online/docs/engine-037-rollout.md)). Every criterion below
-holds. On the real 3840×2160 desktop the engine probe gives canvas 1840×960,
-framebuffer 3680×1920 and `scale_factor` 2.0 at 200 %; 2480×1320 at 1.5 at
-150 %; 2506×1360 in a 3760×2040 window at 1.5 at 100 %. Warband's title, New
-game screen and match were looked at from source on the candidate at each
-scaling and from the published 0.2.26 build at 200 % (Warband's
-`docs/evidence/win4k/`). Found on the way and fixed with it: Windows cascades
-new windows, which hung the fitted window under the taskbar, so a new window
-is centred there (and since `7d508d3`, unreleased, an oversized window keeps
-its title bar on the screen). 422 tests passed on the Mac with the native
-ones; the Mac's windows are as before. The new boundary test imports the
-pyglet backend, which needs a display: the Linux CI run was red until the
-review session added the skip the other native tests use (`c0ddeaa`); I had
-not checked that run after pushing the release. The test boxes that made the
-measurement possible are described in
-[saga-online](../saga-online/docs/windows-test-box.md).
-
-**Acceptance (recorded 2026-09-18 before implementation):**
-
-1. Desktop units. `screen_size`, `window_size`, `windowed_size`,
-   `set_window_size` and the size a fixed-resolution game opens at are in the
-   desktop's own units on every platform: points on macOS as today, physical
-   pixels divided by the desktop's scale on Windows and X11. `scale_factor`
-   then carries the desktop's scale: a 1280×800 game on a 200 % desktop opens
-   2560×1600 px with `scale_factor` 2.0.
-2. `Game(resolution=None)` on 3840×2160 at 200 % gives a canvas of about
-   1840×960 at `scale_factor` 2.0, its window inside the work area; at 150 %
-   about 2480×1320 at 1.5.
-3. A large desktop at a small scale does not become a huge canvas: the fitted
-   canvas is at most 1440 units high, reached by raising the scale in quarter
-   steps, so 3840×2160 at 100 % gives about 2506×1360 at 1.5, while 2560×1440
-   and 1920×1080 at 100 % keep scale 1.0 and today's canvas.
-4. The mock backend's screen and desktop scale can be set, and its
-   `scale_factor` follows them as the real backend's does, so a game's startup
-   matrix can name these desktops headlessly; macOS behaviour is unchanged
-   (the existing display tests and a native run on the reference Mac).
-5. Looked at on the real desktops above (100 %, 150 %, 200 % at 3840×2160, a
-   headless RDP session on the test box): the engine probe's numbers and
-   Warband's title and match frames from a build on the candidate engine: the
-   window uses the desktop, the HUD is readable, the map no longer floats.
-6. Released; Warband's startup matrix, native checks and the shared server
-   follow by the engine-upgrade procedure.
-
 ## S2D-016 — Bound the batch's groups and vertex domains
 
 Found 2026-09-18 by Warband's WB-009 (`tools/perf.py`, the 150-unit reference
@@ -494,124 +336,3 @@ bars are pushed without a Python call per triangle, and the reference battle's
 median frame drops by the measured amount with the frame-pacing and Warband
 gates re-run before a release; the game side keeps its own draw calls.
 
-
-## S2D-018 — Built games carry an icon
-
-Asked for 2026-09-18: the Windows executable, its installer and the Mac app
-bundle of every game show PyInstaller's default picture (the Python-coloured
-snake), because the recipe (`packaging/game.spec`, `game.iss`) names no icon.
-A build should carry the engine's own mark unless the game supplies its
-picture; Warband supplies one (WB-026). Consumers: every packaged game.
-
-**Done 2026-09-18**, commits `7f13be7`, `7a7924f`, `aea32d7`; released as
-**Saga2D 0.3.5** (tag `v0.3.5`, wheel SHA-256
-`6374965477152dc76a496ca38cd0b83c74d75111f2797fe2ac23461712557de2`, sdist
-`ec39f66e178beff6ae1b68e57314f855d9b39bbaf6011b3f853d7e0ae1d0eed2`;
-[Tests 35333175476](https://github.com/ikamensh/saga2d-framework/actions/runs/35333175476);
-the installed-distribution check passed from the built wheel and again from
-PyPI in a fresh environment). Every criterion below holds: 413 tests pass
-(nine new in `tests/framework/test_packaging.py`); the default mark and
-Warband's picture looked at in both platform shapes at every stored size on
-light and dark ground; a Warband bundle built from the candidate on the
-reference Mac passed `verify` with the icon check and shows the picture in
-Finder; Warband's native checks on the released engine are green on Windows
-and macOS ([35337133223](https://github.com/ikamensh/warband/actions/runs/35337133223)),
-and the CI-built executable and Inno Setup installer hold all seven images of
-the converted `.ico` byte for byte. Found on the way: `*.png` is git-ignored
-here, which also keeps a file out of the sdist and so out of the wheel; the
-default picture has its own exception in `.gitignore` and the distribution
-check now requires it. Tribes, Shardbound and Ninefold get the engine's mark
-when their mains move to 0.3.5 (the shared server already runs it:
-[saga-online](../saga-online/docs/engine-035-rollout.md)).
-
-**Acceptance (recorded 2026-09-18 before implementation):**
-
-1. `GamePackage.icon` is an optional path to the game's picture: a square
-   PNG, 1024 px or larger, painted to the edges. A game that names none gets
-   the engine's mark, `saga2d/packaging/icon.png`, committed together with
-   the script that draws it (`tools/make_icon.py`) and shipped in the wheel.
-2. A picture that is not square or is smaller than 1024 px stops the build
-   with an error that names the file and its size; no silent rescue.
-3. Windows: the executable carries the picture as its first icon group in
-   the sizes 16, 24, 32, 48, 64, 128 and 256 (Explorer, the taskbar and the
-   pyglet window read that group), and the installer shows it as well;
-   shortcuts take it from the executable.
-4. macOS: the bundle holds an `.icns` that `CFBundleIconFile` names, shaped to
-   the platform's rounded square with its margin, so the same edge-to-edge
-   picture suits both systems.
-5. The build manifest records the picture's and the converted file's SHA256;
-   `verify` fails a build whose executable (Windows) or bundle (macOS) does
-   not carry exactly the converted icon.
-6. Tests without PyInstaller: the conversion's sizes, the Mac shape's
-   transparent corners, both refusals, the manifest record, the verify check
-   on a fixture; the wheel check (`tools/check_distribution.py`) finds the
-   default picture in the installed distribution.
-7. Looked at: the default mark at 16, 32, 64, 256 and 1024 px on light and
-   dark ground; a bundle built from the candidate engine on the reference Mac
-   with its Finder thumbnail; Warband's native checks on Windows and macOS
-   green on the released engine.
-
-## S2D-019 — A LAN guest slower than the match
-
-Found 2026-09-18 by the Warband code review. `network._Peer.poll` sent and
-received one chunk per call (at most 64 KB in), and `MatchHost.publish` queued
-every state behind the last. A real-time game publishes ten states a second
-whatever the guest's frame rate (Warband: 100 to 140 KB each, so 1.0 to 1.4 MB
-a second), which a guest polling at under about twenty frames a second could
-never read: it fell further behind with every frame, its picture of the match
-seconds old and ageing, until the host's 16 MB queue overflowed and the host
-dropped it with "Connection cannot keep up with the match". Consumers: every
-game's LAN mode; Warband's is the one with states this large.
-
-**Done 2026-09-18** on branch `review`: a poll sends and reads all the socket
-takes and holds now; a state still waiting whole at the end of the queue is
-replaced by the newer one (control messages are never dropped or reordered);
-what a peer said before it hung up is read before the hang-up is raised (a
-rejection once raced the close). `tests/framework/test_network.py`:
-`test_a_guest_slower_than_the_match_sees_the_newest_state_not_a_growing_backlog`
-(a guest at two polls a second against a host publishing 150 KB states: dropped
-by the host on the old code, never more than ten ticks behind on the new); the
-suite 414 passed. Released with S2D-020 and S2D-021 as **Saga2D 0.3.7** on
-2026-09-18 (tag `v0.3.7` at `76cb7cb`; wheel SHA-256
-`31c93847cb9268e8fd22a0a20d9f16e135aec905291dbfde103301715c1c7d21`, sdist
-`c7278aa8abf58e0ec1b6c8773478679f99e173355533efdaecd8433edbbe9452`; the
-installed-distribution check passed from the built wheel and again from PyPI
-in a fresh environment; engine suite 426 passed; Warband main `7f163cf` passes
-its whole suite on the candidate, 1,239 passed). The tagged commit's CI run
-(35365105271) failed only on 0.3.6's new desktop-units test, which imports the
-pyglet backend on a headless runner; `c0ddeaa` skips it there like the other
-native tests and [Tests 35365267852](https://github.com/ikamensh/saga2d-framework/actions/runs/35365267852)
-is green. The shared server moves to 0.3.7 in the rollout the WB-021 session
-runs (Warband pins it there).
-
-## S2D-020 — Online clients take compressed frames
-
-Found 2026-09-18 by the Warband code review. `OnlineClient` connected with
-`compression=None`, declining the permessage-deflate the room server has always
-offered. A Warband state is 70 to 140 KB of JSON ten times a second, so each
-seat of a match drew 6 to 11 Mbit/s from the public server for as long as it
-lasted, and a room cost the server's uplink twice that. The same state deflates
-to about 10 KB with the library's settings (window 12 bits, memory level 5) in
-under half a millisecond.
-
-**Done 2026-09-18** on branch `review`: the client asks for `deflate`; the
-server needs no change. `tests/framework/test_online_client.py`:
-`test_the_client_asks_for_compressed_frames_and_reads_a_large_state_through_them`
-(a room that records the handshake: no offer on the old code). Reaches players
-with the games' next engine upgrade; an older client keeps working
-uncompressed.
-
-## S2D-021 — A realtime room publishes on its clock
-
-Found 2026-09-18 by the same review. `RoomServer.apply` published the whole
-state to both seats after every accepted order. For a turn-based room that is
-the protocol; a realtime room publishes every other tick anyway, a seat may
-send twenty orders a second, and every publication builds and encodes the
-game's snapshot once per seat: one busy seat tripled what its room cost the
-single-threaded server (thirty states built for thirty orders within one tick
-in the test) and what the other seat had to download.
-
-**Done 2026-09-18** on branch `review`: an order marks a realtime room
-unpublished and its next tick, at most 50 ms later, publishes; turn-based
-rooms still answer at once. `tests/framework/test_server.py`:
-`test_a_realtime_room_publishes_on_its_clock_not_on_every_order`.
