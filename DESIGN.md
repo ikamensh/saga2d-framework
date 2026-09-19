@@ -417,7 +417,7 @@ selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
   `write_wav`: pure synthesis shared by every game.  Each game owns its bank
   (which names it renders to WAV, the version marker, playback through its
   `AudioManager`): Tribes' D-major bank in `tribes/sound.py`, Warband's
-  A-minor `SynthBank` in `warband/sound.py`.  The two banks are alike; if a
+  A-minor `SynthBank` in `warband/audio/sound.py`.  The two banks are alike; if a
   third game wants one, that is the moment to lift it back into saga2d.
 * `fonts` — Nunito in three weights, one family per weight because pyglet
   cannot pick a weight out of a variable font.
@@ -431,7 +431,7 @@ selects pyglet's silent audio driver when `SAGA2D_SILENT=1` (or
 
 ## Warband as the second reference game
 
-`warband/model.py` is a 20 Hz fixed-step simulation: units with a queue of
+`warband/sim/model.py` is a 20 Hz fixed-step simulation: units with a queue of
 orders (move, attack-move, attack, harvest, deposit, build, hold), gold
 mining and tree felling, construction with a builder hidden inside the
 site, training queues and rally points, supply from farms, towers that
@@ -544,7 +544,7 @@ the existing scene-owned timer keeps network traffic moving under menus.
 
 `MatchMenu` and `MatchLobby` share address/code entry and the handoff into a
 game-supplied scene. `tribes.multiplayer` validates alternating faction orders;
-`warband.multiplayer` runs a host-owned fixed-step clock and sends numbered
+`warband.online.authority` runs a host-owned fixed-step clock and sends numbered
 feedback events; `eador.multiplayer` serializes both partners' orders into one
 shared campaign and refreshes its map/battle/progression screens. These adapters
 reuse each game's existing model and views. See [multiplayer](docs/multiplayer.md)

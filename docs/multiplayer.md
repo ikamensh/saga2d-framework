@@ -77,7 +77,7 @@ ownership, argument shapes and its existing rules. Invalid commands leave the
 whole authoritative state unchanged. Unexpected implementation errors propagate.
 
 `tribes/multiplayer.py` owns faction/turn permissions and the Tribes command
-schema. `warband/multiplayer.py` owns grouped RTS orders, the authoritative clock
+schema. `warband/online/authority.py` owns grouped RTS orders, the authoritative clock
 and event delivery. `eador/multiplayer.py` owns shared campaign/tactical commands
 and the transition between map, battle, rewards and campaign progression.
 Existing models and scenes remain the source of game rules and presentation.

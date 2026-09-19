@@ -64,7 +64,7 @@ newlines, long translated strings and font/scale changes; inspect native frames.
 and 341–383 implement button hit testing, focus and activation.
 [Tribes scene](../../tribes/tribes/scene.py) lines 1004–1039 implement directional
 tech-tree focus; its settings at 1070 onward and
-[Warband scene](../../warband/warband/scene.py) at 1810 onward repeat indexed
+[Warband scene](../../warband/warband/ui/scene.py) at 1810 onward repeat indexed
 keyboard navigation. Tribes line 224 and Warband line 1074 also duplicate
 `_over_ui()` so world interactions do not pass through HUDs.
 
@@ -103,7 +103,7 @@ pixels agree with the mock. Controller navigation can use this seam later.
 
 The common lifecycle code appears in
 [Tribes multiplayer](../../tribes/tribes/multiplayer.py), lines 105–137,
-[Warband multiplayer](../../warband/warband/multiplayer.py), lines 161–224, and
+[Warband multiplayer](../../warband/warband/ui/multiplayer.py), lines 161–224, and
 [Shardbound multiplayer](../../shardbound/eador/multiplayer.py), lines 90–129.
 Shardbound's `_transferring` flag prevents scene replacement from closing a
 connection that the replacement still needs. That is evidence for match-owned
@@ -117,7 +117,7 @@ scenes subscribe and unsubscribe. Preserve polling under menus. Leave snapshot
 decoding, model identity, authority, pause rules and scene routing in games.
 Do not promote the games' `__dict__.update` reconciliation into an engine pattern.
 
-Separately, [Warband](../../warband/warband/multiplayer.py), lines 27–37 and
+Separately, [Warband](../../warband/warband/ui/multiplayer.py), lines 27–37 and
 206–220, retains a 128-event tail and remembers the consumed ID.
 [Shardbound CombatJournal](../../shardbound/eador/combat_journal.py), lines 24–57,
 and [CombatInbox](../../shardbound/eador/concurrent_playback.py), lines 9–61,
@@ -137,7 +137,7 @@ online adapters exercise the same session interface.
 
 ### Grid/search and scores: useful, but not the first release
 
-[Warband path.py](../../warband/warband/path.py) supplies optimized eight-way
+[Warband path.py](../../warband/warband/sim/path.py) supplies optimized eight-way
 A*, regions and distance fields. [Tribes view](../../tribes/tribes/view.py),
 line 47 onward, supplies isometric projection/picking. A square-grid counterpart
 to [HexGrid](../saga2d/hexgrid.py) is sensible, but geometry and optimized search
@@ -153,7 +153,7 @@ replanning remain local. A shared movement-search abstraction may never be worth
 extracting; square-grid geometry does not depend on making that decision.
 
 [Tribes scores](../../tribes/tribes/scores.py), line 39 onward, and
-[Warband scores](../../warband/warband/scores.py), line 89 onward, offer a small
+[Warband scores](../../warband/warband/records/scores.py), line 89 onward, offer a small
 ranked-record extraction. Do it if it deletes the duplicate algorithms without
 requiring games to adopt a generic score schema. It has less leverage than UI.
 
@@ -179,8 +179,8 @@ Preserve existing behavior during migration. Add an opt-in fixed-step clock
 with remainder/interpolation information, a maximum catch-up budget and a
 declared policy for dropped time. Keep variable-rate UI animation.
 
-Offline [Warband](../../warband/warband/scene.py), lines 1206–1217, and its
-[LAN path](../../warband/warband/multiplayer.py), lines 168–180, use separate
+Offline [Warband](../../warband/warband/ui/scene.py), lines 1206–1217, and its
+[LAN path](../../warband/warband/ui/multiplayer.py), lines 168–180, use separate
 accumulators. The [hosted loop](../saga2d/server/__init__.py), lines 359–388,
 steps every 50 ms, publishes every second step and discards missed time. Make
 simulation/publication rates explicit per hosted game before supporting another
@@ -195,7 +195,7 @@ removing a scene cancels its callbacks/tweens without cancelling global music.
 
 [AssetManager](../saga2d/assets.py), lines 26–97, caches loaded images/sounds
 without a release interface; same-key registration returns the old image and
-in-place update requires the same dimensions. [Warband title](../../warband/warband/title.py),
+in-place update requires the same dimensions. [Warband title](../../warband/warband/ui/title.py),
 lines 248–254, deletes `assets._images` directly when preview dimensions change.
 The renderer retains padded atlas images
 ([pyglet_backend.py](../saga2d/backends/pyglet_backend.py), lines 484–486).
@@ -210,8 +210,8 @@ cache grows to accommodate new content.
 
 Support staged preparation/progress and game-thread uploads when needed.
 Warband already advances texture warmup a few items per frame
-([scene.py](../../warband/warband/scene.py), line 1182), and has a background
-sound-generation queue ([sound.py](../../warband/warband/sound.py), line 80).
+([scene.py](../../warband/warband/ui/scene.py), line 1182), and has a background
+sound-generation queue ([sound.py](../../warband/warband/audio/sound.py), line 80).
 Keep generation, compositions and content-cache rules in Sagaforge/games;
 prebuilt assets should not require background generation at runtime.
 
