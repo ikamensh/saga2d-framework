@@ -35,6 +35,28 @@ exist on current main; extend/adopt them rather than rebuilding them.
 | S2D-014 | Later | deferred | Action input and spatial queries through a small proof game |
 | S2D-016 | Next | ready | Bound the batch's groups and vertex domains: a long battle grows them without end |
 | S2D-017 | Next | ready | Cut the per-frame cost of the y-sorted batch and the shape soups in a crowded scene |
+| S2D-022 | Next | proposed | A floor under the fitted canvas: a game says the smallest its layouts are made for |
+
+## S2D-022 — A floor under the fitted canvas
+
+`Game(resolution=None)` fits the canvas to the desktop and divides it down while it is taller than
+`MAX_FITTED_HEIGHT`, so a big screen never turns into a wall-sized canvas with a tiny HUD. Nothing holds
+it up. A desktop narrower than 1280 px gives a canvas narrower than any layout a game has: measured on
+2026-09-20 with Warband's screen lint, a 1366x768 laptop (canvas 1286x648) loses the top and bottom of
+the New game screen and part of Settings and the codex, a 1280x720 desktop (1200x600) clips the title's
+own word and breaks 17 screens, and a 1024x768 desktop (944x648) puts most of the HUD off screen across
+63 of them. Everything from 1280x800 up is clean. Warband's own smallest canvas, written into its lint,
+is 1200x680.
+
+The engine already draws a canvas larger than its window: `tests/framework` and Warband's startup matrix
+open an 1840x960 canvas in a 960x500 window. So a game could say the smallest canvas its layouts are made
+for and never be given less, the window showing the whole canvas scaled with bars instead.
+
+Consumers: Warband (WB-057) today; every game the moment someone opens it on a small laptop.
+
+Acceptance: `Game(resolution=None, minimum=(w, h))` never returns a canvas below *minimum*; a window
+smaller than it shows the whole canvas, letterboxed; a test opens a 1024x768 screen with a 1200x680
+minimum and finds the canvas 1200x680 and the pointer mapping still correct.
 
 ## S2D-001 — Existing branch review
 
