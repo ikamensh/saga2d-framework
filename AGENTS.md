@@ -50,8 +50,11 @@ uv run python tools/verify_frame_pacing.py         # real-backend checks; see ea
 - `saga2d/packaging/` — build, verify and install standalone games (each game
   has a ten-line `tools/package.py` describing itself as a `GamePackage`).
   `icon.py` gives a build its icon: the game's square picture
-  (`GamePackage.icon`) or the engine's mark (`icon.png`, drawn by
+  (`GamePackage.icon`) or the engine's mark (`saga2d/assets/icon.png`, drawn by
   `tools/make_icon.py`), shaped per platform, checked by `verify`.
+- `saga2d/desktop.py` — the same picture while the game runs, and the name
+  macOS puts beside it: `Game(icon=...)` hands the window a Dock tile and a
+  taskbar icon a game started from a checkout otherwise lacks.
 - `saga2d/testing/` — `render_scene`, text-overlap checks, `cpu_budget`,
   `native_frames.tick`, the pytest fixtures plugin and `online` (the counter
   test game plus helpers that drive a real server process).

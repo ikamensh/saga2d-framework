@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.10 — 2026-09-20
+
+- A game wears its icon while it runs, not only once it is built: `Game(icon=…)`
+  names the square picture, `saga2d.desktop` shapes it for the platform exactly
+  as the built app carries it, and the window hands it to the Dock, the taskbar
+  and the title bar. A game that names no picture wears the engine's mark. The
+  picture belongs in the game package's `assets`, which a built game carries.
+- macOS also learns what to call the game. Only Launch Services names a process
+  there, and one without an application bundle keeps the interpreter's name, so
+  a game started from a checkout sat in the Dock as a blank page called
+  "python3.13" however its window was captioned.
+- The engine's mark moved to `saga2d/assets/icon.png` from the packaging recipe,
+  which the wheel ships but a built game does not carry;
+  `saga2d.packaging.icon.DEFAULT` still names it and builds are unchanged.
+- A network string the server cannot read is refused instead of raised on
+  (a lone surrogate in a JSON escape reached `token.encode()` in the handshake),
+  and object keys are length-checked like values.
+- 0.3.9 is this release without that network fix, published a minute before it
+  reached main. Pin 0.3.10.
+
 ## 0.3.8 — 2026-09-18
 
 - Rooms of more than two seats (S2D-011, for Warband's free-for-all): a

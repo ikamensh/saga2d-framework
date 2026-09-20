@@ -45,6 +45,8 @@ class MockBackend:
         self.frame_count: int = 0
         self.is_running: bool = True
         self.fullscreen = False
+        #: The picture the desktop would draw this game under.
+        self.icon: str | None = None
         self.window_size = (logical_width, logical_height)
         self._windowed_size = self.window_size
         self._clipboard_text = ""
@@ -122,6 +124,9 @@ class MockBackend:
         self.fullscreen = fullscreen
         self.window_size = self.screen_size() if fullscreen else self._windowed_size
         self._fit()
+
+    def set_icon(self, path: str) -> None:
+        self.icon = path
 
     def set_window_size(self, width: int, height: int) -> None:
         self.fullscreen = False

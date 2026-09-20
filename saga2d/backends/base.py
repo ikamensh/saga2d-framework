@@ -134,6 +134,10 @@ class Backend(Protocol):
         """Enter windowed mode at this content size; retain the logical canvas."""
         ...
 
+    def set_icon(self, path: str) -> None:
+        """Draw the game under the square picture at ``path``: its window, its taskbar entry, its Dock tile."""
+        ...
+
     def capture_frame(self) -> "PILImage.Image": ...
 
     def get_clipboard_text(self) -> str:

@@ -23,8 +23,9 @@ def package(root: Path) -> GamePackage:
 
 def test_recipe_ships_its_spec_installer_script_and_entry():
     """The build copies these by name; a missing file must fail before PyInstaller runs."""
-    for name in ("game.spec", "game.iss", "entry.py", "icon.png"):
+    for name in ("game.spec", "game.iss", "entry.py"):
         assert (RECIPE / name).is_file(), name
+    assert icon.DEFAULT.is_file(), "the engine's mark, which a game also wears while it runs"
     assert '"__PACKAGE__"' in (RECIPE / "entry.py").read_text(encoding="utf-8")
 
 
