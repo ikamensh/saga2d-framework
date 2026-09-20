@@ -86,7 +86,7 @@ the next were caught.  On a Mac the pyglet backend reports Control+click
 as the right button, the platform's secondary click, so games need no
 trackpad special case of their own.
 `saga2d.testing.FrameTimer` measures the frame breakdown (wrap the phases,
-time frames, print the report; `tools/perf_warband.py` is its use); time
+time frames, print the report; Warband's `tools/perf.py` is its use); time
 frames with it before claiming numbers, and never under a profiler or
 `tracemalloc`, which slow tight Python loops several times over and shift
 the blame.  `ParticleEmitter.burst` and `continuous` return the emitter,

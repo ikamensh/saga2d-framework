@@ -54,14 +54,32 @@ def decode(data):
         if depth > 12 or count > 2048:
             raise CommandError('Network message is too complex.')
         if isinstance(value, dict):
+            for key in value:
+                _text(key)  # a key is text the server reads and logs like any other
             pending.extend((item, depth + 1) for item in value.values())
         elif isinstance(value, list):
             pending.extend((item, depth + 1) for item in value)
         elif isinstance(value, float) and not math.isfinite(value):
             raise CommandError('Network numbers must be finite.')
-        elif isinstance(value, str) and len(value) > 1024:
-            raise CommandError('Network text is too long.')
+        elif isinstance(value, str):
+            _text(value)
     return message
+
+
+def _text(value):
+    """Text the server can read and hand back out again.
+
+    A JSON escape may name a lone surrogate, which no encoder will take: ``resume_token`` carrying one made
+    ``token.encode()`` raise where a refusal belonged, and the connection died on the catch-all with the wrong
+    message and a traceback in the log for anyone who cared to send one.
+    """
+    if len(value) > 1024:
+        raise CommandError('Network text is too long.')
+    if not value.isascii():  # the common case costs one C scan; only the rest is encoded
+        try:
+            value.encode()
+        except UnicodeEncodeError as exc:
+            raise CommandError('Network text is not text this server can read.') from exc
 
 
 class IncompatibleClient(CommandError):

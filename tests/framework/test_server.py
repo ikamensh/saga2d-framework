@@ -146,9 +146,12 @@ def test_realtime_matches_run_on_the_server_clock_and_pause_for_a_disconnected_p
             assert resumed['ready']
 
 
-@pytest.mark.parametrize('message', ['[]', '{', '{"value":1e999}', '{"value":NaN}'])
+@pytest.mark.parametrize('message', ['[]', '{', '{"value":1e999}', '{"value":NaN}',
+                                     '{"value":"\\ud800"}', '{"\\ud800":1}', '{"' + 'k' * 2000 + '":1}'])
 def test_malformed_json_is_a_connection_rejection(server_url, message):
-    """Invalid JSON cannot escape into rules or crash the room event loop."""
+    """Invalid JSON cannot escape into rules or crash the room event loop.  A JSON escape may name a lone
+    surrogate, which no encoder will take: one in a resume token used to raise inside the handshake and come
+    back as "the server could not create this match", with a traceback in the log for anyone who asked."""
     with connect(server_url, proxy=None) as bad:
         bad.send(message)
         assert receive(bad, 'reject')['error']
