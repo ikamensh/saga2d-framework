@@ -32,12 +32,14 @@ option is set at the top of this module.
 
 from __future__ import annotations
 
+import io
 import math
 import sys
 from typing import Any
 
 import pyglet
 
+from saga2d import desktop
 from saga2d.backends.base import Color, Event, KeyEvent, MouseEvent, Space, WindowEvent, silent_audio
 
 if silent_audio():
@@ -261,6 +263,7 @@ class PygletBackend:
                                      screen.y + max(title_bar, (screen.height - self.window.height) // 2))
         self._compute_viewport(self.window.width, self.window.height)
         self._register_handlers()
+        desktop.call_it(title)  # the Dock has a process to name once the window exists
         self._windowed_size = self.window_size
         if fullscreen:
             self.set_fullscreen(True)
@@ -526,6 +529,16 @@ class PygletBackend:
             self.window.set_size(width, height)
         self._windowed_size = self.window_size
         self._compute_viewport(self.window.width, self.window.height)
+
+    def set_icon(self, path: str) -> None:
+        # Through a PNG each time: pyglet reads a file in its own row order, which raw rows would have to match.
+        images = []
+        for picture in desktop.pictures(path):
+            encoded = io.BytesIO()
+            picture.save(encoded, format="PNG")
+            encoded.seek(0)
+            images.append(pyglet.image.load("icon.png", file=encoded))
+        self.window.set_icon(*images)
 
     def get_clipboard_text(self) -> str:
         return self.window.get_clipboard_text()

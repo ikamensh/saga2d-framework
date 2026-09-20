@@ -13,7 +13,7 @@ import struct
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-DEFAULT = Path(__file__).resolve().parent / "icon.png"
+DEFAULT = Path(__file__).resolve().parents[1] / "assets" / "icon.png"  # shipped with the engine: a game also wears it while it runs
 SIDE = 1024                                    # the smallest picture a game may supply, and the master's size
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 ICNS_SIZES = (32, 64, 128, 256, 512, 1024)     # what Pillow's writer stores
@@ -40,7 +40,9 @@ def rounded(side: int, radius: int) -> Image.Image:
 
 
 def shaped(picture: Image.Image, system: str) -> Image.Image:
-    """The ``SIDE`` px master in ``system``'s outline."""
+    """The ``SIDE`` px master in ``system``'s outline; the picture itself where a desktop shapes nothing."""
+    if system not in FORMATS:
+        return picture
     if system == "Windows":
         tile = picture.resize((SIDE, SIDE), Image.Resampling.LANCZOS)
         tile.putalpha(ImageChops.multiply(tile.getchannel("A"), rounded(SIDE, WINDOWS_RADIUS)))

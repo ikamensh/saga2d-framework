@@ -1,4 +1,4 @@
-"""Draw the engine's default application icon, ``saga2d/packaging/icon.png``.
+"""Draw the engine's default application icon, ``saga2d/assets/icon.png``.
 
     uv run python tools/make_icon.py            # writes the committed picture
     uv run python tools/make_icon.py out.png    # writes somewhere else
@@ -17,7 +17,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 SIZE = 1024
 OVERSAMPLE = 4
-TARGET = Path(__file__).resolve().parents[1] / "saga2d" / "packaging" / "icon.png"
+TARGET = Path(__file__).resolve().parents[1] / "saga2d" / "assets" / "icon.png"
 
 NIGHT_TOP, NIGHT_BOTTOM = (52, 58, 140), (16, 20, 56)
 GOLD_TOP, GOLD_BOTTOM = (255, 222, 128), (236, 150, 44)

@@ -104,6 +104,10 @@ class Game:
         save_dir:   Directory for save slots (default ``~/.<title>/saves``).
         asset_path: Root of the assets directory (default ``assets``).
         theme:      UI theme; default :class:`Theme()`.
+        icon:       Square PNG of at least 1024 px the desktop draws the game
+                    under (see :mod:`saga2d.desktop`); the engine's mark
+                    without one. Ship it inside the game package's ``assets``,
+                    which is what a built game carries.
     """
 
     def __init__(
@@ -117,9 +121,11 @@ class Game:
         save_dir: Path | str | None = None,
         asset_path: Path | str | None = None,
         theme: Theme | None = None,
+        icon: Path | str | None = None,
     ) -> None:
         import saga2d.rendering.sprite as sprite_mod
         import saga2d.util.tween as tween_mod
+        from saga2d.packaging import icon as packaging_icon  # the engine's mark, and the shaping every icon goes through
 
         if sprite_mod._current_game is not None:
             raise RuntimeError("A Game instance already exists. Call game.close() before creating another.")
@@ -171,6 +177,7 @@ class Game:
         self._warned_text: set[str] = set()
 
         self._backend.create_window(self._resolution[0], self._resolution[1], title, fullscreen, visible, window_size)
+        self._backend.set_icon(str(icon) if icon is not None else str(packaging_icon.DEFAULT))
         tween_mod._tween_manager = self._tween_manager
         sprite_mod._current_game = self
 
