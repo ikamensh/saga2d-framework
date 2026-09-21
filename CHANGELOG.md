@@ -7,10 +7,13 @@
   as the built app carries it, and the window hands it to the Dock, the taskbar
   and the title bar. A game that names no picture wears the engine's mark. The
   picture belongs in the game package's `assets`, which a built game carries.
-- macOS also learns what to call the game. Only Launch Services names a process
-  there, and one without an application bundle keeps the interpreter's name, so
-  a game started from a checkout sat in the Dock as a blank page called
-  "python3.13" however its window was captioned.
+- macOS also learns what to call the game in Activity Monitor, the Force Quit
+  window and `lsappinfo`: a process without an application bundle keeps the
+  interpreter's name until Launch Services is told otherwise. The Dock *tile*
+  is labelled from the bundle instead, so a game run from a checkout keeps
+  "python3.13" there however its window is captioned, while its picture is now
+  the game's own. Only a built `.app` carries both; `saga2d.desktop` records
+  what else was tried on macOS 26 and why it does not work.
 - The engine's mark moved to `saga2d/assets/icon.png` from the packaging recipe,
   which the wheel ships but a built game does not carry;
   `saga2d.packaging.icon.DEFAULT` still names it and builds are unchanged.
