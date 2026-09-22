@@ -123,8 +123,7 @@ def test_connection_break_resumes_same_seat_and_authoritative_turn(server_url):
         pump(creator, guest, until=lambda: creator.ready and guest.ready)
         assert creator.resume_token == token and creator.player == 0
         creator.submit({'action': 'add'}, revision=creator.revision)
-        pump(creator, guest, until=lambda: guest.state['counts'][0] == 1)
-        assert creator.state == guest.state
+        pump(creator, guest, until=lambda: guest.state['counts'][0] == 1 and guest.state == creator.state)
     finally:
         creator.close()
         if guest is not None:
