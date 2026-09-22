@@ -180,6 +180,66 @@ def test_window_close_stops_the_game(game: Game, backend) -> None:
     assert game.running is False
 
 
+class BackgroundLog(Scene):
+    def __init__(self, calls: list, name: str) -> None:
+        self.calls = calls
+        self.name = name
+
+    def on_background(self) -> None:
+        self.calls.append(f"{self.name}-background")
+
+    def on_foreground(self) -> None:
+        self.calls.append(f"{self.name}-foreground")
+
+
+def test_window_background_reaches_every_scene_and_foreground_returns(game: Game, backend) -> None:
+    """A covered match must hear the background too, or it would play on unpaused below a menu."""
+    calls: list[str] = []
+    game.push(BackgroundLog(calls, "bottom"))
+    game.push(BackgroundLog(calls, "top"))
+    game.tick(0.016)
+    assert calls == ["bottom-foreground", "top-foreground"]  # startup is a genuine arrival
+    calls.clear()
+    backend.inject_focus(False)
+    game.tick(0.016)
+    assert calls == ["bottom-background", "top-background"]
+    backend.inject_visibility(False)
+    game.tick(0.016)
+    assert calls == ["bottom-background", "top-background"]
+    backend.inject_focus(True)
+    backend.inject_visibility(True)
+    game.tick(0.016)
+    assert calls == ["bottom-background", "top-background", "bottom-foreground", "top-foreground"]
+
+
+def test_a_batch_that_leaves_foreground_state_unchanged_fires_no_hooks(game: Game, backend) -> None:
+    calls: list[str] = []
+    game.push(BackgroundLog(calls, "only"))
+    game.tick(0.016)
+    calls.clear()
+    backend.inject_focus(False)
+    backend.inject_focus(True)
+    game.tick(0.016)
+    assert calls == []
+
+
+def test_a_background_hook_may_push_a_scene(game: Game, backend) -> None:
+    """A hook's transition defers like any other: the tick completes and the scene applies after."""
+    applied: list[str] = []
+
+    class Pausing(Scene):
+        def on_background(self) -> None:
+            self.game.push(Scene())
+            applied.append("pushed")
+
+    game.push(Pausing())
+    game.tick(0.016)
+    assert len(game.scenes) == 1
+    backend.inject_focus(False)
+    game.tick(0.016)
+    assert applied == ["pushed"] and len(game.scenes) == 2
+
+
 def test_scroll_and_drag_deltas_keep_their_fractions(game: Game, backend) -> None:
     events: list[InputEvent] = []
 

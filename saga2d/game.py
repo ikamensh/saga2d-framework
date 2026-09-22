@@ -430,12 +430,16 @@ class Game:
         position — because what happens while unfocused never arrives: a
         release elsewhere would otherwise leave a pressed control, a stuck
         key, or a view scrolling on a stale pointer for the whole alt-tab.
+        The same transition fires :meth:`Scene.on_background` on every
+        scene (and :meth:`Scene.on_foreground` on the way back), so a game
+        can pause what should not run while nobody watches.
         """
         if dt is None:
             dt = self._backend.get_dt()
         if not math.isfinite(dt) or dt < 0:
             raise ValueError(f"dt must be a finite number >= 0, got {dt!r}")
 
+        was_foreground = self._window_visible and self._window_focused
         raw_events: list[Event] = self._backend.poll_events()
         input_events = []
         lost_window_focus = False
@@ -453,6 +457,9 @@ class Game:
             if isinstance(event, MouseEvent):
                 self._mouse = (float(event.x), float(event.y))
             input_events.append(event)
+        is_foreground = self._window_visible and self._window_focused
+        backgrounded = was_foreground and not is_foreground
+        foregrounded = is_foreground and not was_foreground
 
         stack = self._scene_stack
         stack.begin_phase()
@@ -481,6 +488,15 @@ class Game:
 
         stack.begin_phase()
         try:
+            # Net-state transitions only: a batch that hides and shows again
+            # fires neither. Like input, a hook's scene transition defers to
+            # the end of the phase.
+            if backgrounded:
+                for scene in self.scenes:
+                    scene.on_background()
+            elif foregrounded:
+                for scene in self.scenes:
+                    scene.on_foreground()
             stack.update(dt)
             top = stack.top()
             if top is not None and top._ui is not None:

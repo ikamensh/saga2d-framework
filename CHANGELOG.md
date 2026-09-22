@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.12 — 2026-09-22
+
+- Window background/foreground is visible to games: new `Scene.on_background`
+  and `Scene.on_foreground` hooks, fired on every scene on the net-state
+  transition (a batch that hides and shows again fires neither), safe to
+  push scenes from. Warband pauses an undecided local match on background
+  and resumes it on return.
+- The connection-break test pumps the resumed seat until its state
+  converges instead of asserting once: on a loaded runner the final
+  broadcast could land a poll later.
+
 ## 0.3.11 — 2026-09-22
 
 - Losing the window clears every transient input state instead of only pointer

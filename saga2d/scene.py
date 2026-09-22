@@ -124,6 +124,20 @@ class Scene:
     def on_reveal(self) -> None:
         pass
 
+    def on_background(self) -> None:
+        """The window went to the background: deactivated or hidden.
+
+        Transient input is already cleared (a release elsewhere never
+        arrives). Pause what should not run while nobody watches; a match
+        scene usually pauses here and resumes in :meth:`on_foreground`.
+        """
+        pass
+
+    def on_foreground(self) -> None:
+        """The window came back: activated and shown. Undo what
+        :meth:`on_background` did, if it is still yours to undo."""
+        pass
+
     def update(self, dt: float) -> None:
         pass
 
