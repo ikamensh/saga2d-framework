@@ -424,6 +424,12 @@ class Game:
         A scene transition ends dispatch of the current input batch, so queued
         double clicks cannot repeat a completed action or hit the next scene.
         Held-key state still accounts for every press and release in the batch.
+
+        Losing the window (deactivate or hide) clears every transient input
+        state after dispatch — pointer capture, held keys, the pointer
+        position — because what happens while unfocused never arrives: a
+        release elsewhere would otherwise leave a pressed control, a stuck
+        key, or a view scrolling on a stale pointer for the whole alt-tab.
         """
         if dt is None:
             dt = self._backend.get_dt()
@@ -442,6 +448,7 @@ class Game:
                     lost_window_focus = lost_window_focus or not self._window_focused
                 elif event.type in ('show', 'hide'):
                     self._window_visible = event.type == 'show'
+                    lost_window_focus = lost_window_focus or not self._window_visible
                 continue
             if isinstance(event, MouseEvent):
                 self._mouse = (float(event.x), float(event.y))
@@ -461,11 +468,16 @@ class Game:
             stack.end_phase()
 
         # A press in this batch can acquire capture after the OS focus event
-        # was collected. Cancel after dispatch so it cannot survive focus loss.
+        # was collected. Clear after dispatch so nothing held survives
+        # focus loss: capture, held keys, and the pointer position.
         if lost_window_focus:
+            self._input.release_all()
+            self._mouse = None
             for scene in self.scenes:
                 if scene._ui is not None:
                     scene._ui._cancel_pointer()
+                if scene.camera is not None:
+                    scene.camera.release_keys()
 
         stack.begin_phase()
         try:

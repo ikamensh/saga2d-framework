@@ -230,3 +230,16 @@ def test_window_focus_loss_cancels_a_press_from_the_same_input_batch(game, backe
     backend.inject_focus(False)
     game.tick(0)
     assert cancellations == ["cancel"] and scene.ui.focused is button
+
+
+def test_hiding_the_window_cancels_a_held_press(game, backend):
+    """Minimizing (or switching away from fullscreen) must not leave a pressed control behind."""
+    scene = Scene()
+    game.push(scene)
+    button = scene.ui.add(Button("Press", width=100, height=40, anchor=Anchor.TOP_LEFT))
+    backend.inject_click(20, 20)
+    game.tick(0)
+    assert button.has_pointer_capture
+    backend.inject_visibility(False)
+    game.tick(0)
+    assert not button.has_pointer_capture and button.state != "pressed"

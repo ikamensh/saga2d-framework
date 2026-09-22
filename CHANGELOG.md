@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.11 — 2026-09-22
+
+- Losing the window clears every transient input state instead of only pointer
+  capture: hiding (minimize, a fullscreen space switch) cancels a held press
+  like deactivating does, and backgrounding also forgets held keys
+  (`InputManager.release_all`, new `Camera.release_keys`) and the pointer
+  position. What happens while unfocused never arrives, so a release elsewhere
+  no longer leaves a pressed control, a stuck scrolling key, or — the report
+  behind this — a Warband view that edge-scrolled across the map on a stale
+  pointer for the whole alt-tab and answered clicks from the wrong ground
+  after the return. Unfocused frames update the camera with no pointer, so
+  edge scrolling freezes while the window is in the background.
+
 ## 0.3.10 — 2026-09-20
 
 - A game wears its icon while it runs, not only once it is built: `Game(icon=…)`

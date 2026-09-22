@@ -124,6 +124,55 @@ def test_held_keys_are_queryable_between_press_and_release(game: Game, backend) 
     assert not game.input.is_pressed("w")
 
 
+def test_losing_focus_releases_held_keys_and_camera_direction_keys(game: Game, backend) -> None:
+    """A release that lands while alt-tabbed never arrives: backgrounding forgets held keys."""
+    from saga2d import Camera
+
+    class World(Scene):
+        def on_enter(self) -> None:
+            self.camera = Camera(self.game.resolution)
+            self.camera.enable_key_scroll(speed=600)
+
+    scene = World()
+    game.push(scene)
+    backend.inject_key("w")
+    backend.inject_key("right")
+    game.tick(0.1)
+    assert game.input.is_pressed("w")
+    scrolling = scene.camera.x
+    assert scrolling > 0
+    backend.inject_focus(False)
+    game.tick(0.1)
+    assert not game.input.is_pressed("w")
+    for _ in range(10):
+        game.tick(0.1)
+    assert scene.camera.x == scrolling
+
+
+def test_unfocused_window_does_not_edge_scroll_on_a_stale_pointer(game: Game, backend) -> None:
+    """The pointer stays where it was when the player alt-tabbed; the view must stay too."""
+    from saga2d import Camera
+
+    class World(Scene):
+        def on_enter(self) -> None:
+            self.camera = Camera(self.game.resolution, world_bounds=(0, 0, 4000, 4000))
+            self.camera.enable_edge_scroll(8, 600.0)
+            self.camera.center_on(2000, 2000)
+
+    scene = World()
+    game.push(scene)
+    backend.inject_mouse_move(799, 300)
+    game.tick(0.1)
+    assert scene.camera.x > 1600.0
+    backend.inject_focus(False)
+    game.tick(0.1)
+    assert game.mouse_position is None
+    parked = scene.camera.x
+    for _ in range(10):
+        game.tick(0.1)
+    assert scene.camera.x == parked
+
+
 def test_window_close_stops_the_game(game: Game, backend) -> None:
     game.push(Scene())
     backend.inject_window_event("close")

@@ -230,6 +230,15 @@ class Camera:
         self._key_speed = 0.0
         self._held.clear()
 
+    def release_keys(self) -> None:
+        """Forget held direction keys.
+
+        Their release happened while the window was unfocused, so it never
+        arrived: without this the view would keep scrolling on a key nobody
+        holds, during the whole alt-tab and after the return.
+        """
+        self._held.clear()
+
     def handle_input(self, event: InputEvent) -> bool:
         """Track direction keys for key scroll.  Returns True if consumed."""
         if not self._key_speed or event.key is None:
