@@ -243,3 +243,19 @@ def test_hiding_the_window_cancels_a_held_press(game, backend):
     backend.inject_visibility(False)
     game.tick(0)
     assert not button.has_pointer_capture and button.state != "pressed"
+
+
+def test_first_click_after_reactivate_fires(game, backend):
+    """Returning from an alt-tab, the first button press must work, not be eaten by stale state."""
+    calls = []
+    scene = Scene()
+    game.push(scene)
+    scene.ui.add(Button("Press", width=100, height=40, anchor=Anchor.TOP_LEFT, on_click=lambda: calls.append("press")))
+    backend.inject_focus(False)
+    game.tick(0)
+    backend.inject_focus(True)
+    game.tick(0)
+    backend.inject_click(20, 20)
+    backend.inject_release(20, 20)
+    game.tick(0)
+    assert calls == ["press"]
