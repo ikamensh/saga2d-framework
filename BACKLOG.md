@@ -337,6 +337,15 @@ never are. Releasing empty bands would trim memory, not the per-frame cost;
 that needs the y-sorted layer drawn from one ordered buffer instead of a group
 per band (S2D-017's territory).
 
+**Releasing them measured slower (2026-09-24).** Letting culling leave an empty
+group visible, so pyglet's next rebuild frees it, halved the batch in a
+12-seat, 144×108 Warband match (8,537 → 4,021 pyglet groups after a minute of
+play) but did not make its frames faster, and on a marching-crowd bench (400
+y-sorted sprites crossing bands, the camera panning; three interleaved runs
+each) it cost more: `end_frame` 6.2 ms against 4.3 and process CPU 13.2 ms a
+frame against 7.8, since a unit entering an emptied band makes pyglet build a
+new vertex domain. The kept groups are a cache; only the ordered buffer helps.
+
 ## S2D-017 — Per-frame cost of the y-sorted batch and the shape soups
 
 Measured 2026-09-18 with Warband's WB-009 (`tools/perf.py`, the 150-unit
@@ -357,4 +366,13 @@ list every frame (or the rebuild is bounded to the touched groups), boxes and
 bars are pushed without a Python call per triangle, and the reference battle's
 median frame drops by the measured amount with the frame-pacing and Warband
 gates re-run before a release; the game side keeps its own draw calls.
+
+**On a large map (2026-09-24):** a 12-seat Grandmaster match on 144×108 (398
+units, 213 buildings, 2720×2320 px canvas, match paused so only drawing runs)
+spends a median 13 ms a frame drawing: `end_frame` 6.8 (`batch.draw` 2.5,
+`window.flip` 3.4), the scene's draw 2.5, `view.sync` 1.7. Playing, `view.sync`
+rises to 5–6 ms and `batch.draw` to 5, so drawing alone is over the 16.7 ms
+budget before the world step (20 ms every third frame at that point). Machine
+load was about 80 during the run; the split, not the absolute numbers, is the
+finding. Record: `~/saga/evidence/warband/large-map-frame-budget/`.
 
