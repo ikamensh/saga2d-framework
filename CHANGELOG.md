@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.13 — 2026-09-24
+
+- Frame telemetry for every game: `Game.run()` folds its frames into
+  five-second windows (frame-interval and work percentiles, the
+  update/draw/present split, hitches, CPU, full collections, the window's
+  size) and appends one JSON line per window to
+  `<data_dir>/telemetry/<started>-<pid>-<part>.jsonl`. A part continues past
+  4 MiB and the oldest files are deleted past 16 MiB. Scenes add what they
+  are through the new `Scene.telemetry_context()` hook, and games time their
+  own blocks with `game.telemetry.phase(name)`. Only `run()` records; ticked
+  tests and tools, the mock backend, and `SAGA2D_TELEMETRY=0` write nothing.
+  `python -m saga2d.telemetry DIR` summarises a data directory.
+- Backends report `present_seconds`, the time the last `end_frame` spent in
+  the buffer swap. Custom backends must add the attribute.
+- `Game.close()` stops telemetry before tearing the scenes down, so the last
+  window still has their context.
+
 ## 0.3.12 — 2026-09-22
 
 - Window background/foreground is visible to games: new `Scene.on_background`

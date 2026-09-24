@@ -221,6 +221,15 @@ Elapsed time continues to drive animation and timers at either rate.
 tests; those callers own their pacing. No game has to write a sleep loop.
 See the independent [frame-pacing example](docs/framework-frame-pacing.md).
 
+The same loop keeps frame telemetry (`saga2d/telemetry.py`): five-second
+windows of frame-interval and work percentiles, the update/draw/present split,
+hitches, CPU, and what the scenes report (`Scene.telemetry_context`, timed
+`game.telemetry.phase` blocks), one JSON line each under
+`<data_dir>/telemetry`, pruned oldest first past 16 MiB. Only `run()`
+records; ticked tests and tools write nothing. Replays hold orders, not
+frames, so without this a player's frame rate could only be reconstructed.
+See [frame telemetry](docs/framework-telemetry.md).
+
 `Game.close()` owns final scene/resource cleanup and backend shutdown for
 callers that drive explicit ticks. `run()` and `render_scene()` use the same
 operation; ordinary launchers need no additional call. Scene cleanup failures

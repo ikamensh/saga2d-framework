@@ -158,6 +158,12 @@ class Game:
         self._audio: AudioManager | None = None
         self._save_manager: SaveManager | None = None
         self._settings: Settings | None = None
+        from saga2d.backends.mock_backend import MockBackend
+        from saga2d.telemetry import Telemetry, enabled_by_default  # not at the top: ``python -m saga2d.telemetry`` runs it
+
+        #: Frame times while :meth:`run` plays, kept under ``<data_dir>/telemetry`` (see :mod:`saga2d.telemetry`).
+        self.telemetry = Telemetry(self.data_dir / "telemetry",
+                                   enabled=enabled_by_default() and not isinstance(self._backend, MockBackend))
 
         self.running = True
         self._window_visible = visible
@@ -394,9 +400,12 @@ class Game:
         but the backend still closes and a new Game can be created.
         """
         try:
-            self._teardown()
+            self.telemetry.stop()  # first: its last window asks the scenes what they are
         finally:
-            self._backend.quit()
+            try:
+                self._teardown()
+            finally:
+                self._backend.quit()
 
     def set_fullscreen(self, fullscreen: bool) -> None:
         """Enter desktop fullscreen, or restore the last actual windowed size."""
@@ -434,6 +443,8 @@ class Game:
         scene (and :meth:`Scene.on_foreground` on the way back), so a game
         can pause what should not run while nobody watches.
         """
+        started = time.perf_counter()
+        self.telemetry.frame_begins(started)
         if dt is None:
             dt = self._backend.get_dt()
         if not math.isfinite(dt) or dt < 0:
@@ -534,11 +545,16 @@ class Game:
 
         base = stack.get_base_scene()
         self.text_overflows = []
+        drawing = time.perf_counter()
         self._backend.begin_frame(base.background_color if base is not None else None)
         try:
             stack.draw()
         finally:
             self._backend.end_frame()
+        if self.telemetry.recording:
+            top = stack.top()
+            self.telemetry.frame_ends(started, drawing, time.perf_counter(), self._backend.present_seconds,
+                                      scene=type(top).__name__ if top is not None else None, foreground=is_foreground)
 
     def _note_text_overflow(self, text: str, left: float, top: float, width: float, height: float,
                             region: str, region_left: float, region_top: float,
@@ -583,6 +599,11 @@ class Game:
         try:
             if not math.isfinite(fps) or fps <= 0:
                 raise ValueError('fps must be a finite number greater than zero')
+            if self.telemetry.enabled:
+                from saga2d.release import build_info
+                from saga2d.telemetry import session_header
+
+                self.telemetry.start(session_header(self._title, self._resolution, fps, build_info()), self._telemetry_fields)
             self.push(start_scene)
             while self.running:
                 started = time.perf_counter()
@@ -601,6 +622,16 @@ class Game:
                 if run_error is not None:
                     raise run_error from cleanup_error
                 raise
+
+    def _telemetry_fields(self) -> dict[str, Any]:
+        """What a telemetry window records beyond its frames: the window, and what the scenes say about themselves."""
+        fields: dict[str, Any] = {"window": list(self.window_size), "fullscreen": self.fullscreen}
+        context: dict[str, Any] = {}
+        for scene in self.scenes:  # bottom first, so an overlay's word wins
+            context.update(scene.telemetry_context() or {})
+        if context:
+            fields["context"] = context
+        return fields
 
     def _teardown(self) -> None:
         """Release scenes, sprites, timers, audio and the module-level game reference."""

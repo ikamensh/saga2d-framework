@@ -26,6 +26,7 @@ class MockBackend:
         self.logical_width = logical_width
         self.logical_height = logical_height
         self.scale_factor: float = 1.0
+        self.present_seconds: float = 0.0
         #: The desktop a test runs on: its size in desktop units and the pixels per unit
         #: (3840×2160 at 200 % is ``screen=(1920, 1080), desktop_scale=2.0``).
         self.screen = screen

@@ -32,6 +32,9 @@ uv run python tools/verify_frame_pacing.py         # real-backend checks; see ea
 ## Layout
 
 - `saga2d/game.py` — game loop (`tick`), subsystems, scene stack glue.
+- `saga2d/telemetry.py` — frame times of every `run()`, kept under
+  `<data_dir>/telemetry` and size-bounded; `python -m saga2d.telemetry DIR`
+  summarises them.
 - `saga2d/scene.py` — `Scene` hooks, `controls`, draw helpers, ownership.
 - `saga2d/backends/pyglet_backend.py` — GPU backend: view matrices per space,
   triangle soup for shapes, cached labels, texture atlas. `mock_backend.py`

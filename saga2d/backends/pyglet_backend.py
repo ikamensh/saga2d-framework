@@ -35,6 +35,7 @@ from __future__ import annotations
 import io
 import math
 import sys
+import time
 from typing import Any
 
 import pyglet
@@ -114,6 +115,7 @@ class PygletBackend:
         self.logical_width = 0
         self.logical_height = 0
         self.scale_factor = 1.0
+        self.present_seconds = 0.0
         self.offset_x = 0.0
         self.offset_y = 0.0
         self._clip_rect = (0, 0, 0, 0)
@@ -430,7 +432,9 @@ class PygletBackend:
             self.batch.draw()
         finally:
             gl.glDisable(gl.GL_SCISSOR_TEST)
+        presenting = time.perf_counter()
         self.window.flip()
+        self.present_seconds = time.perf_counter() - presenting
 
     def _cull_world_groups(self) -> None:
         """Skip wholly offscreen sprite groups without changing order or ownership."""

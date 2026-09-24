@@ -84,6 +84,8 @@ class Backend(Protocol):
     """Interface every backend satisfies via structural subtyping."""
 
     scale_factor: float
+    #: Seconds the last ``end_frame`` spent presenting the frame (waiting for VSync or the GPU).
+    present_seconds: float
 
     # -- Lifecycle -----------------------------------------------------------
 

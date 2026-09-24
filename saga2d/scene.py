@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import inspect
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Callable, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Mapping
 
 from saga2d.input import normalize_combo
 from saga2d.rendering._text import ANCHOR_X, ANCHOR_Y, TextLayout, _ellipsize, _layout_paragraph, _validate_paragraph_size
@@ -143,6 +143,12 @@ class Scene:
 
     def draw(self) -> None:
         pass
+
+    def telemetry_context(self) -> Mapping[str, Any] | None:
+        """What frame telemetry should record beside this scene's frames: a few small JSON values
+        (map size, unit count, the tick), asked once per window as it closes, for every scene on the
+        stack. Keep it cheap and side-effect free. See :mod:`saga2d.telemetry`."""
+        return None
 
     def handle_input(self, event: InputEvent) -> bool:
         return False
