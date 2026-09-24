@@ -79,7 +79,7 @@ class Telemetry:
         #: The previous frame's start and its (update, draw, present) ms: its interval ends when the next frame starts.
         self._last: tuple[float, tuple[float, float, float]] | None = None
         self._frame_phases: dict[str, float] = {}
-        self._reset_window(0.0)
+        # The window's state is set by start(): until then nothing reads a clock (tests fake them).
 
     @property
     def recording(self) -> bool:

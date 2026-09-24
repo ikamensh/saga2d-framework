@@ -443,8 +443,10 @@ class Game:
         scene (and :meth:`Scene.on_foreground` on the way back), so a game
         can pause what should not run while nobody watches.
         """
-        started = time.perf_counter()
-        self.telemetry.frame_begins(started)
+        telemetry = self.telemetry if self.telemetry.recording else None  # off, it reads no clock
+        if telemetry is not None:
+            started = time.perf_counter()
+            telemetry.frame_begins(started)
         if dt is None:
             dt = self._backend.get_dt()
         if not math.isfinite(dt) or dt < 0:
@@ -545,16 +547,17 @@ class Game:
 
         base = stack.get_base_scene()
         self.text_overflows = []
-        drawing = time.perf_counter()
+        if telemetry is not None:
+            drawing = time.perf_counter()
         self._backend.begin_frame(base.background_color if base is not None else None)
         try:
             stack.draw()
         finally:
             self._backend.end_frame()
-        if self.telemetry.recording:
+        if telemetry is not None:
             top = stack.top()
-            self.telemetry.frame_ends(started, drawing, time.perf_counter(), self._backend.present_seconds,
-                                      scene=type(top).__name__ if top is not None else None, foreground=is_foreground)
+            telemetry.frame_ends(started, drawing, time.perf_counter(), self._backend.present_seconds,
+                                 scene=type(top).__name__ if top is not None else None, foreground=is_foreground)
 
     def _note_text_overflow(self, text: str, left: float, top: float, width: float, height: float,
                             region: str, region_left: float, region_top: float,

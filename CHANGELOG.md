@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.14 — 2026-09-24
+
+- Telemetry that is not recording reads no clock and no collector
+  statistics, in `Game()` or in a tick. 0.3.13 read `time.process_time`
+  once per `Game` it built, which moved the fake clock Shardbound's
+  CPU-budget tests install and failed one of them. Pin 0.3.14.
+
 ## 0.3.13 — 2026-09-24
 
 - Frame telemetry for every game: `Game.run()` folds its frames into

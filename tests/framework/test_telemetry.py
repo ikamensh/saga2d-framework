@@ -171,3 +171,24 @@ def test_a_bad_launch_opens_no_telemetry(tmp_path, fps):
     with pytest.raises(ValueError, match="fps"):
         game.run(Timed(), fps=fps)
     assert not (tmp_path / "telemetry").exists()
+
+
+def test_a_game_that_is_not_recording_reads_no_clock(monkeypatch):
+    """Regression: Shardbound's CPU-budget tests replace ``time.process_time`` with a fake clock, and a
+    ``Game`` read it once while setting up telemetry it would never record, which moved their clock.
+    Off, telemetry costs nothing: no clock and no collector statistics, in the constructor or a tick."""
+    import gc
+    import time as time_module
+
+    reads = []
+    for name in ("perf_counter", "process_time"):
+        real = getattr(time_module, name)
+        monkeypatch.setattr(time_module, name, lambda real=real, name=name: reads.append(name) or real())
+    monkeypatch.setattr(gc, "get_stats", lambda: reads.append("gc.get_stats") or [])
+    game = Game("quiet", backend="mock")
+    game.push(Timed(10.0))
+    for _ in range(3):
+        game.tick(1 / 60)
+    game.close()
+    monkeypatch.undo()
+    assert reads == []
