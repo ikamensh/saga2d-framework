@@ -5,7 +5,7 @@ Game code imports from here::
     from saga2d import Game, Scene, Sprite, Camera, Label, Button, Anchor
 """
 
-__version__ = "0.3.14"
+__version__ = "0.3.15"
 
 import pyglet
 

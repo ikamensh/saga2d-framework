@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15 — 2026-09-25
+
+- A key pyglet cannot name no longer raises in the window's key handlers. On a Mac, Caps Lock and the
+  input-source key reach pyglet with no symbol, and every press printed a `TypeError` traceback from
+  `_symbol_to_name` (seen in Hellward). Such keys are now ignored; every other key is unchanged.
+
 ## 0.3.14 — 2026-09-24
 
 - Telemetry that is not recording reads no clock and no collector

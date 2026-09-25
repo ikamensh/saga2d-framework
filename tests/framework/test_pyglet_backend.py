@@ -414,6 +414,22 @@ def test_control_click_is_a_right_click_on_a_mac() -> None:
         game.backend.quit()
 
 
+def test_a_key_pyglet_cannot_name_is_ignored() -> None:
+    """On a Mac, Caps Lock and the input-source key reach pyglet with no symbol: nothing to press, nothing to raise."""
+    from pyglet.window import key
+
+    game = Game("pyglet", resolution=(200, 120), backend="pyglet", visible=False)
+    try:
+        window = game.backend.window
+        window.dispatch_event("on_key_press", None, 0)
+        window.dispatch_event("on_key_release", None, 0)
+        window.dispatch_event("on_key_press", key.A, 0)
+        assert [(e.type, e.key) for e in game.backend.poll_events() if e.type.startswith("key")] == [("key_press", "a")]
+    finally:
+        game._teardown()
+        game.backend.quit()
+
+
 def test_scaled_opaque_images_have_no_dark_seams_before_or_after_update() -> None:
     """Bilinear filtering at atlas edges must preserve a continuous opaque surface."""
     class Tiles(Scene):

@@ -276,14 +276,17 @@ class PygletBackend:
         window = self.window
         queue = self._event_queue
 
+        # A key pyglet cannot name (on a Mac: Caps Lock, the input-source key) arrives with no symbol.
         @window.event
-        def on_key_press(symbol: int, modifiers: int) -> bool:
-            queue.append(KeyEvent("key_press", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
+        def on_key_press(symbol: int | None, modifiers: int) -> bool:
+            if symbol is not None:
+                queue.append(KeyEvent("key_press", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
             return True  # never fall through to pyglet's ESC-closes-window default
 
         @window.event
-        def on_key_release(symbol: int, modifiers: int) -> bool:
-            queue.append(KeyEvent("key_release", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
+        def on_key_release(symbol: int | None, modifiers: int) -> bool:
+            if symbol is not None:
+                queue.append(KeyEvent("key_release", _symbol_to_name(symbol), **_mods_to_kwargs(modifiers)))
             return True
 
         def name_of(button: int, modifiers: int, pressing: bool) -> str | None:
