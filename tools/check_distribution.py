@@ -13,6 +13,7 @@ from PIL import ImageFont
 from websockets.sync.client import connect
 
 import saga2d
+import saga2d.compiled as compiled
 from saga2d import Button, Column, Game, Label, Scene, TextLayout, fonts
 from saga2d.packaging import RECIPE, icon
 from saga2d.testing.online import COUNTER_GAMES, command, handshake, receive, running_server
@@ -24,6 +25,7 @@ def check_installation() -> None:
     installed_module = Path(distribution.locate_file("saga2d/__init__.py")).resolve()
     assert Path(saga2d.__file__).resolve() == installed_module, "Imported a checkout instead of the wheel"
     assert saga2d.__version__ == distribution.version
+    assert Path(compiled.__file__).resolve() == Path(distribution.locate_file("saga2d/compiled.py")).resolve()
     for filename in fonts.FILES.values():
         font = ImageFont.truetype(str(fonts.FONT_DIR / filename), size=18)
         assert font.getlength("Saga2D") > 0
