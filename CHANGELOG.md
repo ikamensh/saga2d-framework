@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16 — 2026-09-29
+
+- Add `saga2d.compiled.CompiledPackage` for games that compile selected Python modules with mypyc. It keys the build cache to sources and compiler options, shares a build with spawned workers, rejects stale binaries, prunes old builds, and attaches compiled modules before package initializers can import their source versions. Hellward uses it for its simulation.
+
 ## 0.3.15 — 2026-09-25
 
 - A key pyglet cannot name no longer raises in the window's key handlers. On a Mac, Caps Lock and the

@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=9.0.2"]
+dev = ["pytest>=9.0.2", "mypy>=2.3.1", "setuptools>=84"]
 
 [project.urls]
 Homepage = "https://github.com/ikamensh/saga2d-framework"
