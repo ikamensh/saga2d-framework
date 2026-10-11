@@ -20,6 +20,168 @@ RATED = 'counter-rated-v1'
 server_url = server_fixture(COUNTER_GAMES)
 
 
+def test_a_refused_duplicate_join_leaves_the_host_profile_unchanged(tmp_path):
+    """A duplicate account join is refused before any rename: the host stays
+    Original through HTTP, a valid guest still takes the free seat, and the
+    refusal persists as no change across a restart."""
+    from contextlib import ExitStack
+    from urllib.request import urlopen
+    arguments = ('--state-dir', str(tmp_path))
+
+    def get(http, path):
+        with urlopen(http + path, timeout=5) as response:
+            return json.loads(response.read())
+
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        with ExitStack() as stack:
+            host = stack.enter_context(connect(url, proxy=None))
+            welcome = handshake(host, game=RATED, rated=True, player_name='Original')
+            receive(host)
+            room, host_token, host_id = welcome['room'], welcome['player_token'], welcome['player_id']
+            refused = stack.enter_context(connect(url, proxy=None))
+            refused.send(json.dumps({'type': 'join', 'protocol': 1, 'game': RATED,
+                                     'room': room, 'player_token': host_token,
+                                     'player_name': 'RefusedName'}))
+            rejection = json.loads(refused.recv(timeout=5))
+            assert rejection['type'] == 'reject' and 'already holds a seat' in rejection['error']
+            assert get(http, f'/players/{host_id}?game={RATED}')['name'] == 'Original'
+            assert 'RefusedName' not in json.dumps(get(http, f'/ratings?game={RATED}'))
+            guest = stack.enter_context(connect(url, proxy=None))
+            assert handshake(guest, 'join', game=RATED, room=room, player_name='Guest')['player'] == 1
+            assert receive(host, predicate=lambda message: message['ready'])['ready']
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        assert get(http, f'/players/{host_id}?game={RATED}')['name'] == 'Original'
+        assert 'RefusedName' not in json.dumps(get(http, f'/ratings?game={RATED}'))
+
+
+def test_a_refused_foreign_resume_leaves_both_profiles_unchanged(tmp_path):
+    """A seat token paired with another account's token plus a new name is
+    refused before any rename: the guest keeps Other, the host seat still
+    resumes for its owner, and the refusal survives a restart as no change."""
+    from contextlib import ExitStack
+    from urllib.request import urlopen
+    arguments = ('--state-dir', str(tmp_path))
+
+    def get(http, path):
+        with urlopen(http + path, timeout=5) as response:
+            return json.loads(response.read())
+
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        with ExitStack() as stack:
+            host = stack.enter_context(connect(url, proxy=None))
+            welcome = handshake(host, game=RATED, rated=True, player_name='Original')
+            receive(host)
+            guest = stack.enter_context(connect(url, proxy=None))
+            other = handshake(guest, game=GAME, player_name='Other')
+            intruder = stack.enter_context(connect(url, proxy=None))
+            intruder.send(json.dumps({'type': 'resume', 'protocol': 1, 'game': RATED,
+                                      'room': welcome['room'], 'resume_token': welcome['resume_token'],
+                                      'player_token': other['player_token'], 'player_name': 'RefusedOther'}))
+            rejection = json.loads(intruder.recv(timeout=5))
+            assert rejection['type'] == 'reject' and 'different account' in rejection['error']
+            assert get(http, f'/players/{other["player_id"]}?game={GAME}')['name'] == 'Other'
+            assert 'RefusedOther' not in json.dumps(get(http, f'/ratings?game={RATED}'))
+            assert 'RefusedOther' not in json.dumps(get(http, f'/ratings?game={GAME}'))
+            owner = stack.enter_context(connect(url, proxy=None))
+            assert handshake(owner, 'resume', game=RATED, room=welcome['room'],
+                             resume_token=welcome['resume_token'])['player'] == 0
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        assert get(http, f'/players/{other["player_id"]}?game={GAME}')['name'] == 'Other'
+        assert 'RefusedOther' not in json.dumps(get(http, f'/ratings?game={RATED}'))
+        assert get(http, f'/players/{welcome["player_id"]}?game={RATED}')['name'] == 'Original'
+
+
+def test_refused_player_options_mint_no_orphan_and_rename_nothing(tmp_path):
+    """Malformed player options consume no seat and change no profile: a known
+    account keeps its name, a new name mints no leaderboard orphan, and a valid
+    guest still joins the free seat. The silence persists across a restart."""
+    from contextlib import ExitStack
+    from urllib.request import urlopen
+    arguments = ('--state-dir', str(tmp_path))
+
+    def get(http, path):
+        with urlopen(http + path, timeout=5) as response:
+            return json.loads(response.read())
+
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        with ExitStack() as stack:
+            host = stack.enter_context(connect(url, proxy=None))
+            welcome = handshake(host, game=RATED, rated=True, player_name='Original')
+            receive(host)
+            neighbour = stack.enter_context(connect(url, proxy=None))
+            known = handshake(neighbour, game=RATED, rated=True, player_name='Known')
+            receive(neighbour)
+            refused = stack.enter_context(connect(url, proxy=None))
+            refused.send(json.dumps({'type': 'join', 'protocol': 1, 'game': RATED,
+                                     'room': welcome['room'], 'player_token': known['player_token'],
+                                     'player_name': 'RefusedKnown', 'player_options': {'race': 'invalid'}}))
+            rejection = json.loads(refused.recv(timeout=5))
+            assert rejection['type'] == 'reject' and 'race' in rejection['error'].lower()
+            assert get(http, f'/players/{known["player_id"]}?game={RATED}')['name'] == 'Known'
+            orphan = stack.enter_context(connect(url, proxy=None))
+            orphan.send(json.dumps({'type': 'join', 'protocol': 1, 'game': RATED,
+                                    'room': welcome['room'], 'player_name': 'Orphan',
+                                    'player_options': {'race': 'invalid'}}))
+            rejection = json.loads(orphan.recv(timeout=5))
+            assert rejection['type'] == 'reject' and 'race' in rejection['error'].lower()
+            assert get(http, f'/players/{welcome["player_id"]}?game={RATED}')['name'] == 'Original'
+            board = get(http, f'/ratings?game={RATED}')
+            assert sorted(entry['player_id'] for entry in board['players']) == sorted(
+                [welcome['player_id'], known['player_id']])
+            assert 'Orphan' not in json.dumps(board) and 'RefusedKnown' not in json.dumps(board)
+            guest = stack.enter_context(connect(url, proxy=None))
+            assert handshake(guest, 'join', game=RATED, room=welcome['room'])['player'] == 1
+            assert receive(host, predicate=lambda message: message['ready'])['ready']
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        board = get(http, f'/ratings?game={RATED}')
+        assert sorted(entry['name'] for entry in board['players']) == ['Commander', 'Known', 'Original']
+        assert 'Orphan' not in json.dumps(board) and 'RefusedKnown' not in json.dumps(board)
+
+
+def test_invalid_creates_register_no_account_and_make_no_room(tmp_path):
+    """A create refused for its options or its name registers no account and
+    makes no room: the leaderboard stays empty and a later valid create works."""
+    from contextlib import ExitStack
+    from urllib.request import urlopen
+    arguments = ('--state-dir', str(tmp_path))
+
+    def get(http, path):
+        with urlopen(http + path, timeout=5) as response:
+            return json.loads(response.read())
+
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        with ExitStack() as stack:
+            bad_options = stack.enter_context(connect(url, proxy=None))
+            bad_options.send(json.dumps({'type': 'create', 'protocol': 1, 'game': RATED, 'rated': True,
+                                         'options': {'seats': 99}, 'player_name': 'NoRoom'}))
+            assert json.loads(bad_options.recv(timeout=5))['type'] == 'reject'
+            bad_race = stack.enter_context(connect(url, proxy=None))
+            bad_race.send(json.dumps({'type': 'create', 'protocol': 1, 'game': RATED, 'rated': True,
+                                      'player_name': 'NoSeat', 'player_options': {'race': 'invalid'}}))
+            assert json.loads(bad_race.recv(timeout=5))['type'] == 'reject'
+            bad_name = stack.enter_context(connect(url, proxy=None))
+            bad_name.send(json.dumps({'type': 'create', 'protocol': 1, 'game': RATED, 'rated': True,
+                                      'player_name': 'x' * 33}))
+            assert json.loads(bad_name.recv(timeout=5))['type'] == 'reject'
+            assert get(http, f'/ratings?game={RATED}')['players'] == []
+            status = get(http, '/status')
+            assert status['rooms'] == 0
+            host = stack.enter_context(connect(url, proxy=None))
+            welcome = handshake(host, game=RATED, rated=True, player_name='Original')
+            assert get(http, f'/players/{welcome["player_id"]}?game={RATED}')['name'] == 'Original'
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        http = url.replace('ws://', 'http://')
+        board = get(http, f'/ratings?game={RATED}')
+        assert [entry['name'] for entry in board['players']] == ['Original']
+
+
 def test_unsupported_games_take_no_rated_rooms(server_url):
     """A rated create on a game without an authoritative result is refused clearly."""
     with connect(server_url, proxy=None) as host:
@@ -138,6 +300,41 @@ def test_elo_moves_points_from_losers_to_winner_and_conserves_the_sum():
     assert entries[0]['rating'] == 1500.0, 'settlement must read pre-match ratings, not mutate its inputs'
 
 
+UNEQUAL_RATING_VECTORS = [
+    [1600.0, 1400.0],
+    [1400.0, 1600.0],
+    [1700.0, 1500.0, 1300.0],
+    [1300.0, 1500.0, 1700.0],
+    [1550.0, 1550.0, 1400.0],
+    [1800.0, 1600.0, 1400.0, 1200.0],
+    [1200.0, 1400.0, 1600.0, 1800.0],
+    [1500.0, 1600.0, 1400.0, 1550.0],
+]
+
+
+@pytest.mark.parametrize('ratings', UNEQUAL_RATING_VECTORS)
+def test_unequal_ratings_conserve_points_for_every_winner(ratings):
+    """Every seat order of an unequal field settles the same invariants the
+    equal-rating test states: the deltas sum to zero, only the winner gains,
+    each after is its before plus its delta, and the tallies stay consistent.
+    The assertions state properties, never the formula's own arithmetic."""
+    for winner in range(len(ratings)):
+        entries = [{'player_id': f'p{i}', 'name': f'P{i}', 'rating': rating,
+                    'games': 5, 'wins': 2, 'losses': 3} for i, rating in enumerate(ratings)]
+        records = settle_ratings(entries, winner)
+        assert abs(sum(record['delta'] for record in records)) < 1e-9
+        assert records[winner]['delta'] > 0
+        assert all(record['delta'] < 0 for seat, record in enumerate(records) if seat != winner)
+        for record, entry in zip(records, entries):
+            assert abs(record['after'] - entry['rating'] - record['delta']) < 1e-12
+            assert record['player_id'] == entry['player_id'] and record['name'] == entry['name']
+            assert record['before'] == entry['rating']
+        assert [(record['games'], record['wins'], record['losses']) for record in records] == [
+            (6, 3, 3) if seat == winner else (6, 2, 4) for seat in range(len(ratings))]
+        assert [entry['rating'] for entry in entries] == list(ratings), \
+            'settlement must read pre-match ratings, not mutate its inputs'
+
+
 def test_a_rated_lobby_waits_out_grace_and_starts_normally_when_the_guest_arrives():
     """The abandon clock never runs before every needed seat connected once: a lone
     creator waits past a short grace with no winner and no ratings, then a valid
@@ -250,6 +447,69 @@ def test_a_rated_finish_rates_winner_and_losers_once(server_url):
         assert 'over' in receive(host, 'error')['error'].lower()
         names = sorted(entry['name'] for entry in result['ratings'])
         assert names == ['Robin', 'Wren']
+
+
+@pytest.mark.parametrize('seats', [2, 3, 4])
+def test_same_account_rematches_price_favourites_and_underdogs(tmp_path, seats):
+    """Three rematches between the same accounts start from equal ratings: the
+    first victory pays exactly sixteen, repeating the higher-rated winner pays
+    less, and the lower-rated winner's upset pays more. Every match conserves
+    its points, the public ids and tallies stay consistent, and a restart keeps
+    the third match's table. Winners are chosen with public add orders; the
+    finish crowns the highest count."""
+    from contextlib import ExitStack
+    from urllib.request import urlopen
+    arguments = ('--state-dir', str(tmp_path))
+
+    def get(http, path):
+        with urlopen(http + path, timeout=5) as response:
+            return json.loads(response.read())
+
+    names = [f'P{seat}' for seat in range(seats)]
+    winners = [0, 0, 1]
+    results = []
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        tokens, ids = [None] * seats, [None] * seats
+        for winner in winners:
+            with ExitStack() as stack:
+                sockets = [stack.enter_context(connect(url, proxy=None)) for _ in range(seats)]
+                declared = {'player_name': names[0]}
+                if tokens[0] is not None:
+                    declared['player_token'] = tokens[0]
+                welcome = handshake(sockets[0], game=RATED, rated=True, seats=4,
+                                    options={'seats': seats}, **declared)
+                ids[0], tokens[0] = welcome['player_id'], welcome['player_token']
+                for seat in range(1, seats):
+                    declared = {'player_name': names[seat]}
+                    if tokens[seat] is not None:
+                        declared['player_token'] = tokens[seat]
+                    joined = handshake(sockets[seat], 'join', game=RATED, room=welcome['room'],
+                                       seats=4, **declared)
+                    ids[seat], tokens[seat] = joined['player_id'], joined['player_token']
+                assert receive(sockets[0], predicate=lambda message: message['ready'])['ready']
+                command(sockets[winner], {'action': 'add'})
+                command(sockets[winner], {'action': 'finish'})
+                settled = receive(sockets[winner], predicate=lambda message: message['result'] is not None)
+                assert settled['result']['winner'] == winner
+                results.append(settled['result'])
+        assert [record['player_id'] for record in results[0]['ratings']] == ids
+        for result in results:
+            assert [record['player_id'] for record in result['ratings']] == ids
+            assert abs(sum(record['delta'] for record in result['ratings'])) < 1e-9
+        assert abs(results[0]['ratings'][0]['delta'] - 16.0) < 1e-9
+        assert 0 < results[1]['ratings'][0]['delta'] < 16.0
+        assert results[2]['ratings'][1]['delta'] > 16.0
+        assert [(record['games'], record['wins'], record['losses']) for record in results[2]['ratings']] == [
+            (3, 2, 1), (3, 1, 2)] + [(3, 0, 3)] * (seats - 2)
+        assert [record['name'] for record in results[2]['ratings']] == names
+    with running_server(COUNTER_GAMES, arguments=arguments) as (url, process):
+        board = get(url.replace('ws://', 'http://'), f'/ratings?game={RATED}')['players']
+        assert sorted(entry['player_id'] for entry in board) == sorted(ids)
+        for entry, record in zip(sorted(board, key=lambda item: item['player_id']),
+                                 sorted(results[2]['ratings'], key=lambda item: item['player_id'])):
+            assert entry == {'player_id': record['player_id'], 'name': record['name'],
+                             'rating': record['after'], 'games': record['games'],
+                             'wins': record['wins'], 'losses': record['losses']}
 
 
 def test_a_three_seat_rated_match_splits_the_win_across_two_losers(server_url):

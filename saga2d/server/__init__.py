@@ -274,6 +274,16 @@ class Room:
                            'result': self.result})
 
 
+@dataclass(frozen=True)
+class _StagedIdentity:
+    """A validated hello waiting for its seat: committing it inserts the account and profile it earned."""
+    player_id: str
+    account_token: str
+    name: str
+    account_hash: str | None  # a fresh account inserts this on commit
+    profile: dict | None  # the profile to insert or rename on commit; None changes nothing
+
+
 class RoomServer:
     """Matches expire after ``room_ttl`` without every needed player; campaigns are retained
     for ``campaign_ttl`` and leave memory after ``room_ttl`` until a seat returns.
@@ -334,47 +344,54 @@ class RoomServer:
                             'connected': peer is not None and not peer.closing})
         return entries
 
-    def identify(self, game, message):
-        """Bind this hello to an account: a known token, or a fresh identity.
+    def _prepare_identity(self, game, message):
+        """Validate this hello against the accounts without changing anything.
 
-        Returns ``(player_id, account_token, name)``; raises before any room changes.
+        Returns a staged identity with the writes a later commit must apply;
+        raises before any account, profile, room or seat changes. ``enter``
+        commits only after every room, seat and game precondition succeeds, so
+        a refused request leaves valid profiles untouched and mints no orphan.
         """
         raw = message.get('player_token', None)
+        # An omitted name changes nothing: reconnects and token resumes carry no
+        # name, and must not rename the account back to the default. Only an
+        # explicit name renames; a fresh account starts with the default.
+        name = player_name(message['player_name']) if 'player_name' in message else None
         if raw is None or raw == '':
             while True:
                 player_id = 'p_' + secrets.token_urlsafe(12)
                 if player_id not in self.accounts:
                     break
             token = secrets.token_urlsafe(32)
-            hashed = _token_hash(token)
-            self.accounts[player_id] = hashed
-            if self.store is not None:
-                self.store.save_account(player_id, hashed)
-        else:
-            if not isinstance(raw, str):
-                raise CommandError('player_token must be text.')
-            player_id = next((known for known, hashed in self.accounts.items()
-                              if _token_matches(raw, hashed)), None)
-            if player_id is None:
-                raise CommandError('This player token is unknown. Create without one for a new identity.')
-            token = raw
-        # An omitted name changes nothing: reconnects and token resumes carry no
-        # name, and must not rename the account back to the default. Only an
-        # explicit name renames; a fresh account starts with the default.
-        name = player_name(message['player_name']) if 'player_name' in message else None
-        profile = self.profiles.get((game, player_id))
-        if profile is None:
             profile = {'player_id': player_id, 'name': name or DEFAULT_PLAYER_NAME, 'rating': STARTING_RATING,
                        'games': 0, 'wins': 0, 'losses': 0}
-            self.profiles[(game, player_id)] = profile
+            return _StagedIdentity(player_id, token, profile['name'], _token_hash(token), profile)
+        if not isinstance(raw, str):
+            raise CommandError('player_token must be text.')
+        player_id = next((known for known, hashed in self.accounts.items()
+                          if _token_matches(raw, hashed)), None)
+        if player_id is None:
+            raise CommandError('This player token is unknown. Create without one for a new identity.')
+        profile = self.profiles.get((game, player_id))
+        if profile is None:
+            resolved = {'player_id': player_id, 'name': name or DEFAULT_PLAYER_NAME, 'rating': STARTING_RATING,
+                        'games': 0, 'wins': 0, 'losses': 0}
+            return _StagedIdentity(player_id, raw, resolved['name'], None, resolved)
+        if name is not None and profile['name'] != name:
+            return _StagedIdentity(player_id, raw, name, None, {**profile, 'name': name})
+        return _StagedIdentity(player_id, raw, profile['name'], None, None)
+
+    def _commit_identity(self, game, staged):
+        """Apply a prepared identity: insert the account and profile the hello earned."""
+        if staged.account_hash is not None:
+            self.accounts[staged.player_id] = staged.account_hash
             if self.store is not None:
-                self.store.save_profile(game, player_id, profile)
-        elif name is not None and profile['name'] != name:
-            profile = {**profile, 'name': name}
-            self.profiles[(game, player_id)] = profile
+                self.store.save_account(staged.player_id, staged.account_hash)
+        if staged.profile is not None:
+            self.profiles[(game, staged.player_id)] = staged.profile
             if self.store is not None:
-                self.store.save_profile(game, player_id, profile)
-        return player_id, token, profile['name']
+                self.store.save_profile(game, staged.player_id, staged.profile)
+        return staged.player_id, staged.account_token, staged.name
 
     def require_rated(self, spec, match, seats):
         """Refuse a rated create the game cannot decide, clearly."""
@@ -520,8 +537,9 @@ class RoomServer:
             fits(seats)
             if rated:
                 self.require_rated(spec, match, seats)
-            player_id, account_token, name = self.identify(game, message)
+            staged = self._prepare_identity(game, message)
             spec.configure_player(match, 0, player_options())
+            player_id, account_token, name = self._commit_identity(game, staged)
             while True:
                 code = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(12))
                 if code not in self.rooms:
@@ -538,12 +556,13 @@ class RoomServer:
             if player is None:
                 raise CommandError(('Both seats are claimed.' if len(room.tokens) == 2 else 'Every seat is claimed.')
                                    + ' Reconnect using your saved seat.')
-            player_id, account_token, name = self.identify(game, message)
-            if room.rated and any(identity is not None and identity['player_id'] == player_id
+            staged = self._prepare_identity(game, message)
+            if room.rated and any(identity is not None and identity['player_id'] == staged.player_id
                                   for identity in room.identities):
                 raise CommandError('This account already holds a seat in this rated room. '
                                    + 'Reconnect using your saved seat.')
             self.games[game].configure_player(room.match, player, player_options())
+            player_id, account_token, name = self._commit_identity(game, staged)
             room.tokens[player] = secrets.token_urlsafe(32)
             room.identities[player] = {'player_id': player_id, 'name': name}
             return room, player, account_token
@@ -551,10 +570,10 @@ class RoomServer:
             raw = message.get('player_token', None)
             if raw is None or raw == '':
                 # A seat token alone still resumes its seat; the account binds on demand.
-                name = player_name(message.get('player_name', None))
-                player_id, account_token, supplied = None, '', False
+                player_name(message.get('player_name', None))
+                staged, supplied = None, False
             else:
-                player_id, account_token, name = self.identify(game, message)
+                staged = self._prepare_identity(game, message)
                 supplied = True
             token = message.get('resume_token')
             if isinstance(token, str):
@@ -563,10 +582,15 @@ class RoomServer:
                         identity = room.identities[player]
                         if identity is None:
                             if not supplied:
-                                player_id, account_token, name = self.identify(game, message)
+                                staged = self._prepare_identity(game, message)
+                            player_id, account_token, name = self._commit_identity(game, staged)
                             room.identities[player] = {'player_id': player_id, 'name': name}
-                        elif supplied and identity['player_id'] != player_id:
-                            raise CommandError('This saved seat belongs to a different account.')
+                        elif supplied:
+                            if identity['player_id'] != staged.player_id:
+                                raise CommandError('This saved seat belongs to a different account.')
+                            player_id, account_token, name = self._commit_identity(game, staged)
+                        else:
+                            player_id, account_token = None, ''
                         if room.peers[player] is not None:
                             room.peers[player].reject('Your seat reconnected from another connection.')
                         return room, player, account_token
