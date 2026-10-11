@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.17 — 2026-10-11
+
+- Server-authoritative rated play. `GameSpec` gains optional `result` (winning seat, or None while undecided), `rated` eligibility, `forfeit` (absent rated seat), and `configure_player` (per-seat options such as own race); a rated game needs `result` plus `forfeit`.
+- `OnlineClient` gains `player_token`/`player_name`/`rated`/`player_options`, with `identity`, `rating`, `players`, `match_id` and `result` properties.
+- Durable server-owned identities: the server mints account tokens, stores only hashes, and binds seat identities across reconnects; a nameless resume keeps its name.
+- One normalized Elo receipt per match: winner/loser settlement persists atomically in SQLite, once per match UUID, restart-safe via a terminal checkpoint.
+- Rated forfeit grace (`--rated-grace`, default 60 s): absent needed seats forfeit only after the match began and the grace expires; lobby waits and shared outages never forfeit.
+- Public JSON endpoints: server status, ratings leaderboard, and player profile (counts only), served with the correct JSON content type.
+- Compatible patch, no migration for existing casual games. Legacy casual clients keep working through additive optional wire fields; explicitly ranked or optioned requests against an old server fail clearly instead of silently playing casual.
+
 ## 0.3.16 — 2026-09-29
 
 - Add `saga2d.compiled.CompiledPackage` for games that compile selected Python modules with mypyc. It keys the build cache to sources and compiler options, shares a build with spawned workers, rejects stale binaries, prunes old builds, and attaches compiled modules before package initializers can import their source versions. Hellward uses it for its simulation.
