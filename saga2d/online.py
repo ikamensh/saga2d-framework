@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 import json
+import math
 import os
 import queue
 import threading
@@ -26,6 +27,45 @@ SEATS = 4
 MAX_STATE = 8 * 1024 * 1024
 MAX_COMMAND = 16 * 1024
 DEFAULT_SERVER_URL = 'wss://games.tachyon-ai.eu/play'
+
+
+def _identity_tally(value, what):
+    """Who a profile or receipt record belongs to and its tally, validated whole."""
+    if not isinstance(value, dict):
+        raise ValueError(f'Invalid {what} from server.')
+    if not isinstance(value.get('player_id'), str) or not isinstance(value.get('name'), str):
+        raise ValueError(f'Invalid {what} identity from server.')
+    for field in ('games', 'wins', 'losses'):
+        if type(value.get(field)) is not int or value[field] < 0:
+            raise ValueError(f'Invalid {what} tally from server.')
+    return value
+
+
+def _profile(value, what):
+    """A public rating profile, validated whole: no partial profiles are manufactured."""
+    _identity_tally(value, what)
+    rating = value.get('rating')
+    if type(rating) not in (int, float) or not math.isfinite(rating):
+        raise ValueError(f'Invalid {what} rating from server.')
+    return value
+
+
+def _result(value):
+    """A rated receipt, validated whole: match, winner and every rating record."""
+    if not isinstance(value, dict):
+        raise ValueError('Invalid match result from server.')
+    if not isinstance(value.get('match_id'), str) or type(value.get('winner')) is not int:
+        raise ValueError('Invalid match result from server.')
+    ratings = value.get('ratings')
+    if not isinstance(ratings, list) or not ratings:
+        raise ValueError('Invalid match result ratings from server.')
+    for entry in ratings:
+        _identity_tally(entry, 'match result rating')
+        for field in ('before', 'after', 'delta'):
+            number = entry.get(field)
+            if type(number) not in (int, float) or not math.isfinite(number):
+                raise ValueError('Invalid match result rating movement from server.')
+    return value
 
 
 def server_endpoint():
@@ -49,19 +89,31 @@ class OnlineClient:
 
     ``ready`` requires every player the match needs, while ``room`` arrives as
     soon as creation succeeds; ``seats`` is the room's size and ``present`` how
-    many are in it. ``resume_token`` is private: share only the room code.
-    ``close`` leaves the seat reserved on the server for ``retention`` seconds
-    without the others. ``incompatible`` marks a rejection that only an update fixes.
+    many are in it. ``resume_token`` is private: share only the room code, and
+    ``player_token`` is the durable account credential: persist it per endpoint
+    and never share it. A rated create on a server without ranked support fails
+    clearly instead of falling back to casual. ``close`` leaves the seat reserved
+    on the server for ``retention`` seconds without the others. ``incompatible``
+    marks a rejection that only an update fixes.
     """
     online = True
 
-    def __init__(self, game_id, *, endpoint=None, room=None, options=None, resume_token=None):
+    def __init__(self, game_id, *, endpoint=None, room=None, options=None, resume_token=None,
+                 player_token='', player_name='Commander', rated=False, player_options=None):
         self.game_id = game_id
         self.endpoint = _endpoint(endpoint or server_endpoint())
         self.room = room.strip().lower() if room else ''
         self.resume_token = resume_token or ''
         if self.resume_token and not self.room:
             raise ValueError('A room code is required to resume a seat.')
+        if type(rated) is not bool:
+            raise ValueError('rated must be true or false.')
+        if player_options is not None and not isinstance(player_options, dict):
+            raise ValueError('player_options must be an object.')
+        try:
+            json.dumps(player_options or {}, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'player_options must be JSON: {exc}') from exc
         self.player = 0 if not room else 1
         self.seats, self.present = 2, 0
         self.ready = False
@@ -71,12 +123,32 @@ class OnlineClient:
         self.retention = None
         self.state = None
         self.revision = 0
+        self.player_id = ''
+        self.player_token = player_token or ''
+        self.player_name = player_name
+        self.rating = None
+        self.players = []
+        self.rated = rated if not room else False
+        self.rated_grace = None
+        self.match_id = ''
+        self.result = None
+        self._wants_rated = rated and not room
+        self._wants_options = dict(player_options or {}) if self._hello['type'] in ('create', 'join') else {}
         self._hello = {'protocol': PROTOCOL, 'game': game_id, 'seats': SEATS,
                        'type': 'resume' if resume_token else 'join' if room else 'create'}
         if room:
             self._hello['room'] = self.room
         if resume_token:
             self._hello['resume_token'] = resume_token
+        if self._hello['type'] == 'create':
+            self._hello['rated'] = rated
+        if self._hello['type'] in ('create', 'join'):
+            if player_token:
+                self._hello['player_token'] = player_token
+            self._hello['player_name'] = player_name
+            self._hello['player_options'] = dict(player_options or {})
+        elif player_token:
+            self._hello['player_token'] = player_token
         if not room:
             self._hello['options'] = options or {}
         # Validate synchronously before launching the worker.
@@ -138,9 +210,39 @@ class OnlineClient:
                                     or message['player'] not in range(seats)
                                     or type(retention) not in (int, float) or not 0 < retention < float('inf')):
                                 raise ValueError('Invalid seat assignment from server.')
+                            for field in ('player_id', 'player_token', 'match_id'):
+                                if field in message and not isinstance(message[field], str):
+                                    raise ValueError('Invalid player identity from server.')
+                            if 'rating' in message:
+                                _profile(message['rating'], 'player rating')
+                            if 'rated' in message and type(message['rated']) is not bool:
+                                raise ValueError('Invalid room rating flag from server.')
+                            if 'rated_grace' in message:
+                                grace = message['rated_grace']
+                                if type(grace) is bool or type(grace) not in (int, float) \
+                                        or not math.isfinite(grace) or grace <= 0:
+                                    raise ValueError('Invalid rated grace from server.')
+                            capabilities = message.get('capabilities')
+                            if self._wants_rated and not (isinstance(capabilities, dict)
+                                                          and capabilities.get('ratings') is True
+                                                          and message.get('rated') is True):
+                                self._emit({'type': 'reject', 'error': 'This server does not support ranked play. '
+                                                                      'Update the server or choose casual.'})
+                                return
+                            if self._wants_options and not (isinstance(capabilities, dict)
+                                                            and capabilities.get('player_options') is True):
+                                self._emit({'type': 'reject',
+                                            'error': 'This server does not support per-player options. '
+                                                     'Update the server.'})
+                                return
                             hello = {'type': 'resume', 'protocol': PROTOCOL, 'seats': SEATS,
                                      'game': self._hello['game'], 'room': message['room'],
                                      'resume_token': message['resume_token']}
+                            issued = message.get('player_token')
+                            if isinstance(issued, str) and issued:
+                                hello['player_token'] = issued
+                            elif self.player_token:
+                                hello['player_token'] = self.player_token
                             self._resume = hello
                             self._retry_deadline = None
                         elif kind == 'state':
@@ -148,6 +250,25 @@ class OnlineClient:
                                     or type(message.get('revision')) is not int
                                     or type(message.get('ready')) is not bool):
                                 raise ValueError('Invalid match state from server.')
+                            if 'players' in message:
+                                players = message['players']
+                                if not isinstance(players, list) or len(players) > SEATS:
+                                    raise ValueError('Invalid match players from server.')
+                                for entry in players:
+                                    if entry is None:
+                                        continue
+                                    _profile(entry, 'match player')
+                                    if type(entry.get('seat')) is not int \
+                                            or entry['seat'] not in range(len(players)):
+                                        raise ValueError('Invalid match player seat from server.')
+                                    if type(entry.get('connected')) is not bool:
+                                        raise ValueError('Invalid match player presence from server.')
+                            if 'rated' in message and type(message['rated']) is not bool:
+                                raise ValueError('Invalid room rating flag from server.')
+                            if 'match_id' in message and not isinstance(message['match_id'], str):
+                                raise ValueError('Invalid match identity from server.')
+                            if 'result' in message and message['result'] is not None:
+                                _result(message['result'])
                             if message['ready']:
                                 self._accept_orders.set()
                             else:
@@ -220,11 +341,35 @@ class OnlineClient:
             if kind == 'welcome':
                 self.room, self.resume_token = message['room'], message['resume_token']
                 self.player, self.retention, self.seats = message['player'], message['retention'], message['seats']
+                self.player_id = message.get('player_id', '')
+                if message.get('player_token'):
+                    self.player_token = message['player_token']
+                if isinstance(message.get('rating'), dict):
+                    self.rating = message['rating']
+                if type(message.get('rated')) is bool:
+                    self.rated = message['rated']
+                if type(message.get('rated_grace')) in (int, float):
+                    self.rated_grace = message['rated_grace']
+                if isinstance(message.get('match_id'), str):
+                    self.match_id = message['match_id']
                 self.error = ''
             elif kind == 'state':
                 self.state, self.revision = message['state'], message['revision']
                 self.ready = message['ready']
                 self.present = message.get('present', self.present)
+                if isinstance(message.get('players'), list):
+                    self.players = message['players']
+                    for entry in self.players:
+                        if isinstance(entry, dict) and entry.get('player_id') == self.player_id and self.player_id:
+                            self.rating = {'player_id': entry['player_id'], 'name': entry['name'],
+                                           'rating': entry['rating'], 'games': entry['games'],
+                                           'wins': entry['wins'], 'losses': entry['losses']}
+                if type(message.get('rated')) is bool:
+                    self.rated = message['rated']
+                if isinstance(message.get('match_id'), str):
+                    self.match_id = message['match_id']
+                if 'result' in message:
+                    self.result = message['result']
             elif kind in ('error', 'reject', 'disconnected'):
                 self.error = message['error']
                 if kind == 'disconnected':

@@ -9,6 +9,12 @@ from typing import Any
 from saga2d.network import CommandError
 
 
+def _reject_player_options(match, player, options):
+    """Games without per-seat choices take no player options beyond the default."""
+    if options:
+        raise CommandError('This game takes no per-player options.')
+
+
 @dataclass(frozen=True)
 class GameSpec:
     """One hosted game version.
@@ -24,6 +30,15 @@ class GameSpec:
     *player* must be connected for play to go on.  A room is ready when every
     needed seat is, so a player who is out of the match may leave without
     pausing the others.  Two seats, every one needed, unless the game says otherwise.
+
+    ``result`` reports the authoritative winner's seat once the match is decided,
+    or None while it is still played; a game without one takes no rated rooms.
+    ``rated`` says whether a fresh match is eligible for ratings, and ``forfeit``
+    records an absent rated seat's abandonment (a rated game needs both hooks:
+    a silent no-op would leave an abandoned match stuck forever).
+    ``configure_player`` applies a
+    joining seat's private options (a race choice, for example) before the seat
+    is claimed; the default accepts only the empty choice.
     """
     create: Callable[[dict], Any]
     checkpoint: Callable[[Any], dict]
@@ -32,6 +47,10 @@ class GameSpec:
     campaign: bool = False
     seats: Callable[[Any], int] = lambda match: 2
     needed: Callable[[Any, int], bool] = lambda match, player: True
+    result: Callable[[Any], int | None] | None = None
+    rated: Callable[[Any], bool] = lambda match: True
+    forfeit: Callable[[Any, int], None] | None = None
+    configure_player: Callable[[Any, int, dict], None] = _reject_player_options
 
 
 def option_keys(options: Any, allowed: set[str]) -> dict:

@@ -1,5 +1,44 @@
 # LAN multiplayer and game integration
 
+## Online identity and rated play
+
+An online account is a random public `player_id` plus a strong random private
+`player_token`. The token is a bearer credential: the game persists it per
+endpoint, the server only ever stores its hash, and it never appears in room
+states, rosters or HTTP answers. The display name is not the identity — two
+players may share one. Names trim to at most 32 printable characters with no
+control characters; anything else is a clear refusal. `resume_token` stays the
+separate private room-seat credential. Every create and join assigns an
+identity, including clients from before identities existed.
+
+`OnlineClient(..., player_token='', player_name='Commander', rated=False)`
+sends `rated` on create; joins and resumes inherit the room's flag. A rated
+create on an old server fails clearly instead of falling back to casual, as
+does a join with player options the server does not understand.
+
+A game opts into ratings with three `GameSpec` hooks: `result(match)` naming
+the winning seat or `None` while undecided (no hook, no rated rooms),
+`rated(match)` for eligibility, and `forfeit(match, seat)` recording an
+abandonment. Rated rooms need a supported, eligible, non-campaign match with
+2–4 seats, and one account cannot hold two of its seats. Only completed
+authoritative matches rate: all participants start at 1500, the winner takes
+32·(1−E) normalised over each loser while losers tie, games/wins/losses
+tally, and each match UUID records exactly one receipt. `configure_player`
+applies a joining seat's private options (a race choice) before the seat is
+claimed; resume never reconfigures.
+
+A rated seat absent past `--rated-grace` (default 60 seconds, positive and
+finite) forfeits through the game's hook once the match has begun — the lobby
+never starts that clock, and an empty room stays paused. Reconnecting in time
+keeps the seat with no defeat. The welcome carries the configured grace, so
+menus read `OnlineClient.rated_grace` (`None` before the welcome or on old
+servers) instead of guessing it.
+
+Anyone may read `GET /status` (counts plus per-game rated support, never room
+codes, tokens or identities), `GET /ratings?game=id&limit=20` (public
+profiles, best first, limit 1–100) and `GET /players/{id}?game=id` as JSON;
+`/healthz` stays plain `ok`.
+
 For internet play, use the default **Online** mode described in
 [the online multiplayer guide](../../tribes/docs/online-multiplayer.md). The following describes
 the explicit **LAN** mode.
