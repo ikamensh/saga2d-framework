@@ -358,20 +358,23 @@ class RoomServer:
             if player_id is None:
                 raise CommandError('This player token is unknown. Create without one for a new identity.')
             token = raw
-        name = player_name(message.get('player_name', None))
+        # An omitted name changes nothing: reconnects and token resumes carry no
+        # name, and must not rename the account back to the default. Only an
+        # explicit name renames; a fresh account starts with the default.
+        name = player_name(message['player_name']) if 'player_name' in message else None
         profile = self.profiles.get((game, player_id))
         if profile is None:
-            profile = {'player_id': player_id, 'name': name, 'rating': STARTING_RATING,
+            profile = {'player_id': player_id, 'name': name or DEFAULT_PLAYER_NAME, 'rating': STARTING_RATING,
                        'games': 0, 'wins': 0, 'losses': 0}
             self.profiles[(game, player_id)] = profile
             if self.store is not None:
                 self.store.save_profile(game, player_id, profile)
-        elif profile['name'] != name:
+        elif name is not None and profile['name'] != name:
             profile = {**profile, 'name': name}
             self.profiles[(game, player_id)] = profile
             if self.store is not None:
                 self.store.save_profile(game, player_id, profile)
-        return player_id, token, name
+        return player_id, token, profile['name']
 
     def require_rated(self, spec, match, seats):
         """Refuse a rated create the game cannot decide, clearly."""
@@ -763,6 +766,9 @@ class RoomServer:
     def json_reply(self, connection, status, payload):
         response = connection.respond(status, json.dumps(payload, separators=(',', ':'),
                                                          allow_nan=False) + '\n')
+        # Headers.__setitem__ appends rather than replaces: drop the plain-text
+        # default first so JSON is the only content type on the wire.
+        del response.headers['Content-Type']
         response.headers['Content-Type'] = 'application/json'
         return response
 

@@ -133,9 +133,9 @@ class OnlineClient:
         self.match_id = ''
         self.result = None
         self._wants_rated = rated and not room
-        self._wants_options = dict(player_options or {}) if self._hello['type'] in ('create', 'join') else {}
-        self._hello = {'protocol': PROTOCOL, 'game': game_id, 'seats': SEATS,
-                       'type': 'resume' if resume_token else 'join' if room else 'create'}
+        hello_type = 'resume' if resume_token else 'join' if room else 'create'
+        self._wants_options = dict(player_options or {}) if hello_type in ('create', 'join') else {}
+        self._hello = {'protocol': PROTOCOL, 'game': game_id, 'seats': SEATS, 'type': hello_type}
         if room:
             self._hello['room'] = self.room
         if resume_token:

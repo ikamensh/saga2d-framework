@@ -52,6 +52,28 @@ def test_an_account_keeps_its_identity_across_rooms_while_names_collide_freely(s
         assert again['player_token'] == welcome['player_token']
 
 
+def test_a_nameless_resume_and_rejoin_keep_the_known_account_name(server_url):
+    """Reconnect hellos carry the token but no name: resuming by seat token plus
+    account token, and opening a new room by account token alone, both preserve
+    Robin (and the rating), instead of renaming back to the default."""
+    with connect(server_url, proxy=None) as host:
+        welcome = handshake(host, game=RATED, rated=True, player_name='Robin')
+        receive(host)
+        code, seat_token, account_token = welcome['room'], welcome['resume_token'], welcome['player_token']
+    with connect(server_url, proxy=None) as resumed:
+        back = handshake(resumed, 'resume', game=RATED, room=code, resume_token=seat_token,
+                         player_token=account_token)
+        assert back['player'] == 0
+        assert back['rating']['name'] == 'Robin'
+        state = receive(resumed)
+        assert state['players'][0]['name'] == 'Robin'
+    with connect(server_url, proxy=None) as fresh:
+        again = handshake(fresh, game=RATED, rated=True, player_token=account_token)
+        assert again['player_id'] == welcome['player_id']
+        assert again['rating'] == {'player_id': welcome['player_id'], 'name': 'Robin',
+                                   'rating': 1500.0, 'games': 0, 'wins': 0, 'losses': 0}
+
+
 def test_an_unknown_account_token_changes_nothing(server_url):
     """A forged token is refused before any seat is claimed or socket replaced."""
     with connect(server_url, proxy=None) as host:
@@ -132,6 +154,7 @@ def test_a_rated_lobby_waits_out_grace_and_starts_normally_when_the_guest_arrive
             with connect(url, proxy=None) as guest:
                 handshake(guest, 'join', game=RATED, room=welcome['room'])
                 ready = receive(host, predicate=lambda message: message['ready'])
+                receive(guest, predicate=lambda message: message['ready'])
                 assert ready['match_id'] == welcome['match_id']
                 assert ready['result'] is None
                 command(host, {'action': 'add'})
@@ -158,6 +181,7 @@ def test_a_restart_gives_absent_seats_fresh_grace_before_any_forfeit():
                     handshake(guest, 'resume', game=RATED, room=welcome['room'],
                               resume_token=guest_welcome['resume_token'])
                     assert receive(host, predicate=lambda message: message['ready'])['ready']
+                    receive(guest, predicate=lambda message: message['ready'])
                     command(host, {'action': 'add'})
                     assert receive(guest)['state']['counts'] == [1, 0]
 
@@ -176,6 +200,7 @@ def test_a_shared_outage_grants_a_fresh_window_instead_of_an_instant_defeat():
             handshake(guest, 'resume', game=RATED, room=welcome['room'],
                       resume_token=guest_welcome['resume_token'])
             ready = receive(host, predicate=lambda message: message['ready'])
+            receive(guest, predicate=lambda message: message['ready'])
             assert ready['result'] is None
             command(host, {'action': 'add'})
             assert receive(guest)['state']['counts'] == [1, 0]
@@ -204,6 +229,7 @@ def test_a_rated_finish_rates_winner_and_losers_once(server_url):
         welcome = handshake(host, game=RATED, rated=True, player_name='Robin')
         guest_welcome = handshake(guest, 'join', game=RATED, room=welcome['room'], player_name='Wren')
         receive(host, predicate=lambda message: message['ready'])
+        receive(guest, predicate=lambda message: message['ready'])
         command(host, {'action': 'add'})
         receive(host)
         receive(guest)
