@@ -69,6 +69,27 @@ def recv_frame(sock, timeout=5):
     return json.loads(recvn(sock, size))
 
 
+def recv_frame_pumped(host, clients, sock, timeout=5):
+    """Read one raw frame while the host and clients keep polling.
+
+    A raw socket has no poll of its own; without this the host would never
+    accept it or answer it, and the read would time out.
+    """
+    if not isinstance(clients, (list, tuple)):
+        clients = [clients]
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        host.poll()
+        for client in clients:
+            client.poll()
+        try:
+            return recv_frame(sock, timeout=.05)
+        except TimeoutError:
+            pass
+        time.sleep(.001)
+    raise AssertionError('raw frame did not arrive')
+
+
 def test_observer_watches_its_own_snapshot_while_seats_play():
     """The watcher sees only the observer hook's data, never a seat snapshot."""
     host, _ = make_host()
@@ -82,10 +103,11 @@ def test_observer_watches_its_own_snapshot_while_seats_play():
         assert guest.state == {'counts': [0, 0], 'you': 1}
         assert host.observer_count == 1
         guest.submit({'amount': 3})
-        pump(host, [guest, watcher], lambda: watcher.state == {'total': 3, 'watching': True})
-        assert guest.state == {'counts': [0, 3], 'you': 1}
+        pump(host, [guest, watcher], lambda: watcher.state == {'total': 3, 'watching': True}
+             and guest.state == {'counts': [0, 3], 'you': 1})
         host.submit({'amount': 2})
-        pump(host, [guest, watcher], lambda: watcher.state == {'total': 5, 'watching': True})
+        pump(host, [guest, watcher], lambda: watcher.state == {'total': 5, 'watching': True}
+             and guest.state == {'counts': [2, 3], 'you': 1})
         assert host.state == {'counts': [2, 3], 'you': 0}
     finally:
         guest.close()
@@ -154,16 +176,17 @@ def test_observer_orders_are_refused_without_touching_the_match():
             watcher.submit({'amount': 1})
         raw.connect(host.address)
         send_frame(raw, {'type': 'observe', 'protocol': 1, 'game': 'counter-v1', 'token': 'test'})
-        assert recv_frame(raw)['type'] == 'welcome'
-        first = recv_frame(raw)
+        assert recv_frame_pumped(host, [guest, watcher], raw)['type'] == 'welcome'
+        first = recv_frame_pumped(host, [guest, watcher], raw)
         assert first['type'] == 'state' and first['observer'] is True
         send_frame(raw, {'type': 'command', 'command': {'amount': 10}, 'revision': None})
-        refused = recv_frame(raw)
+        refused = recv_frame_pumped(host, [guest, watcher], raw)
         assert refused['type'] == 'error' and 'bserver' in refused['error']
         assert counts == [0, 0]
         host.submit({'amount': 2})
-        pump(host, [guest, watcher], lambda: watcher.state == {'total': 2, 'watching': True})
-        assert recv_frame(raw)['state'] == {'total': 2, 'watching': True}
+        pump(host, [guest, watcher], lambda: watcher.state == {'total': 2, 'watching': True}
+             and guest.state == {'counts': [2, 0], 'you': 1})
+        assert recv_frame_pumped(host, [guest, watcher], raw)['state'] == {'total': 2, 'watching': True}
     finally:
         raw.close()
         guest.close()
@@ -181,7 +204,7 @@ def test_several_observers_watch_and_one_rotten_wire_spoils_only_itself():
         pump(host, [guest, first], lambda: guest.ready and first.ready)
         raw.connect(host.address)
         send_frame(raw, {'type': 'observe', 'protocol': 1, 'game': 'counter-v1', 'token': 'test'})
-        assert recv_frame(raw)['type'] == 'welcome'
+        assert recv_frame_pumped(host, [guest, first], raw)['type'] == 'welcome'
         assert host.observer_count == 2
         raw.sendall(struct.pack('!I', 4) + b'{oops')
         pump(host, [guest, first], lambda: host.observer_count == 1)
@@ -310,10 +333,13 @@ def test_pinging_squatters_cannot_hold_the_guest_seat():
     try:
         for _ in range(8):
             sock = socket.socket()
-            sock.connect(host.address)
-            send_frame(sock, {'type': 'ping'})
+            sock.setblocking(False)
+            sock.connect_ex(host.address)  # completes while the host polls below
             squatters.append(sock)
         pump(host, [], lambda: len(host._pending) == 8, timeout=10)
+        for sock in squatters:
+            sock.setblocking(True)
+            send_frame(sock, {'type': 'ping'})
         for peer in host._pending:
             peer.accepted_at -= _HANDSHAKE_TIMEOUT + 1  # simulate elapsed time
         pump(host, [], lambda: not host._pending, timeout=10)
@@ -369,10 +395,10 @@ def test_hook_failing_midgame_ends_only_watching():
         second = MatchClient('counter-v1', host.address, token='test', observer=True)
         pump(host, [guest, first, second], lambda: second.ready)
         guest.submit({'amount': 1})  # its publish trips the hook the third time
-        pump(host, [guest, first, second], lambda: host.observer_count == 0, timeout=10)
+        pump(host, [guest, first, second], lambda: host.observer_count == 0
+             and guest.state == {'counts': [0, 1], 'you': 1}, timeout=10)
         assert 'boom' in first.error and 'boom' in second.error, (first.error, second.error)
         assert guest.ready and host.ready
-        assert guest.state == {'counts': [0, 1], 'you': 1}
     finally:
         guest.close()
         first.close()

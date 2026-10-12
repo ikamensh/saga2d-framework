@@ -390,7 +390,11 @@ class RoomServer:
                        'players': roster, 'rated': room.rated, 'match_id': room.match_id,
                        'result': room.result}
             if len(json.dumps(message, separators=(',', ':'), allow_nan=False)) > MAX_SNAPSHOT:
-                raise ValueError('Observer view exceeds the network size limit.')
+                LOG.warning('Observer view too large in %s room; watching ends, seats play on', room.game)
+                for peer in room.observers:
+                    peer.reject('The observer view failed.')
+                room.observers = []
+                return None
         except Exception:
             LOG.exception('Observer view failed in %s room', room.game)
             for peer in room.observers:

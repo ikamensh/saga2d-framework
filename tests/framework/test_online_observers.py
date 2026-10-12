@@ -61,8 +61,8 @@ def test_observer_watches_lobby_then_game_with_its_own_snapshot(server_url):
         assert len(watcher.players) == 2 and all(entry['seat'] in (0, 1) for entry in watcher.players)
         assert 'resume_token' not in json.dumps(watcher.players)
         creator.submit({'action': 'add'}, revision=creator.revision)
-        pump(creator, guest, watcher, until=lambda: watcher.state['total'] == 1)
-        assert guest.state['counts'] == [1, 0]
+        pump(creator, guest, watcher, until=lambda: watcher.state['total'] == 1
+             and guest.state['counts'] == [1, 0])
     finally:
         close(creator, guest, watcher)
 
@@ -118,7 +118,7 @@ def test_raw_observer_command_is_refused_without_apply(server_url):
                 creator.submit({'action': 'add'}, revision=creator.revision)
                 second = receive(watching, predicate=lambda message: message['state']['total'] == 1)
                 assert second['state'] == {'seed': 0, 'total': 1, 'ticks': 0, 'watching': True}
-                assert second['revision'] == first['revision'] + 1
+                assert second['revision'] > first['revision']  # seats joining publish too
             finally:
                 creator.close()
 
@@ -133,7 +133,7 @@ def test_observe_without_hook_is_rejected_and_play_continues(server_url):
         pump(watcher, until=lambda: watcher.closed)
         assert not watcher.ready and watcher.player is None
         assert 'support observing' in watcher.error
-        assert creator.present == 0
+        assert creator.present == 1  # the creator sits in its own room; the refusal changed nothing
         guest = OnlineClient(PLAIN, endpoint=server_url, room=creator.room)
         pump(creator, guest, until=lambda: creator.ready and guest.ready)
         creator.submit({'action': 'add'}, revision=creator.revision)
@@ -163,7 +163,8 @@ def test_observer_watches_rated_finish_without_touching_it(server_url):
         assert 'races' not in watcher.state
         second.submit({'action': 'resign'}, revision=second.revision)
         pump(first, second, watcher,
-             until=lambda: first.result is not None and watcher.result is not None)
+             until=lambda: first.result is not None and second.result is not None
+             and watcher.result is not None)
         assert watcher.result['winner'] == 0
         assert watcher.result == first.result == second.result
         names = {entry['player_id']: entry for entry in watcher.result['ratings']}

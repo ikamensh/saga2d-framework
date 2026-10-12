@@ -306,6 +306,8 @@ class MatchHost:
 
     def _send_observer_states(self):
         """Send the current view to every watcher without moving the revision."""
+        if not self.observers:
+            return  # never run game code when nobody watches
         view = self._observer_view()
         if view is None:
             return
