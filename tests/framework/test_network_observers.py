@@ -396,14 +396,153 @@ def test_hook_failing_midgame_ends_only_watching():
         pump(host, [guest, first, second], lambda: second.ready)
         guest.submit({'amount': 1})  # its publish trips the hook the third time
         pump(host, [guest, first, second], lambda: host.observer_count == 0
-             and guest.state == {'counts': [0, 1], 'you': 1}, timeout=10)
+             and guest.state == {'counts': [0, 1], 'you': 1}
+             and guest.observer_count == 0, timeout=10)
         assert 'boom' in first.error and 'boom' in second.error, (first.error, second.error)
         assert guest.ready and host.ready
+        assert guest.revision == host.revision  # the count repair moved no revision
     finally:
         guest.close()
         first.close()
         if second is not None:
             second.close()
+        host.close()
+
+
+def test_deeply_nested_observer_view_refuses_watchers_explicitly():
+    """A finite hook payload too deep for the JSON encoder refuses watchers
+    with the cause instead of crashing the host; the seats play on."""
+    def nest(depth):
+        root = []
+        cursor = root
+        for _ in range(depth):
+            child = []
+            cursor.append(child)
+            cursor = child
+        return {'deep': root}
+
+    # The C encoder trips well above the nominal recursion limit; 20000 has
+    # wide margin while staying a small payload either way.
+    host, _ = make_host(observer_snapshot=lambda: nest(20000))
+    guest = MatchClient('counter-v1', host.address, token='test')
+    watcher = MatchClient('counter-v1', host.address, token='test', observer=True)
+    try:
+        pump(host, [guest], lambda: guest.ready and host.ready)
+        pump(host, [guest, watcher], lambda: watcher.closed, timeout=10)
+        assert 'observer view' in watcher.error.lower(), watcher.error
+        assert host.observer_count == 0
+        assert guest.ready and host.ready
+        guest.submit({'amount': 2})
+        pump(host, guest, lambda: guest.state['counts'] == [0, 2])
+    finally:
+        guest.close()
+        watcher.close()
+        host.close()
+
+
+def test_refused_watcher_leaves_on_an_absolute_deadline():
+    """A refused watcher with a backlog behind a reader that never drains is
+    still hung up once its rejection deadline passes, even while it trickles:
+    the deadline is absolute, not measured from its last activity."""
+    from saga2d.network import _REFUSE_GRACE
+
+    broken = []
+
+    def hook():
+        if broken:
+            raise RuntimeError('view went away mid-game')
+        return {'total': 0}
+
+    host, _ = make_host(observer_snapshot=hook)
+    guest = MatchClient('counter-v1', host.address, token='test')
+    watcher = MatchClient('counter-v1', host.address, token='test', observer=True)
+    try:
+        pump(host, [guest], lambda: guest.ready and host.ready)
+        pump(host, [guest, watcher], lambda: watcher.ready)
+        pump(host, [guest, watcher], lambda: len(host.observers) == 1)
+        # Wedge the watcher's downlink first: no reader drains it from here on.
+        host.observers[0].outgoing.extend(b'x' * (8 * 1024 * 1024))
+        broken.append(True)
+        guest.submit({'amount': 1})  # its publish refuses the watcher
+        pump(host, [guest], lambda: len(host._refusing) == 1, timeout=10)
+        peer = host._refusing[0]
+        # Still sending into a backlog that never drains: a last-activity
+        # grace would keep this socket; the absolute deadline does not.
+        peer.last_sent = time.monotonic()
+        peer._refused_at -= _REFUSE_GRACE + 1  # simulate elapsed time
+        pump(host, [guest], lambda: not host._refusing, timeout=10)
+        assert host.observer_count == 0
+        assert guest.ready and host.ready
+        guest.submit({'amount': 2})
+        pump(host, guest, lambda: guest.state['counts'] == [0, 3])
+    finally:
+        guest.close()
+        watcher.close()
+        host.close()
+
+
+def test_refusal_queue_is_bounded_and_never_blocks_admission():
+    """Wedged refusals pile up only to a cap: overflow hangs up at once
+    instead of queueing, and the guest seat plus later watchers still get in."""
+    from saga2d.network import _MAX_REFUSING, _REFUSE_GRACE
+
+    broken = []
+
+    def hook():
+        if broken:
+            raise RuntimeError('view went away mid-game')
+        return {'total': 0}
+
+    class WedgedReader:
+        """A refused socket whose slow reader never drains its backlog."""
+
+        def __init__(self):
+            self.outgoing = bytearray(b'queued-error-bytes')
+            self._refused_at = time.monotonic()
+            self.closed = False
+
+        def poll(self):
+            return []
+
+        def close(self):
+            self.closed = True
+
+    host, _ = make_host(observer_snapshot=hook)
+    guest = MatchClient('counter-v1', host.address, token='test')
+    wedged = [WedgedReader() for _ in range(_MAX_REFUSING)]
+    unlucky = late = None
+    try:
+        pump(host, [guest], lambda: guest.ready and host.ready)
+        host._refusing.extend(wedged)  # slow readers stuck collecting errors
+        broken.append(True)
+        # Admission itself trips the broken hook; the queue is full, so the
+        # newcomer hangs up at once instead of queueing behind the wedged.
+        unlucky = MatchClient('counter-v1', host.address, token='test', observer=True)
+        pump(host, [guest, unlucky], lambda: unlucky.closed, timeout=10)
+        assert len(host._refusing) == _MAX_REFUSING
+        assert all(not peer.closed for peer in wedged)
+        assert host.observer_count == 0
+        # The guest seat plays on through the refused queue...
+        assert guest.ready and host.ready
+        guest.submit({'amount': 1})
+        pump(host, guest, lambda: guest.state['counts'] == [0, 1])
+        # ...and the wedged entries cannot outstay their absolute deadline.
+        for peer in wedged:
+            peer._refused_at -= _REFUSE_GRACE + 1  # simulate elapsed time
+        pump(host, [guest], lambda: not host._refusing, timeout=10)
+        assert all(peer.closed for peer in wedged)
+        # With the queue drained, watching works again: admission was never
+        # blocked, only the wedged readers were shed.
+        broken.clear()
+        late = MatchClient('counter-v1', host.address, token='test', observer=True)
+        pump(host, [guest, late], lambda: late.ready, timeout=10)
+        pump(host, [guest, late], lambda: guest.observer_count == 1, timeout=10)
+    finally:
+        guest.close()
+        if unlucky is not None:
+            unlucky.close()
+        if late is not None:
+            late.close()
         host.close()
 
 

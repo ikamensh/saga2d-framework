@@ -22,9 +22,13 @@ _PROTOCOL = 1
 #: How many watchers one host admits; guests never compete for these slots.
 MAX_OBSERVERS = 8
 _MAX_PENDING = 8
+#: How many refused watchers may linger collecting their error; overflow
+#: hangs up immediately instead of queueing, so refusals stay bounded.
+_MAX_REFUSING = 8
 #: Seconds an accepted socket has to say hello or observe; pings do not extend it.
 _HANDSHAKE_TIMEOUT = 10.
-#: Seconds a refused watcher has to collect its error before the host hangs up.
+#: Absolute seconds a refused watcher has to collect its error, measured from
+#: the rejection itself: a slow reader cannot extend this by trickling.
 _REFUSE_GRACE = 5.
 
 
@@ -42,6 +46,7 @@ class _Peer:
         self.last_received = time.monotonic()
         self.last_sent = self.last_received
         self.accepted_at = self.last_received
+        self._refused_at = 0.  # stamped when the socket is refused; 0 drops it at once
         self._waiting_state = None  # where in ``outgoing`` a state begins that is queued last and has not begun to leave
 
     def send(self, message):
@@ -272,7 +277,7 @@ class MatchHost:
             return self._refuse_observers(f'Observer view failed: {exc}')
         try:
             data = json.dumps(view, separators=(',', ':'), allow_nan=False)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, RecursionError) as exc:
             return self._refuse_observers(f'Invalid observer view: {exc}')
         if len(data) > _MAX_FRAME:
             return self._refuse_observers('Observer view exceeds the network size limit.')
@@ -282,35 +287,50 @@ class MatchHost:
         """Refuse every watcher explicitly; the match plays on.
 
         Refusals flush like pending rejections: a refused socket lingers only
-        until its error leaves or the link proves wedged, never silently.
+        until its error leaves or its absolute deadline passes, never silently.
+        When the refusal queue is full the socket hangs up at once instead of
+        queueing, so refused watchers can never accumulate without bound.
         """
+        now = time.monotonic()
         for peer in list(self.observers):
             try:
                 peer.send({'type': 'reject', 'error': error})
             except ConnectionError:
                 peer.close()
             else:
-                self._refusing.append(peer)
+                peer._refused_at = now
+                if len(self._refusing) >= _MAX_REFUSING:
+                    peer.close()
+                else:
+                    self._refusing.append(peer)
         self.observers = []
         return None
 
     def _poll_refusing(self):
+        now = time.monotonic()
         for peer in list(self._refusing):
             try:
                 peer.poll()
             except (OSError, ConnectionError):
-                pass
-            if not peer.outgoing or time.monotonic() - peer.last_sent > _REFUSE_GRACE:
+                peer.close()
+                self._refusing.remove(peer)
+                continue
+            if not peer.outgoing or now - peer._refused_at > _REFUSE_GRACE:
                 peer.close()
                 self._refusing.remove(peer)
 
     def _send_observer_states(self):
-        """Send the current view to every watcher without moving the revision."""
+        """Send the current view to every watcher without moving the revision.
+
+        Returns True when sending removed or refused watchers, so the caller
+        can refresh the guest's counts; False when membership is unchanged.
+        """
         if not self.observers:
-            return  # never run game code when nobody watches
+            return False  # never run game code when nobody watches
         view = self._observer_view()
         if view is None:
-            return
+            return True  # every watcher was refused; counts changed
+        changed = False
         while self.observers:
             count = len(self.observers)
             failed = False
@@ -323,9 +343,11 @@ class MatchHost:
                     if peer in self.observers:
                         self.observers.remove(peer)
                     failed = True
+            changed = changed or failed
             if not failed:
-                return
+                return changed
             # A dropped watcher left earlier sends overstating the count; correct them.
+        return True
 
     def _refresh_seat_metadata(self):
         """Re-send the guest its last state with fresh watcher counts.
@@ -388,7 +410,10 @@ class MatchHost:
                 self._guest_payload = payload
             except ConnectionError as exc:
                 self._drop(exc)
-        self._send_observer_states()
+        if self._send_observer_states():
+            # Publication refused or dropped watchers: the count the guest
+            # just heard is stale. Refresh it, still without a revision bump.
+            self._refresh_seat_metadata()
 
     def close(self):
         if self.peer is not None:
