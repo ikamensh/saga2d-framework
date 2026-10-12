@@ -122,6 +122,53 @@ and the transition between map, battle, rewards and campaign progression.
 Existing models and scenes remain the source of game rules and presentation.
 None of those concepts belong in the transport.
 
+## Observers
+
+A match can be watched without playing it, over LAN and through the room
+server. Watching is an explicit role, not a seat: a watcher says `observe`
+(a distinct handshake type, never `hello` with a flag), holds no seat
+(`player` is None), carries no seat credential (no resume token, no account
+token, no identity), and can never submit — `submit` raises CommandError
+locally, and a raw order over a watcher wire is refused without touching the
+match. Otherwise a watcher looks like any session: `state`, `revision`,
+`ready`, `error`, `poll` and `close` work the same way.
+
+```python
+watcher = MatchClient('warband-v1', host.address, token=code, observer=True)
+watcher = OnlineClient('warband-v1', endpoint=url, room=code, observer=True)
+```
+
+A game opts in with one hook: `observer_snapshot(match)` on `GameSpec`, or
+`observer_snapshot()` on `MatchHost`. That hook is the watcher's whole world —
+watchers never see a seat snapshot or a checkpoint. A game without the hook
+refuses watchers clearly (`This match does not support observing`), and
+everything else plays on unchanged. At most eight watchers fit one room or
+host; seats never compete for those slots.
+
+Watchers may arrive before the first player, while the match runs, or after it
+is decided; they see states once the room is ready, and watching the same code
+again reconnects the same way. They change nothing: they occupy and satisfy no
+seat, never appear in `present`, `seats` or `players` (those count playing
+seats only; `observer_count` carries the watching tally), mint no account,
+alter no rating, settle no result, block no readiness, pause nothing on
+leaving, and extend no retention — an emptied room still expires under watching
+eyes. Seats learn watcher arrivals and departures at the same revision, from
+their last published state, so the tally stays live even in a paused room
+that never publishes again. A suspended campaign detaches its watchers with
+an explicit refusal; watching again restores the room. A watcher welcome
+carries public room data only, while states may carry
+the public roster and the rated receipt. A broken observer hook ends watching,
+loudly in the server log, while the seats play on. A watcher handshake that
+never completes is dropped after ten seconds no matter how much it pings, so
+squatters cannot hold the guest seat hostage.
+
+An old host rejects the unknown `observe` type without claiming its guest
+seat, so watching an unupgraded host ends in a clear refusal. The other way
+round, a new watcher requires an explicit observer welcome followed by
+observer-flagged states and refuses anything shaped like a seat claim instead
+of downgrading silently. Old clients ignore the added `observer_count` key on
+seat states.
+
 ## Reproducing verification
 
 ```bash

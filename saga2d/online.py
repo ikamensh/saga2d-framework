@@ -85,7 +85,7 @@ def _endpoint(value):
 
 
 class OnlineClient:
-    """Create, join, or resume a room; every player uses the same client interface.
+    """Create, join, resume, or observe a room; every player uses the same client interface.
 
     ``ready`` requires every player the match needs, while ``room`` arrives as
     soon as creation succeeds; ``seats`` is the room's size and ``present`` how
@@ -95,15 +95,39 @@ class OnlineClient:
     clearly instead of falling back to casual. ``close`` leaves the seat reserved
     on the server for ``retention`` seconds without the others. ``incompatible``
     marks a rejection that only an update fixes.
+
+    ``observer=True`` watches instead of playing: it needs only the room code,
+    holds no seat (``player`` is None, no resume or account token is issued or
+    kept), sees only the game's observer hook, and can never submit. Watching
+    the same code again reconnects the same way. ``observer_count`` says how
+    many are watching; ``present`` still counts playing seats only.
     """
     online = True
 
     def __init__(self, game_id, *, endpoint=None, room=None, options=None, resume_token=None,
-                 player_token='', player_name='Commander', rated=False, player_options=None):
+                 player_token='', player_name='Commander', rated=False, player_options=None,
+                 observer=False):
         self.game_id = game_id
         self.endpoint = _endpoint(endpoint or server_endpoint())
         self.room = room.strip().lower() if room else ''
         self.resume_token = resume_token or ''
+        if type(observer) is not bool:
+            raise ValueError('observer must be true or false.')
+        if observer:
+            if not self.room:
+                raise ValueError('A room code is required to observe a match.')
+            if resume_token:
+                raise ValueError('Observers rejoin with only the room code.')
+            if player_token:
+                raise ValueError('Observers do not sign in.')
+            if rated:
+                raise ValueError('Observers do not play rated matches.')
+            if player_options:
+                raise ValueError('Observers choose no player options.')
+            if options:
+                raise ValueError('Observers create no matches.')
+            if player_name != 'Commander':
+                raise ValueError('Observers play under no name.')
         if self.resume_token and not self.room:
             raise ValueError('A room code is required to resume a seat.')
         if type(rated) is not bool:
@@ -114,8 +138,10 @@ class OnlineClient:
             json.dumps(player_options or {}, allow_nan=False)
         except (TypeError, ValueError) as exc:
             raise ValueError(f'player_options must be JSON: {exc}') from exc
-        self.player = 0 if not room else 1
+        self.observer = observer
+        self.player = None if observer else (0 if not room else 1)
         self.seats, self.present = 2, 0
+        self.observer_count = 0
         self.ready = False
         self.closed = False
         self.error = ''
@@ -124,16 +150,16 @@ class OnlineClient:
         self.state = None
         self.revision = 0
         self.player_id = ''
-        self.player_token = player_token or ''
+        self.player_token = '' if observer else (player_token or '')
         self.player_name = player_name
         self.rating = None
         self.players = []
-        self.rated = rated if not room else False
+        self.rated = False if observer else (rated if not room else False)
         self.rated_grace = None
         self.match_id = ''
         self.result = None
-        self._wants_rated = rated and not room
-        hello_type = 'resume' if resume_token else 'join' if room else 'create'
+        self._wants_rated = rated and not room and not observer
+        hello_type = 'observe' if observer else 'resume' if resume_token else 'join' if room else 'create'
         self._wants_options = dict(player_options or {}) if hello_type in ('create', 'join') else {}
         self._hello = {'protocol': PROTOCOL, 'game': game_id, 'seats': SEATS, 'type': hello_type}
         if room:
@@ -200,7 +226,23 @@ class OnlineClient:
                         if not isinstance(message, dict):
                             raise ValueError('Invalid server message.')
                         kind = message.get('type')
-                        if kind == 'welcome':
+                        observing = self._hello.get('type') == 'observe'
+                        if kind == 'welcome' and observing:
+                            if ('resume_token' in message or 'player_token' in message
+                                    or 'player_id' in message
+                                    or message.get('observer') is not True
+                                    or message.get('player') is not None
+                                    or not isinstance(message.get('room'), str)
+                                    or type(message.get('seats')) is not int
+                                    or not 2 <= message['seats'] <= SEATS):
+                                raise ValueError('Invalid observer welcome from server.')
+                            if 'rated' in message and type(message['rated']) is not bool:
+                                raise ValueError('Invalid room rating flag from server.')
+                            if 'match_id' in message and not isinstance(message['match_id'], str):
+                                raise ValueError('Invalid match identity from server.')
+                            self._resume = dict(self._hello)  # a blip re-sends observe, never a seat hello
+                            self._retry_deadline = None
+                        elif kind == 'welcome':
                             retention = message.get('retention')
                             seats = message.setdefault('seats', 2)  # servers from before larger rooms say nothing
                             if (not isinstance(message.get('room'), str)
@@ -269,9 +311,14 @@ class OnlineClient:
                                 raise ValueError('Invalid match identity from server.')
                             if 'result' in message and message['result'] is not None:
                                 _result(message['result'])
-                            if message['ready']:
+                            if observing:
+                                if message.get('observer') is not True:
+                                    raise ValueError('Invalid observer state from server.')
+                            elif message.get('observer') is True:
+                                raise ValueError('Invalid match state from server.')
+                            if message['ready'] and not observing:
                                 self._accept_orders.set()
-                            else:
+                            elif not observing:
                                 self._pause_orders()
                         elif kind in ('error', 'reject'):
                             if not isinstance(message.get('error'), str):
@@ -338,7 +385,17 @@ class OnlineClient:
             if kind == 'exception':
                 self.close()
                 raise RuntimeError('Online connection worker failed.') from message['exception']
-            if kind == 'welcome':
+            if kind == 'welcome' and self.observer:
+                self.seats = message['seats']
+                self.present = message.get('present', self.present)
+                if type(message.get('observer_count')) is int:
+                    self.observer_count = message['observer_count']
+                if type(message.get('rated')) is bool:
+                    self.rated = message['rated']
+                if isinstance(message.get('match_id'), str):
+                    self.match_id = message['match_id']
+                self.error = ''
+            elif kind == 'welcome':
                 self.room, self.resume_token = message['room'], message['resume_token']
                 self.player, self.retention, self.seats = message['player'], message['retention'], message['seats']
                 self.player_id = message.get('player_id', '')
@@ -357,6 +414,8 @@ class OnlineClient:
                 self.state, self.revision = message['state'], message['revision']
                 self.ready = message['ready']
                 self.present = message.get('present', self.present)
+                if type(message.get('observer_count')) is int:
+                    self.observer_count = message['observer_count']
                 if isinstance(message.get('players'), list):
                     self.players = message['players']
                     for entry in self.players:
@@ -380,6 +439,8 @@ class OnlineClient:
                     break
 
     def submit(self, command, *, revision=None):
+        if self.observer:
+            raise CommandError('Observers cannot submit orders.')
         data = json.dumps({'type': 'command', 'command': command, 'revision': revision}, allow_nan=False)
         if len(data.encode()) > MAX_COMMAND:
             raise CommandError('That order exceeds the online message limit.')

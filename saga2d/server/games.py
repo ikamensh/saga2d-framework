@@ -39,6 +39,9 @@ class GameSpec:
     ``configure_player`` applies a
     joining seat's private options (a race choice, for example) before the seat
     is claimed; the default accepts only the empty choice.
+    ``observer_snapshot`` returns the whole watcher view of a match; a game
+    without one cannot be observed, and the server never substitutes a seat
+    snapshot or the checkpoint.
     """
     create: Callable[[dict], Any]
     checkpoint: Callable[[Any], dict]
@@ -51,6 +54,7 @@ class GameSpec:
     rated: Callable[[Any], bool] = lambda match: True
     forfeit: Callable[[Any, int], None] | None = None
     configure_player: Callable[[Any, int, dict], None] = _reject_player_options
+    observer_snapshot: Callable[[Any], dict] | None = None
 
 
 def option_keys(options: Any, allowed: set[str]) -> dict:

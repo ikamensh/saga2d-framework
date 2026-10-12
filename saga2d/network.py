@@ -19,6 +19,13 @@ from collections.abc import Callable
 _MAX_FRAME = 8 * 1024 * 1024
 _MAX_QUEUE = 2 * _MAX_FRAME
 _PROTOCOL = 1
+#: How many watchers one host admits; guests never compete for these slots.
+MAX_OBSERVERS = 8
+_MAX_PENDING = 8
+#: Seconds an accepted socket has to say hello or observe; pings do not extend it.
+_HANDSHAKE_TIMEOUT = 10.
+#: Seconds a refused watcher has to collect its error before the host hangs up.
+_REFUSE_GRACE = 5.
 
 
 class CommandError(ValueError):
@@ -34,6 +41,7 @@ class _Peer:
         self.outgoing = bytearray()
         self.last_received = time.monotonic()
         self.last_sent = self.last_received
+        self.accepted_at = self.last_received
         self._waiting_state = None  # where in ``outgoing`` a state begins that is queued last and has not begun to leave
 
     def send(self, message):
@@ -101,18 +109,26 @@ class _Peer:
 
 
 class MatchHost:
-    """Host one guest. Seat 0 belongs to the host, seat 1 to the guest.
+    """Host one guest plus up to ``MAX_OBSERVERS`` watchers. Seat 0 belongs to
+    the host, seat 1 to the guest; watchers hold no seat.
 
     ``apply`` raises CommandError for an invalid command. Other exceptions
     propagate. ``snapshot`` must return fresh JSON data, filtered for that seat.
-    A disconnected guest can rejoin with the same token and receives a fresh
-    snapshot. Games pause their simulation whenever ``ready`` is false.
+    ``observer_snapshot`` returns the watcher's whole view, or None for games
+    that cannot be watched. A disconnected guest can rejoin with the same token
+    and receives a fresh snapshot; a watcher rejoins by saying ``observe``
+    again. Games pause their simulation whenever ``ready`` is false, and only
+    the guest affects ``ready``. ``observer_count`` says how many are watching.
     """
     player = 0
 
     def __init__(self, game_id: str, apply: Callable[[int, dict], None],
-                 snapshot: Callable[[int], dict], *, address=('0.0.0.0', 7777), token: str | None = None):
+                 snapshot: Callable[[int], dict], *, address=('0.0.0.0', 7777), token: str | None = None,
+                 observer_snapshot: Callable[[], dict] | None = None):
+        if observer_snapshot is not None and not callable(observer_snapshot):
+            raise ValueError('observer_snapshot must be a callable or None.')
         self.game_id, self.apply, self.snapshot = game_id, apply, snapshot
+        self.observer_snapshot = observer_snapshot
         self.token = token if token is not None else secrets.token_hex(6)
         if not self.token:
             raise ValueError('A nonempty room token is required.')
@@ -127,19 +143,206 @@ class MatchHost:
             raise
         self.address = self.listener.getsockname()
         self.peer = None
+        self.observers: list[_Peer] = []
+        self._pending: list[_Peer] = []
+        self._refusing: list[_Peer] = []
         self.ready = False
         self.closed = False
         self.error = ''
         self.revision = 0
         self.state = None
-        self._rejecting = False
+        self._guest_payload = None  # last published guest payload; metadata refresh only
+
+    @property
+    def observer_count(self):
+        return len(self.observers)
 
     def _drop(self, error):
         self.peer.close()
         self.peer = None
         self.ready = False
         self.error = str(error)
-        self._rejecting = False
+        self._send_observer_states()
+
+    def _remove_pending(self, peer):
+        peer.close()
+        if peer in self._pending:
+            self._pending.remove(peer)
+
+    def _reject_pending(self, peer, error):
+        peer.send({'type': 'reject', 'error': error})
+        peer._rejecting = True
+
+    def _remove_observer(self, peer):
+        peer.close()
+        if peer in self.observers:
+            self.observers.remove(peer)
+        self._refresh_observers()
+
+    def _valid_hello(self, message):
+        return (message.get('protocol') == _PROTOCOL
+                and message.get('game') == self.game_id
+                and isinstance(message.get('token'), str)
+                and secrets.compare_digest(message['token'].encode(), self.token.encode()))
+
+    def _route_pending(self, peer, message):
+        kind = message.get('type')
+        if kind == 'hello' and self._valid_hello(message):
+            if self.peer is not None:
+                self._reject_pending(peer, 'The guest seat is already taken.')
+            else:
+                self._pending.remove(peer)
+                self.peer = peer
+                self.ready = True
+                self.error = ''
+                self.publish()
+        elif kind == 'observe' and self._valid_hello(message):
+            if self.observer_snapshot is None:
+                self._reject_pending(peer, 'This match does not support observing.')
+            elif len(self.observers) >= MAX_OBSERVERS:
+                self._reject_pending(peer, 'This match has too many observers.')
+            else:
+                self._pending.remove(peer)
+                self.observers.append(peer)
+                peer.send({'type': 'welcome', 'observer': True, 'player': None,
+                           'ready': self.ready, 'observer_count': len(self.observers)})
+                self._refresh_observers()
+        else:
+            self._reject_pending(peer, 'Wrong game version or room token.')
+
+    def _poll_pending(self):
+        now = time.monotonic()
+        for peer in list(self._pending):
+            if now - peer.accepted_at > _HANDSHAKE_TIMEOUT:
+                self._remove_pending(peer)
+                continue
+            try:
+                messages = peer.poll()
+            except (OSError, ConnectionError):
+                self._remove_pending(peer)
+                continue
+            for message in messages:
+                if peer._rejecting:
+                    continue
+                self._route_pending(peer, message)
+                if peer not in self._pending:
+                    break
+            if peer in self._pending and peer._rejecting and not peer.outgoing:
+                self._remove_pending(peer)
+
+    def _poll_guest(self):
+        if self.peer is None:
+            return
+        try:
+            for message in self.peer.poll():
+                if self.peer is None:
+                    break
+                if message.get('type') == 'command' and isinstance(message.get('command'), dict):
+                    try:
+                        self._apply(1, message['command'], message.get('revision'))
+                    except CommandError as exc:
+                        if self.peer is None:
+                            break
+                        self.peer.send({'type': 'error', 'error': str(exc)})
+                else:
+                    raise ConnectionError('Unexpected network message.')
+        except (OSError, ConnectionError) as exc:
+            self._drop(exc)
+
+    def _poll_observers(self):
+        for peer in list(self.observers):
+            try:
+                for message in peer.poll():
+                    if message.get('type') == 'command':
+                        peer.send({'type': 'error', 'error': 'Observers cannot submit orders.'})
+                    else:
+                        raise ConnectionError('Unexpected network message.')
+            except (OSError, ConnectionError):
+                self._remove_observer(peer)
+
+    def _observer_view(self):
+        """The shared watcher payload, or None when watching must end.
+
+        Hook, serialization, and size failures refuse every watcher with an
+        explicit error; the match never pays for a view only watchers see.
+        """
+        try:
+            view = self.observer_snapshot()
+        except Exception as exc:
+            return self._refuse_observers(f'Observer view failed: {exc}')
+        try:
+            data = json.dumps(view, separators=(',', ':'), allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            return self._refuse_observers(f'Invalid observer view: {exc}')
+        if len(data) > _MAX_FRAME:
+            return self._refuse_observers('Observer view exceeds the network size limit.')
+        return view
+
+    def _refuse_observers(self, error):
+        """Refuse every watcher explicitly; the match plays on.
+
+        Refusals flush like pending rejections: a refused socket lingers only
+        until its error leaves or the link proves wedged, never silently.
+        """
+        for peer in list(self.observers):
+            try:
+                peer.send({'type': 'reject', 'error': error})
+            except ConnectionError:
+                peer.close()
+            else:
+                self._refusing.append(peer)
+        self.observers = []
+        return None
+
+    def _poll_refusing(self):
+        for peer in list(self._refusing):
+            try:
+                peer.poll()
+            except (OSError, ConnectionError):
+                pass
+            if not peer.outgoing or time.monotonic() - peer.last_sent > _REFUSE_GRACE:
+                peer.close()
+                self._refusing.remove(peer)
+
+    def _send_observer_states(self):
+        """Send the current view to every watcher without moving the revision."""
+        view = self._observer_view()
+        if view is None:
+            return
+        while self.observers:
+            count = len(self.observers)
+            failed = False
+            for peer in list(self.observers):
+                try:
+                    peer.send({'type': 'state', 'observer': True, 'revision': self.revision,
+                               'ready': self.ready, 'state': view, 'observer_count': count})
+                except ConnectionError:
+                    peer.close()
+                    if peer in self.observers:
+                        self.observers.remove(peer)
+                    failed = True
+            if not failed:
+                return
+            # A dropped watcher left earlier sends overstating the count; correct them.
+
+    def _refresh_seat_metadata(self):
+        """Re-send the guest its last state with fresh watcher counts.
+
+        Same revision, same game data, no callbacks: a paused match's guest
+        learns the new count without a new match event. Advisory only.
+        """
+        if self.peer is None or self._guest_payload is None:
+            return
+        try:
+            self.peer.send({'type': 'state', 'player': 1, 'revision': self.revision,
+                            'state': self._guest_payload, 'observer_count': len(self.observers)})
+        except ConnectionError:
+            pass
+
+    def _refresh_observers(self):
+        """Watcher membership changed: update watchers and the guest's counts."""
+        self._send_observer_states()
+        self._refresh_seat_metadata()
 
     def poll(self):
         if self.closed:
@@ -149,40 +352,16 @@ class MatchHost:
         except BlockingIOError:
             sock = None
         if sock is not None:
-            if self.peer is not None:
+            if len(self._pending) >= _MAX_PENDING:
                 sock.close()
             else:
-                self.peer = _Peer(sock)
-        if self.peer is None:
-            return
-        try:
-            for message in self.peer.poll():
-                if self.peer is None:
-                    break
-                if self._rejecting:
-                    continue
-                if not self.ready:
-                    if (message.get('type') != 'hello' or message.get('protocol') != _PROTOCOL
-                            or message.get('game') != self.game_id
-                            or not isinstance(message.get('token'), str)
-                            or not secrets.compare_digest(message['token'].encode(), self.token.encode())):
-                        self.peer.send({'type': 'reject', 'error': 'Wrong game version or room token.'})
-                        self._rejecting = True
-                        continue
-                    self.ready = True
-                    self.error = ''
-                    self.publish()
-                elif message.get('type') == 'command' and isinstance(message.get('command'), dict):
-                    try:
-                        self._apply(1, message['command'], message.get('revision'))
-                    except CommandError as exc:
-                        self.peer.send({'type': 'error', 'error': str(exc)})
-                else:
-                    raise ConnectionError('Unexpected network message.')
-            if self.peer is not None and self._rejecting and not self.peer.outgoing:
-                self._drop('Guest rejected: wrong game version or room token.')
-        except (OSError, ConnectionError) as exc:
-            self._drop(exc)
+                peer = _Peer(sock)
+                peer._rejecting = False
+                self._pending.append(peer)
+        self._poll_guest()
+        self._poll_pending()
+        self._poll_observers()
+        self._poll_refusing()
 
     def _apply(self, player, command, revision):
         if not self.ready:
@@ -201,36 +380,65 @@ class MatchHost:
         self.state = self.snapshot(0)
         if self.ready:
             try:
-                self.peer.send({'type': 'state', 'player': 1, 'revision': self.revision, 'state': self.snapshot(1)})
+                payload = self.snapshot(1)
+                self.peer.send({'type': 'state', 'player': 1, 'revision': self.revision,
+                                'state': payload, 'observer_count': len(self.observers)})
+                self._guest_payload = payload
             except ConnectionError as exc:
                 self._drop(exc)
+        self._send_observer_states()
 
     def close(self):
         if self.peer is not None:
             self.peer.close()
             self.peer = None
+        for peer in self._pending:
+            peer.close()
+        self._pending = []
+        for peer in self.observers:
+            peer.close()
+        self.observers = []
+        for peer in self._refusing:
+            peer.close()
+        self._refusing = []
         self.listener.close()
         self.closed = True
         self.ready = False
 
 
 class MatchClient:
-    """Join a host; submit commands and read the latest authoritative state."""
+    """Join a host as its guest, or watch it with ``observer=True``.
+
+    A watcher says ``observe`` instead of ``hello``: it holds no seat, so
+    ``player`` is None, and it only ever sees the host's observer hook. Only
+    an explicit observer welcome followed by observer-flagged states may turn
+    a watcher ready; anything shaped like a seat claim is refused. Watchers
+    cannot submit: ``submit`` raises CommandError locally.
+    """
     player = 1
 
-    def __init__(self, game_id: str, address: tuple[str, int], *, token: str):
+    def __init__(self, game_id: str, address: tuple[str, int], *, token: str, observer: bool = False):
+        if type(observer) is not bool:
+            raise ValueError('observer must be true or false.')
+        self.observer = observer
+        self.player = None if observer else 1
         self.ready = False
         self.closed = False
         self.error = ''
         self.state = None
         self.revision = 0
+        self.observer_count = 0
+        self._welcomed = not observer
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.peer = _Peer(sock)
         try:
             result = sock.connect_ex(address)
             if result not in (0, errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY):
                 raise OSError(result, 'Could not connect to host.')
-            self.peer.send({'type': 'hello', 'protocol': _PROTOCOL, 'game': game_id, 'token': token})
+            if observer:
+                self.peer.send({'type': 'observe', 'protocol': _PROTOCOL, 'game': game_id, 'token': token})
+            else:
+                self.peer.send({'type': 'hello', 'protocol': _PROTOCOL, 'game': game_id, 'token': token})
         except BaseException:
             sock.close()
             raise
@@ -252,10 +460,30 @@ class MatchClient:
                 self._connecting = False
             for message in self.peer.poll():
                 kind = message.get('type')
-                if kind == 'state' and isinstance(message.get('state'), dict) and type(message.get('revision')) is int:
-                    self.state = message['state']
-                    self.revision = message['revision']
-                    self.ready = True
+                if kind == 'welcome' and self.observer:
+                    if message.get('observer') is not True or message.get('player') is not None:
+                        raise ConnectionError('Unexpected network message.')
+                    self._welcomed = True
+                    if type(message.get('observer_count')) is int:
+                        self.observer_count = message['observer_count']
+                elif (kind == 'state' and isinstance(message.get('state'), dict)
+                        and type(message.get('revision')) is int):
+                    if self.observer:
+                        if not self._welcomed or message.get('observer') is not True:
+                            raise ConnectionError('Unexpected network message.')
+                        self.state = message['state']
+                        self.revision = message['revision']
+                        self.ready = message.get('ready') is True
+                        if type(message.get('observer_count')) is int:
+                            self.observer_count = message['observer_count']
+                    else:
+                        if message.get('observer') is True:
+                            raise ConnectionError('Unexpected network message.')
+                        self.state = message['state']
+                        self.revision = message['revision']
+                        self.ready = True
+                        if type(message.get('observer_count')) is int:
+                            self.observer_count = message['observer_count']
                 elif kind in ('error', 'reject') and isinstance(message.get('error'), str):
                     self.error = message['error']
                     if kind == 'reject':
@@ -268,6 +496,8 @@ class MatchClient:
             self.close()
 
     def submit(self, command: dict, *, revision: int | None = None):
+        if self.observer:
+            raise CommandError('Observers cannot submit orders.')
         if not self.ready:
             raise CommandError(self.error or 'Waiting for the host.')
         self.peer.send({'type': 'command', 'command': command, 'revision': revision})

@@ -145,16 +145,74 @@ def _restore(snapshot):
     return match
 
 
+def _observer_view(match):
+    """What watchers see of a counter: totals only, never per-seat details."""
+    return {'seed': match.seed, 'total': sum(match.counts), 'ticks': match.ticks, 'watching': True}
+
+
+def _observer_view_rated(match):
+    """What watchers see of a rated counter: the score without the seat options."""
+    return {'seed': match.seed, 'counts': list(match.counts), 'winner': match.winner}
+
+
+class GrowCounter(Counter):
+    """A counter whose watcher view grows one mebibyte per ``grow`` order.
+
+    Seat snapshots stay tiny no matter how much the watcher view bulks up, so
+    an overgrown view can only ever end watching, never the match.
+    """
+    CHUNK = 1024 * 1024
+
+    def __init__(self, seed=0, start=0, seats=2):
+        super().__init__(seed, start, seats)
+        self.grows = 0
+
+    def apply(self, player, command):
+        if command == {'action': 'grow'}:
+            self.grows += 1
+            return
+        super().apply(player, command)
+
+
+def _create_grow(options):
+    option_keys(options, {'seed'})
+    return GrowCounter(option_seed(options, 0))
+
+
+def _checkpoint_grow(match):
+    record = _checkpoint(match)
+    record['grows'] = match.grows
+    return record
+
+
+def _restore_grow(snapshot):
+    match = GrowCounter(snapshot['seed'], seats=len(snapshot['counts']))
+    match.counts, match.out, match.ticks = list(snapshot['counts']), list(snapshot['out']), snapshot['ticks']
+    match.grows = snapshot['grows']
+    return match
+
+
+def _observer_view_grow(match):
+    return {'seed': match.seed, 'total': sum(match.counts), 'ticks': match.ticks,
+            'watching': True, 'bulk': 'g' * (match.grows * GrowCounter.CHUNK)}
+
+
 GAMES = {
     'counter-v1': GameSpec(_create, _checkpoint, _restore),
     'counter-realtime-v1': GameSpec(_create, _checkpoint, _restore, realtime=True),
     'counter-campaign-v1': GameSpec(_create, _checkpoint, _restore, campaign=True),
+    'counter-campaign-observer-v1': GameSpec(_create, _checkpoint, _restore, campaign=True,
+                                             observer_snapshot=_observer_view),
     'counter-seats-v1': GameSpec(_create_seated, _checkpoint, _restore, realtime=True,
                                  seats=lambda match: len(match.counts), needed=lambda match, player: not match.out[player]),
     'counter-rated-v1': GameSpec(_create_rated, _checkpoint_rated, _restore_rated,
                                  seats=lambda match: len(match.counts),
                                  result=lambda match: match.winner, rated=lambda match: True,
-                                 forfeit=_forfeit_rated, configure_player=_configure_race),
+                                 forfeit=_forfeit_rated, configure_player=_configure_race,
+                                 observer_snapshot=_observer_view_rated),
+    'counter-observer-v1': GameSpec(_create, _checkpoint, _restore, observer_snapshot=_observer_view),
+    'counter-grow-v1': GameSpec(_create_grow, _checkpoint_grow, _restore_grow,
+                                observer_snapshot=_observer_view_grow),
 }
 COUNTER_GAMES = 'saga2d.testing.online:GAMES'
 

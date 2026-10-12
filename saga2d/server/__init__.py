@@ -31,12 +31,14 @@ from saga2d.network import CommandError
 from saga2d.server.games import GameSpec, load_games, option_choice, option_int, option_keys, option_seed
 from saga2d.server.storage import RoomStore
 
-__all__ = ['ELO_K', 'GameSpec', 'IncompatibleClient', 'MAX_MESSAGE', 'PROTOCOL', 'Peer', 'RATED_SEATS', 'Room',
-           'RoomServer', 'STARTING_RATING', 'decode', 'load_games', 'option_choice', 'option_int', 'option_keys',
-           'option_seed', 'player_name', 'run', 'settle_ratings']
+__all__ = ['ELO_K', 'GameSpec', 'IncompatibleClient', 'MAX_MESSAGE', 'MAX_OBSERVERS', 'PROTOCOL', 'Peer',
+           'RATED_SEATS', 'Room', 'RoomServer', 'STARTING_RATING', 'decode', 'load_games', 'option_choice',
+           'option_int', 'option_keys', 'option_seed', 'player_name', 'run', 'settle_ratings']
 
 PROTOCOL = 1
 MAX_MESSAGE = 16_384
+#: How many watchers one room admits; seats never compete for these slots.
+MAX_OBSERVERS = 8
 MAX_SNAPSHOT = 8 * 1024 * 1024
 LOG = logging.getLogger(__name__)
 
@@ -239,6 +241,8 @@ class Room:
     seat_gone: list = field(default_factory=list)  # per-seat disconnect time, or None while connected
     started: bool = False  # every needed seat was connected at once; rated grace never runs before this
     forfeited: list = field(default_factory=list)  # per-seat whether the abandon hook already ran
+    observers: list = field(default_factory=list)  # watcher peers; never seats, never persisted
+    seat_states: dict = field(default_factory=dict)  # last published game payload per seat; metadata refresh only
 
     def __post_init__(self):
         self.peers = [None] * len(self.tokens)
@@ -252,6 +256,10 @@ class Room:
     @property
     def present(self):
         return sum(peer is not None and not peer.closing for peer in self.peers)
+
+    @property
+    def observer_count(self):
+        return sum(peer is not None and not peer.closing for peer in self.observers)
 
     @property
     def ready(self):
@@ -268,10 +276,26 @@ class Room:
         players = roster if roster is not None else [None] * len(self.peers)
         for player, peer in enumerate(self.peers):
             if peer is not None:
+                payload = self.match.snapshot(player)
                 peer.send({'type': 'state', 'player': player, 'revision': self.revision, 'ready': ready,
-                           'seats': len(self.peers), 'present': present, 'state': self.match.snapshot(player),
+                           'seats': len(self.peers), 'present': present, 'state': payload,
                            'players': players, 'rated': self.rated, 'match_id': self.match_id,
-                           'result': self.result})
+                           'result': self.result, 'observer_count': self.observer_count})
+                self.seat_states[player] = payload
+
+    def publish_observers(self, message):
+        """Send one prebuilt watcher state without moving the revision.
+
+        A watcher that cannot take it is refused alone; the seats never notice.
+        """
+        for peer in list(self.observers):
+            if peer is not None and not peer.closing:
+                try:
+                    peer.send(message)
+                except RuntimeError:
+                    peer.reject('The observer view is too large.')
+                    if peer in self.observers:
+                        self.observers.remove(peer)
 
 
 @dataclass(frozen=True)
@@ -343,6 +367,82 @@ class RoomServer:
             entries.append({**profile, 'seat': seat,
                             'connected': peer is not None and not peer.closing})
         return entries
+
+    def _live_observers(self, room):
+        """Watchers still connected; closing ones leave without a sound."""
+        room.observers = [peer for peer in room.observers if peer is not None and not peer.closing]
+        return room.observers
+
+    def _observer_view(self, room, roster):
+        """The shared watcher payload, or None when nobody watches.
+
+        The game's hook is the only source of watcher data. When it fails the
+        room plays on: every watcher is refused and watching ends, loudly in
+        the log, while the seats never notice.
+        """
+        if not self._live_observers(room):
+            return None
+        try:
+            message = {'type': 'state', 'observer': True, 'revision': room.revision, 'ready': room.ready,
+                       'seats': len(room.tokens), 'present': room.present,
+                       'observer_count': len(room.observers),
+                       'state': self.games[room.game].observer_snapshot(room.match),
+                       'players': roster, 'rated': room.rated, 'match_id': room.match_id,
+                       'result': room.result}
+            if len(json.dumps(message, separators=(',', ':'), allow_nan=False)) > MAX_SNAPSHOT:
+                raise ValueError('Observer view exceeds the network size limit.')
+        except Exception:
+            LOG.exception('Observer view failed in %s room', room.game)
+            for peer in room.observers:
+                peer.reject('The observer view failed.')
+            room.observers = []
+            return None
+        return message
+
+    def _publish(self, room):
+        """Publish to seats and watchers; one roster and revision for the whole room."""
+        roster = self.roster(room)
+        room.publish(roster)
+        view = self._observer_view(room, roster)
+        if view is not None:
+            room.publish_observers(view)
+
+    def _refresh_observers(self, room):
+        """Send watchers the current view without moving the revision.
+
+        Watcher arrivals and departures are not match events: bumping the
+        revision for them would stale every in-flight seat order. Seats learn
+        the new watcher count the same way, from their cached payloads.
+        """
+        view = self._observer_view(room, self.roster(room))
+        if view is not None:
+            room.publish_observers(view)
+        self._refresh_seat_metadata(room)
+
+    def _refresh_seat_metadata(self, room):
+        """Re-send each connected seat its last state with fresh watcher counts.
+
+        Same revision, same game data, no game callbacks: a paused room's
+        players learn the new count without a new match event. Advisory only —
+        a seat that cannot take it keeps its stale count.
+        """
+        if not room.seat_states:
+            return
+        count, ready, present = room.observer_count, room.ready, room.present
+        players = self.roster(room)
+        for player, peer in enumerate(room.peers):
+            if peer is None or peer.closing:
+                continue
+            payload = room.seat_states.get(player)
+            if payload is None:
+                continue
+            try:
+                peer.send({'type': 'state', 'player': player, 'revision': room.revision, 'ready': ready,
+                           'seats': len(room.peers), 'present': present, 'state': payload,
+                           'players': players, 'rated': room.rated, 'match_id': room.match_id,
+                           'result': room.result, 'observer_count': count})
+            except RuntimeError:
+                pass
 
     def _prepare_identity(self, game, message):
         """Validate this hello against the accounts without changing anything.
@@ -430,8 +530,17 @@ class RoomServer:
             room.checkpointed_at = time.monotonic()
 
     def suspend(self, room):
-        """Keep a campaign's seats in storage only, freeing memory and the room limit."""
+        """Keep a campaign's seats in storage only, freeing memory and the room limit.
+
+        Watching ends with the in-memory room: detached watchers get an
+        explicit refusal and can watch again once a seat restores it. Detaching
+        touches no seat state, so the stored retention stands as it was.
+        """
         self.store.suspend(room, self.retention(room.game), self.games[room.game].checkpoint(room.match))
+        for peer in room.observers:
+            if peer is not None:
+                peer.reject('The room was suspended while empty. Watch again to reconnect.')
+        room.observers = []
         del self.rooms[room.code]
 
     def maybe_settle(self, room):
@@ -551,6 +660,16 @@ class RoomServer:
             return room, 0, account_token
         room = self.find_room(message.get('room'), game)
         fits(len(room.tokens))
+        if kind == 'observe':
+            for field in ('resume_token', 'player_token', 'player_name',
+                          'player_options', 'options', 'rated'):
+                if field in message:
+                    raise CommandError('Observers join with only a room code.')
+            if self.games[game].observer_snapshot is None:
+                raise CommandError('This match does not support observing.')
+            if sum(peer is not None and not peer.closing for peer in room.observers) >= MAX_OBSERVERS:
+                raise CommandError('This room has too many observers.')
+            return room, None, None
         if kind == 'join':
             player = next((seat for seat, token in enumerate(room.tokens) if token is None), None)
             if player is None:
@@ -602,6 +721,9 @@ class RoomServer:
         for peer in room.peers:
             if peer is not None:
                 peer.reject(error)
+        for peer in room.observers:
+            if peer is not None:
+                peer.reject(error)
         if self.store is not None:
             self.store.delete(room.code)
 
@@ -622,7 +744,7 @@ class RoomServer:
             # twenty orders a second triple what the room costs the server and the other seat's link.
             room.unpublished = True
         else:
-            room.publish(self.roster(room))
+            self._publish(room)
         self.checkpoint(room, force=not self.games[room.game].realtime)
 
     async def handle(self, websocket):
@@ -645,6 +767,42 @@ class RoomServer:
         try:
             message = decode(await asyncio.wait_for(websocket.recv(), timeout=10))
             room, player, account_token = self.enter(message, address)
+            if player is None:
+                try:
+                    room.observers.append(peer)
+                    peer.send({'type': 'welcome', 'observer': True, 'player': None,
+                               'room': room.code, 'game': room.game, 'protocol': PROTOCOL,
+                               'seats': len(room.tokens), 'present': room.present,
+                               'observer_count': room.observer_count,
+                               'rated': room.rated, 'match_id': room.match_id})
+                    self._refresh_observers(room)
+                    async for data in websocket:
+                        if peer not in room.observers or peer.closing:
+                            break
+                        peer.check_rate()
+                        message = decode(data)
+                        if message.get('type') == 'command':
+                            peer.send({'type': 'error', 'error': 'Observers cannot submit orders.'})
+                        else:
+                            peer.send({'type': 'error', 'error': 'Observers only watch the match.'})
+                except ConnectionClosed:
+                    pass
+                except CommandError as exc:
+                    peer.reject(str(exc))
+                    await writer
+                except Exception:
+                    LOG.exception('Unexpected failure watching %s room', room.game)
+                    peer.reject('The server could not stream this match.')
+                    await writer
+                finally:
+                    if peer in room.observers:
+                        room.observers.remove(peer)
+                    if room.code in self.rooms:
+                        try:
+                            self._refresh_observers(room)
+                        except Exception:
+                            LOG.exception('Could not refresh watchers of %s room', room.game)
+                return
             identity = room.identities[player]
             peer.send({'type': 'welcome', 'room': room.code, 'resume_token': room.tokens[player],
                        'player': player, 'seats': len(room.tokens), 'protocol': PROTOCOL, 'game': room.game,
@@ -655,7 +813,7 @@ class RoomServer:
                        'capabilities': {'ratings': True, 'player_options': True}})
             room.peers[player] = peer
             room.seat_gone[player] = None
-            room.publish(self.roster(room))
+            self._publish(room)
             self.checkpoint(room, force=True)
             async for data in websocket:
                 if room.peers[player] is not peer or peer.closing:
@@ -689,13 +847,13 @@ class RoomServer:
             self.by_ip[address] -= 1
             if not self.by_ip[address]:
                 del self.by_ip[address]
-            if room is not None and room.peers[player] is peer:
+            if room is not None and player is not None and room.peers[player] is peer:
                 room.peers[player] = None
                 room.disconnected_at = time.monotonic()
                 room.seat_gone[player] = time.monotonic()
                 if room.code in self.rooms:
                     try:
-                        room.publish(self.roster(room))
+                        self._publish(room)
                         self.checkpoint(room, force=True)
                     except Exception:
                         LOG.exception('Could not publish disconnected %s room', room.game)
@@ -731,7 +889,7 @@ class RoomServer:
             spec.forfeit(room.match, seat)
             room.forfeited[seat] = True
         self.maybe_settle(room)
-        room.publish(self.roster(room))
+        self._publish(room)
         self.checkpoint(room, force=True)
         return True
 
@@ -755,11 +913,11 @@ class RoomServer:
                         room.ticks += 1
                         settled = self.maybe_settle(room)
                         if room.ticks % 2 == 0 or room.unpublished or settled:
-                            room.publish(self.roster(room))
+                            self._publish(room)
                         self.checkpoint(room)
                     else:
                         if self.maybe_settle(room):
-                            room.publish(self.roster(room))
+                            self._publish(room)
                             self.checkpoint(room, force=True)
                 except Exception:
                     LOG.exception('Simulation failed in %s room', room.game)
@@ -809,6 +967,7 @@ class RoomServer:
                 'protocol': PROTOCOL, 'games': sorted(self.games),
                 'rooms': len(rooms), 'ready_rooms': sum(1 for room in rooms if room.ready),
                 'players': sum(room.present for room in rooms),
+                'observers': sum(room.observer_count for room in rooms),
                 'max_rooms': self.max_rooms, 'max_connections': self.max_connections,
                 'room_retention': self.room_ttl, 'campaign_retention': self.campaign_ttl,
                 'rated_grace': self.rated_grace, 'ratings': self.ratings_info()})
