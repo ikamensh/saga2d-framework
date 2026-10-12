@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.18 — 2026-10-12
+
+- Read-only network observers for hosted rooms and LAN matches. Games opt in with `GameSpec.observer_snapshot` or `MatchHost(observer_snapshot=...)`; clients use `observer=True`, with `player=None` and no private seat or account credentials.
+- Observers join waiting, running and finished matches without taking a seat, affecting readiness or ratings, or keeping abandoned rooms alive. Commands are refused by both client and authority. Existing games and playing clients retain their behavior.
+- Separate, bounded observer connections and handshake/refusal deadlines isolate invalid snapshots, oversized payloads and slow readers from the players. Live observer counts update without changing match revisions.
+
 ## 0.3.17 — 2026-10-11
 
 - Server-authoritative rated play. `GameSpec` gains optional `result` (winning seat, or None while undecided), `rated` eligibility, `forfeit` (absent rated seat), and `configure_player` (per-seat options such as own race); a rated game needs `result` plus `forfeit`.
